@@ -74,20 +74,39 @@ this branch (fixed or resolved as duplicates); 12 remain below.
   control-registry docs corrected; sync-settings anchor uses
   `sectionAnchorId()` with a loud miss.
 
+### Fixer pass 2 (medium-difficulty findings)
+
+- **Settings lifecycle:** `SettingsRegistry` is subscribable with frozen
+  snapshots; settings UI reads it reactively; registering a schema merges
+  persisted values for newly-known `extension-*` keys without clobbering
+  in-session edits; `settings.set` writes only its own key via
+  `setSingleSettingImmediately`; host injection covers
+  settings/events/workspace singletons.
+- **Activation seam:** panel stubs survive the activation window and are
+  swapped atomically when the real contribution registers — the
+  "Starting extension…"/failure placeholder is reachable and "not
+  registered" no longer flashes; persisted `ext.kind` tabs restore via
+  placeholder tab views that wake the owning extension instead of being
+  silently dropped.
+- **Shell parity:** `PhoneShell` registers a command-surface override so
+  extension commands' panel effects route to phone UI (routes, inspector
+  overlay) instead of dead desktop dock writes; unavailable right panels
+  are disabled in the ⋯ menu/pinned icons, while left icons are dimmed
+  but still clickable (left contributions render their own `Unavailable`
+  explanation); failed startup directories render as entries with
+  Retry/Remove (`forget`).
+- **Filesystem boundary:** `pick_and_read_text_file` /
+  `save_and_write_text_file` fuse the dialog into the Rust command — the
+  renderer never supplies a path — and the unscoped
+  `fs:allow-read/write-text-file` grants are dropped from capabilities.
+- **E2E follow-ups:** restored the `list` role on the load-errors list
+  (alert moved to a wrapper); the startup-failure spec asserts the new
+  actionable failure entries.
+
 ## Remaining findings
 
 | Finding | Urgency | Difficulty | Note |
 |---|---|---|---|
-| [Settings registry is the one registry without `subscribe`](settings-registry-not-reactive-med-med.md) | med | med | Highest-leverage pair with the next row — one fix covers both |
-| [Persisted extension settings invisible until schema registers + reload](lazy-extension-settings-values-unseen-med-med.md) | med | med | Journal can write into the wrong folder for the session |
-| [Persisted extension tab kinds silently dropped at restore](extension-tab-kind-dropped-on-restore-med-med.md) | med | med | Needs a `contributes.tabs` stub path or deferred restore |
-| [`settings.set` flushes all staged changes](extension-settings-set-flushes-unrelated-staging-med-med.md) | med | med | Needs a scoped write path in settingsStore |
-| [Lazy panel placeholder unmounts itself](lazy-panel-placeholder-unreachable-med-med.md) | med | med | Needs atomic stub→real swap in registry/bootstrap |
-| [Command-context effects are desktop-only](command-context-effects-desktop-only-med-med.md) | med | med | PhoneShell ignores dock setters; needs per-chrome effects |
-| [Stuck startup-failure extension has no removal path](localextensions-stuck-startup-failure-med-med.md) | med | med | Panel + store work |
-| [`fs:allow-read/write-text-file` unscoped in capabilities](unscoped-fs-plugin-permissions-med-med.md) | med | med | Real hardening; needs scoped commands or `fs:scope` |
-| [Panel `availability` honored inconsistently](panel-availability-inconsistent-med-easy.md) | med | easy | Skipped by fixer — needs DesktopShell/ActivityBar wiring, not fabricable context |
-| [Test-host injection omits settings/events/workspace](host-injection-stops-at-five-registries-low-med.md) | low | med | |
 | [`onCommand:`/`onView:` activation kinds parsed but unconsumed](activation-events-command-view-unconsumed-low-easy.md) | low | easy | Product decision: implement lazy activation or drop the kinds |
 | [Canonicalize/open swap can escape the extension dir](extension-file-canonicalize-open-swap-low-hard.md) | low | hard | Defense-in-depth; `directory` root is already renderer-chosen (tracked in `plans/other_tasks/pending-ipc_hardening-low-med.md`) |
 

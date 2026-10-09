@@ -155,6 +155,80 @@ describe("bootstrapExtensions", () => {
   });
 });
 
+describe("lazy panel placeholders", () => {
+  const panelManifest = (): ExtensionManifest =>
+    manifest({
+      activationEvents: ["onView:stats"],
+      contributes: {
+        commands: [],
+        panels: [{ id: "stats", label: "Stats", icon: "∑", side: "right" }]
+      }
+    });
+
+  /**
+   * Regression: the stub used to be disposed before `activate` ran, so the
+   * registry notified subscribers mid-activation and the popout unmounted the
+   * placeholder into "not registered". The stub must hold the id for the whole
+   * window; the real panel swaps it out inside its own registration.
+   */
+  it("keeps the panel stub registered through the whole activation window", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const activate = vi.fn(async (context: DesktopExtensionContext) => {
+      await gate;
+      context.panels.register({
+        id: "stats",
+        label: "Stats",
+        icon: "∑",
+        side: "right",
+        factory: () => null
+      });
+    });
+    const { panels, boot } = setup({ manifest: panelManifest(), activate });
+
+    const activation = boot.activate!("sample");
+
+    // Mid-activation the id still resolves to the placeholder — this is the
+    // moment the popout used to lose it.
+    expect(panels.get("sample.stats")).toMatchObject({ label: "Stats", placeholder: true });
+
+    release();
+    await activation;
+
+    const real = panels.get("sample.stats");
+    expect(real?.placeholder).toBeUndefined();
+    // The swap preserved the stub's ordering slot rather than appending.
+    expect(panels.entriesBySide("right").map((panel) => panel.id)).toEqual(["sample.stats"]);
+  });
+
+  it("keeps the placeholder after a failed activation so the failure UI stays reachable", async () => {
+    const activate = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const { panels, boot } = setup({ manifest: panelManifest(), activate });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      await expect(boot.activate!("sample")).rejects.toThrow();
+
+      expect(boot.entries()[0]?.status).toBe("failed");
+      // Unlike command stubs, the panel stub survives failure: it is what
+      // renders the "failed to start" message in the popout.
+      expect(panels.get("sample.stats")?.placeholder).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("rejects activation for an id no extension is registered under", async () => {
+    const { boot } = setup({ manifest: panelManifest(), activate: vi.fn() });
+
+    await expect(boot.activate!("missing-extension")).rejects.toThrow(/not registered/i);
+  });
+});
+
 describe("mobile New-note actions", () => {
   const withAction = (activate: BuiltInExtension["activate"]): BuiltInExtension => ({
     manifest: manifest(),

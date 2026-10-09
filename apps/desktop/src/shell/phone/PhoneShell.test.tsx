@@ -25,6 +25,7 @@ import {
   tapBubble,
   visibleDialog
 } from "./PhoneShell.testHarness";
+import { desktopCommandRegistry } from "../../commands/commandRegistry";
 import { useNotificationStore } from "../../notifications/notificationStore";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { useShellState, type ShellState } from "../useShellState";
@@ -568,6 +569,76 @@ describe("PhoneShell", () => {
     expect(inspector(host)).not.toBeNull();
     expect(inspector(host)?.querySelector('[aria-label="Version history panel"]')).not.toBeNull();
     expect(actionsMenu(host)).toBeNull();
+  });
+
+  /**
+   * Command handlers get one `DesktopCommandContext` from the shared
+   * `runCommand`; on this chrome the panel effects are rerouted — a right
+   * reveal lands on the inspector overlay, never on `shell.rightPanel`,
+   * which PhoneShell does not read.
+   */
+  it("routes an extension command's right-panel reveal to the inspector overlay", async () => {
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
+    const commandReg = await act(async () =>
+      desktopCommandRegistry.register({
+        id: "test.show-stats",
+        title: "Show stats",
+        availability: "available",
+        // The shape extension commands actually use (`note-stats.show` does).
+        handler: ({ revealPanel }) => revealPanel("outline")
+      })
+    );
+    try {
+      const command = shell().paletteCommands.find((c) => c.id === "test.show-stats");
+      await act(async () => shell().runCommand(command!));
+
+      expect(inspector(host)).not.toBeNull();
+      expect(inspector(host)?.querySelector('[aria-label="Outline panel"]')).not.toBeNull();
+      // No dead write to the desktop-only dock state.
+      expect(shell().rightPanel).toBeNull();
+    } finally {
+      await act(async () => commandReg.dispose());
+    }
+  });
+
+  it("routes a left-panel reveal to a panel route Back can leave", async () => {
+    const { host, shell } = await renderWithShell();
+    const commandReg = await act(async () =>
+      desktopCommandRegistry.register({
+        id: "test.show-notebook",
+        title: "Show notebook",
+        availability: "available",
+        handler: ({ revealPanel }) => revealPanel("hello-notes.notebook")
+      })
+    );
+    try {
+      const command = shell().paletteCommands.find((c) => c.id === "test.show-notebook");
+      await act(async () => shell().runCommand(command!));
+
+      // The left reveal became a content route, not a `setLeftPanel` write
+      // the route sync would overwrite.
+      expect(host.querySelector('[aria-label="Hello notebook panel"]')).not.toBeNull();
+      expect(filesVisible(host)).toBe(false);
+      await click(host, "Back");
+      expect(filesVisible(host)).toBe(true);
+    } finally {
+      await act(async () => commandReg.dispose());
+    }
+  });
+
+  it("toggles a panel command's inspector on and off", async () => {
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
+    const runToggle = () =>
+      shell().runCommand(shell().paletteCommands.find((c) => c.id === "toggle-outline")!);
+
+    await act(async () => runToggle());
+    expect(inspector(host)?.querySelector('[aria-label="Outline panel"]')).not.toBeNull();
+
+    await act(async () => runToggle());
+    expect(inspector(host)).toBeNull();
+    expect(shell().rightPanel).toBeNull();
   });
 
   it("the drawer and its scrim cover the whole shell, header included", async () => {

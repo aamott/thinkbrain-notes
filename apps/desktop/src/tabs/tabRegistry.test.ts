@@ -81,4 +81,33 @@ describe("contributed tab renderers", () => {
 
     expect(seen).toEqual([1, 0]);
   });
+
+  /**
+   * A restored extension tab kind is a placeholder until its extension wakes
+   * and registers the real view. The swap must happen inside the real
+   * registration — a separate dispose-then-register would drop the kind for
+   * one synchronous turn and unmount the lazy placeholder mid-activation.
+   */
+  it("swaps a placeholder for the real view instead of rejecting it as a duplicate", () => {
+    const registry = createDesktopTabRegistry([]);
+    const stub = registry.register({ ...calendar, placeholder: true });
+    const real = { ...calendar, factory: () => "real calendar" };
+
+    expect(() => registry.register(real)).not.toThrow();
+    expect(registry.get(calendar.kind)).toEqual(real);
+
+    // The retired placeholder's handle is inert — disposing it must not
+    // remove the real view.
+    stub.dispose();
+    expect(registry.get(calendar.kind)).toEqual(real);
+  });
+
+  it("still rejects a duplicate over a real view", () => {
+    const registry = createDesktopTabRegistry([]);
+    registry.register(calendar);
+
+    expect(() => registry.register({ ...calendar, placeholder: true })).toThrow(
+      "already registered"
+    );
+  });
 });

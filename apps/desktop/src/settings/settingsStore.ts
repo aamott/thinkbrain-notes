@@ -13,6 +13,7 @@
  */
 
 import { create } from "zustand";
+import { useSyncExternalStore } from "react";
 import { readAppSettingsDocument, updateAppSettingsDocument } from "./appSettingsFile";
 import {
   readWorkspaceSettingsDocument,
@@ -31,10 +32,14 @@ import {
 } from "@thinkbrain/core";
 import {
   getErrorMessage,
+  isRecord,
   parseDynamicAppSettings,
   parseDynamicWorkspaceSettings,
   serializeDynamicAppSettings,
-  serializeDynamicWorkspaceSettings
+  serializeDynamicWorkspaceSettings,
+  type SettingDefinition,
+  type SettingScope,
+  type SettingsModule
 } from "@thinkbrain/core";
 import { scheduleAutosave } from "./autosaveScheduler";
 import {
@@ -156,9 +161,24 @@ export interface SettingsStoreState {
    *
    * Used by palette commands, where there is no Save bar to press. Any other
    * staged edits are persisted alongside it — acceptable because the Settings
-   * tab and the palette are not usually driven at the same time.
+   * tab and the palette are not usually driven at the same time. Extensions
+   * use {@link setSingleSettingImmediately} instead: a timer- or event-driven
+   * write must not silently flush user edits.
    */
   setSettingImmediately(key: string, value: unknown): Promise<void>;
+  /**
+   * Stages a single setting and persists only that key.
+   *
+   * The scoped counterpart to {@link setSettingImmediately}, used by extension
+   * `settings.set` (D81). Unlike the palette path it does not co-persist
+   * unrelated staged edits, and an unrelated staged key that fails validation
+   * cannot strand the write as a phantom-dirty entry.
+   *
+   * On failure — a rejected write, an invalid value, or a workspace-scoped key
+   * with no workspace open — the value stays staged: the session still honours
+   * it and a later `saveSettings()` retries the write.
+   */
+  setSingleSettingImmediately(key: string, value: unknown): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,16 +189,22 @@ export interface SettingsStoreState {
  * Creates a Zustand settings store bound to the given gateway.
  *
  * Tests pass a mock gateway; production uses the default native gateway. The
- * store always uses the module-scoped `appSettingsRegistry`.
+ * store defaults to the module-scoped `appSettingsRegistry`; tests that need a
+ * fully isolated store can inject a fresh registry too.
  *
  * Args:
  *   gateway: The I/O gateway for reading/writing settings. Defaults to the
  *     native Tauri command gateway.
+ *   registry: The schema registry backing defaults, scopes, validation, and
+ *     serialization. Defaults to `appSettingsRegistry`.
  *
  * Returns:
  *   A Zustand store creator (use as a hook in React components).
  */
-export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettingsGateway) {
+export function createSettingsStore(
+  gateway: SettingsStoreGateway = nativeSettingsGateway,
+  registry: SettingsRegistry = appSettingsRegistry
+) {
   // Load-generation token used to deduplicate concurrent `loadSettings` calls.
   // Each call increments the counter and captures its own generation; after its
   // awaits complete, it checks whether a newer load has superseded it. If so, the
@@ -188,7 +214,14 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
   // Scoped inside the factory closure so each store instance has its own counter.
   let loadGeneration = 0;
 
-  return create<SettingsStoreState>((set, get) => ({
+  // The last documents this store read from — or successfully wrote to — the
+  // gateway. Kept so a late-registered extension schema can re-extract its
+  // persisted keys without a disk round-trip; extraction at load dropped them
+  // as unknown (see the registry subscription below the factory).
+  let lastLoadedAppDocument: string | null = null;
+  let lastLoadedWorkspaceDocument: string | null = null;
+
+  const store = create<SettingsStoreState>((set, get) => ({
     // --- Loaded values ---
     appValues: {},
     workspaceValues: null,
@@ -221,18 +254,21 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       const myGeneration = ++loadGeneration;
       try {
         const rawAppJson = await gateway.readAppSettings();
-        const appResult = parseDynamicAppSettings(rawAppJson, appSettingsRegistry);
+        const appResult = parseDynamicAppSettings(rawAppJson, registry);
 
         let workspaceValues: Record<string, unknown> | null = null;
         let rawWorkspaceJson: string | null = null;
         if (rootPath !== null) {
           rawWorkspaceJson = await gateway.readWorkspaceSettings(rootPath);
-          workspaceValues = parseDynamicWorkspaceSettings(rawWorkspaceJson, appSettingsRegistry);
+          workspaceValues = parseDynamicWorkspaceSettings(rawWorkspaceJson, registry);
         }
 
         // A newer load superseded us while we were awaiting — abort so we don't
         // clobber the fresher state the newer load will (or already did) set.
         if (myGeneration !== loadGeneration) return;
+
+        lastLoadedAppDocument = rawAppJson;
+        lastLoadedWorkspaceDocument = rawWorkspaceJson;
 
         set({
           appValues: appResult.values,
@@ -293,7 +329,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       }
 
       // Partition staged changes by scope once; reused for validation and writes.
-      const { app: appStaged, workspace: workspaceStaged } = partitionByScope(appSettingsRegistry, staged);
+      const { app: appStaged, workspace: workspaceStaged } = partitionByScope(registry, staged);
 
       // Build the full effective values map for validation: merge loaded values
       // with staged changes so validators see the complete picture.
@@ -301,7 +337,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       const workspaceEffective = { ...(state.workspaceValues ?? {}), ...workspaceStaged };
 
       // Validate all effective values (both scopes).
-      const diagnostics = validateSettings(appSettingsRegistry, {
+      const diagnostics = validateSettings(registry, {
         ...appEffective,
         ...workspaceEffective
       });
@@ -342,16 +378,18 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
         if (appMerged !== null) {
           const values = appMerged;
           appSerialized = await gateway.writeAppSettings((current) =>
-            serializeDynamicAppSettings(values, appSettingsRegistry, current)
+            serializeDynamicAppSettings(values, registry, current)
           );
+          lastLoadedAppDocument = appSerialized;
         }
         let workspaceSerialized: string | null = null;
         if (workspaceMerged !== null && state.workspaceRootPath !== null) {
           workspaceSerialized = await gateway.writeWorkspaceSettings(
             state.workspaceRootPath,
             (current) =>
-              serializeDynamicWorkspaceSettings(workspaceMerged, appSettingsRegistry, current)
+              serializeDynamicWorkspaceSettings(workspaceMerged, registry, current)
           );
+          lastLoadedWorkspaceDocument = workspaceSerialized;
         }
 
         // Both writes succeeded — now commit the new state atomically.
@@ -426,7 +464,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * section. Uses the registry to find which full keys belong to that section.
      */
     resetSection(sectionId: string): void {
-      const sectionDefs = appSettingsRegistry.getDefinitionsForSection(sectionId);
+      const sectionDefs = registry.getDefinitionsForSection(sectionId);
       const sectionKeys = new Set(sectionDefs.map((d) => d.key));
       const staged = { ...get().stagedChanges };
       for (const key of sectionKeys) {
@@ -454,7 +492,7 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
      * else loaded value (app or workspace), else the registry default.
      */
     getEffectiveValue(key: string): unknown {
-      return effectiveSettingValue(get(), appSettingsRegistry.getDefinition(key), key);
+      return effectiveSettingValue(get(), registry.getDefinition(key), key);
     },
 
     async setSettingImmediately(key: string, value: unknown): Promise<void> {
@@ -463,8 +501,126 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
       if (!result.success) {
         console.error(`[settingsStore] Failed to persist "${key}".`, result.diagnostics);
       }
+    },
+
+    async setSingleSettingImmediately(key: string, value: unknown): Promise<void> {
+      get().stageChange(key, value);
+
+      const definition = registry.getDefinition(key);
+      if (!definition) {
+        // The key cannot be serialized (unknown keys are dropped on write), so
+        // persisting would report success while storing nothing.
+        console.error(`[settingsStore] Refusing to persist unregistered setting "${key}".`);
+        return;
+      }
+      // Validate only this key: an unrelated staged value that fails
+      // validation must not strand the write the way `saveSettings()` would.
+      const diagnostics = validateSettings(registry, { [key]: value });
+      if (diagnostics.length > 0) {
+        const others = get().validationDiagnostics.filter((d) => d.path !== key);
+        set({ validationDiagnostics: [...others, ...diagnostics] });
+        console.error(`[settingsStore] Refusing to persist invalid value for "${key}".`, diagnostics);
+        return;
+      }
+
+      const scope = definition.scope === "workspace" ? "workspace" : "app";
+      try {
+        let merged: Record<string, unknown>;
+        if (scope === "workspace") {
+          const { workspaceRootPath } = get();
+          if (workspaceRootPath === null) {
+            // Nowhere to persist yet. The staged value is still honoured for
+            // the session and a later save writes it once a workspace opens.
+            return;
+          }
+          merged = { ...(get().workspaceValues ?? {}), [key]: value };
+          lastLoadedWorkspaceDocument = await gateway.writeWorkspaceSettings(
+            workspaceRootPath,
+            (current) => serializeDynamicWorkspaceSettings(merged, registry, current)
+          );
+        } else {
+          merged = { ...get().appValues, [key]: value };
+          lastLoadedAppDocument = await gateway.writeAppSettings(
+            (current) => serializeDynamicAppSettings(merged, registry, current)
+          );
+        }
+
+        // Clear the staged key only if nothing re-staged it mid-write, then
+        // update the loaded layer so effective-value reads see what persisted.
+        const remaining = { ...get().stagedChanges };
+        if (Object.is(remaining[key], value)) delete remaining[key];
+        set(
+          scope === "workspace"
+            ? { stagedChanges: remaining, workspaceValues: merged, saveError: null }
+            : { stagedChanges: remaining, appValues: merged, saveError: null }
+        );
+      } catch (error) {
+        // Keep the staged entry: the session honours the value and a later
+        // save retries the write — the same contract `saveSettings()` gives.
+        console.error(`[settingsStore] Failed to persist "${key}":`, error);
+      }
     }
   }));
+
+  /**
+   * Merges persisted values for keys that were unknown at load time.
+   *
+   * `loadSettings` drops keys with no registered definition — which is every
+   * `extension-*` key whose extension has not activated yet. When a schema
+   * registers later (lazily-activated extensions), this re-reads the last
+   * loaded documents and fills in the now-known keys. Keys already present —
+   * loaded earlier, or written in-session — are left alone, so a schema
+   * registration never clobbers user edits.
+   */
+  const mergePersistedValues = (): void => {
+    const state = store.getState();
+    if (!state.loaded) return;
+
+    const mergeScope = (
+      rawJson: string | null,
+      current: Record<string, unknown> | null,
+      scope: SettingScope
+    ): Record<string, unknown> | null => {
+      if (current === null) return null;
+      let document: Record<string, unknown> | null = null;
+      if (rawJson !== null) {
+        try {
+          const parsed: unknown = JSON.parse(rawJson);
+          if (isRecord(parsed)) document = parsed;
+        } catch {
+          // A document this store already handled cannot have become malformed
+          // in its hands; a corrupt one simply has nothing to merge.
+        }
+      }
+      let next: Record<string, unknown> | null = null;
+      for (const def of registry.getAllDefinitions()) {
+        if (def.scope !== scope || def.key in current) continue;
+        next ??= { ...current };
+        next[def.key] =
+          document !== null && def.key in document ? document[def.key] : def.default;
+      }
+      return next;
+    };
+
+    const appValues = mergeScope(lastLoadedAppDocument, state.appValues, "app");
+    const workspaceValues = mergeScope(
+      lastLoadedWorkspaceDocument,
+      state.workspaceValues,
+      "workspace"
+    );
+    if (appValues === null && workspaceValues === null) return;
+    store.setState({
+      ...(appValues !== null ? { appValues } : {}),
+      ...(workspaceValues !== null ? { workspaceValues } : {})
+    });
+  };
+
+  // A late-registered (extension) schema makes previously-unknown persisted
+  // keys visible: merge them now rather than waiting for a reload that may
+  // never come this session. `loadSettings` itself cannot re-run — it would
+  // discard staged edits.
+  registry.subscribe(mergePersistedValues);
+  return store;
 }
 
 /**
@@ -474,6 +630,59 @@ export function createSettingsStore(gateway: SettingsStoreGateway = nativeSettin
  * store with a mock gateway.
  */
 export const useSettingsStore = createSettingsStore();
+
+/**
+ * Module-level subscribe for `useSyncExternalStore`: a stable reference so
+ * React does not resubscribe on every render.
+ */
+const subscribeToSettingsRegistry = (listener: () => void): (() => void) =>
+  appSettingsRegistry.subscribe(listener);
+
+/**
+ * Live snapshot of the settings modules contributing to one scope.
+ *
+ * Subscribing is required, not optional: extension schemas register on
+ * activation, which routinely happens while the settings tab is open — a
+ * one-shot read during render would leave the nav and content showing a
+ * module that was never registered (or was already disposed). The registry
+ * keeps the returned array referentially stable between changes, so it can
+ * serve as the `useSyncExternalStore` snapshot directly.
+ */
+export function useSettingsModules(scope: SettingScope): readonly SettingsModule[] {
+  return useSyncExternalStore(
+    subscribeToSettingsRegistry,
+    () => appSettingsRegistry.getModulesByScope(scope),
+    () => appSettingsRegistry.getModulesByScope(scope)
+  );
+}
+
+/**
+ * Live snapshot of every registered settings module, unprojected.
+ *
+ * Used by the header-bar breadcrumbs, which resolve a section id across all
+ * modules rather than one scope's projection.
+ */
+export function useAllSettingsModules(): readonly SettingsModule[] {
+  return useSyncExternalStore(
+    subscribeToSettingsRegistry,
+    () => appSettingsRegistry.getAllModules(),
+    () => appSettingsRegistry.getAllModules()
+  );
+}
+
+/**
+ * Live snapshot of every resolved setting definition.
+ *
+ * Used by nav search so a schema registered while settings is open is
+ * searchable immediately rather than after the next unrelated re-render.
+ */
+export function useSettingDefinitions(): readonly SettingDefinition[] {
+  return useSyncExternalStore(
+    subscribeToSettingsRegistry,
+    () => appSettingsRegistry.getAllDefinitions(),
+    () => appSettingsRegistry.getAllDefinitions()
+  );
+}
 
 /** True when there are any staged (unsaved) changes. */
 export const selectIsDirty = (state: SettingsStoreState): boolean =>

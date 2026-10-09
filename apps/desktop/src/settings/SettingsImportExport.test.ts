@@ -17,27 +17,27 @@ import {
 /**
  * Settings import/export logic tests.
  *
- * The native dialog/fs modules are mocked via `vi.mock` so tests can control
- * the file paths and contents returned by `saveFilePath`, `pickFilePath`,
- * `writeTextFileNative`, and `readTextFileNative`. The real module-scoped
+ * The native fs module is mocked via `vi.mock` so tests can control the file
+ * paths and contents returned by `saveAndWriteTextFile` and
+ * `pickAndReadTextFile`. The real module-scoped
  * `useSettingsStore` singleton is seeded directly via `setState`.
  */
 
-// Mock the native dialogs module so we can control save/open dialog results.
-vi.mock("../native/dialogs", () => ({
-  saveFilePath: vi.fn<(title: string, defaultName: string) => Promise<string | null>>(),
-  pickFilePath: vi.fn<(title?: string) => Promise<string | null>>()
-}));
-
-// Mock the native fs module so we can control read/write results.
+// Mock the native fs module so we can control dialog+read/write results.
 vi.mock("../native/fs", () => ({
-  writeTextFileNative: vi.fn<(path: string, contents: string) => Promise<boolean>>(),
-  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+  saveAndWriteTextFile: vi.fn<
+    (title: string, defaultName: string, contents: string) => Promise<boolean>
+  >(),
+  pickAndReadTextFile: vi.fn<
+    (
+      title: string,
+      extensions?: readonly string[]
+    ) => Promise<{ path: string; contents: string } | null>
+  >()
 }));
 
 // Import the mocked functions AFTER vi.mock so we get the mock implementations.
-import { saveFilePath, pickFilePath } from "../native/dialogs";
-import { writeTextFileNative, readTextFileNative } from "../native/fs";
+import { saveAndWriteTextFile, pickAndReadTextFile } from "../native/fs";
 
 /**
  * Default app values seeded into the store for most tests. Extends the shared
@@ -66,10 +66,8 @@ beforeEach(() => {
   seedSettingsStore({ appValues: SEEDED_APP_VALUES });
 
   // Reset mock call counts and default implementations.
-  vi.mocked(saveFilePath).mockReset();
-  vi.mocked(pickFilePath).mockReset();
-  vi.mocked(writeTextFileNative).mockReset();
-  vi.mocked(readTextFileNative).mockReset();
+  vi.mocked(saveAndWriteTextFile).mockReset();
+  vi.mocked(pickAndReadTextFile).mockReset();
 });
 
 afterEach(() => {
@@ -152,23 +150,24 @@ describe("buildExportPayload", () => {
 
 describe("writeExportFile", () => {
   it("writes the file when the user selects a path", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue("/tmp/settings.json");
-    vi.mocked(writeTextFileNative).mockResolvedValue(true);
+    vi.mocked(saveAndWriteTextFile).mockResolvedValue(true);
 
     const result = await writeExportFile('{"version":1}');
 
     expect(result).toBe(true);
-    expect(saveFilePath).toHaveBeenCalledWith("Export settings", "thinkbrain-settings.json");
-    expect(writeTextFileNative).toHaveBeenCalledWith("/tmp/settings.json", '{"version":1}');
+    expect(saveAndWriteTextFile).toHaveBeenCalledWith(
+      "Export settings",
+      "thinkbrain-settings.json",
+      '{"version":1}'
+    );
   });
 
   it("returns false when the user cancels the save dialog", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue(null);
+    vi.mocked(saveAndWriteTextFile).mockResolvedValue(false);
 
     const result = await writeExportFile('{"version":1}');
 
     expect(result).toBe(false);
-    expect(writeTextFileNative).not.toHaveBeenCalled();
   });
 });
 
@@ -183,8 +182,10 @@ describe("importSettings", () => {
       }
     });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(importJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/import.json",
+      contents: importJson
+    });
 
     // Spy on stageChange so we can assert it was called. The spy replicates
     // the real staging logic so the resulting stagedChanges reflect the import.
@@ -211,8 +212,10 @@ describe("importSettings", () => {
       }
     });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(importJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/import.json",
+      contents: importJson
+    });
 
     const stageChangeSpy = installStageChangeSpy();
 
@@ -235,8 +238,10 @@ describe("importSettings", () => {
       }
     });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(importJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/import.json",
+      contents: importJson
+    });
 
     const stageChangeSpy = installStageChangeSpy();
 
@@ -249,12 +254,11 @@ describe("importSettings", () => {
   });
 
   it("returns null when the user cancels the open dialog", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue(null);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue(null);
 
     const result = await importSettings();
 
     expect(result).toBeNull();
-    expect(readTextFileNative).not.toHaveBeenCalled();
   });
 
   it("handles bare settings object format (no version wrapper)", async () => {
@@ -263,8 +267,10 @@ describe("importSettings", () => {
       "editor.fontSize": 20
     });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(importJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/import.json",
+      contents: importJson
+    });
 
     installStageChangeSpy();
 
@@ -280,17 +286,21 @@ describe("importSettings", () => {
    * both and the user was told nothing about a file that could not be used.
    */
   it("throws on malformed JSON rather than reporting nothing imported", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
-    vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/import.json",
+      contents: "not valid json {{{"
+    });
 
     await expect(importSettings()).rejects.toThrow(/not valid JSON/i);
   });
 
   it("throws when the document is not a settings export", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/import.json");
     // A wrapper carrying a version but no `settings` — the shape an export
     // truncated mid-write would have.
-    vi.mocked(readTextFileNative).mockResolvedValue(JSON.stringify({ version: 1 }));
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/import.json",
+      contents: JSON.stringify({ version: 1 })
+    });
 
     await expect(importSettings()).rejects.toThrow(/not a settings export/i);
   });

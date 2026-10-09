@@ -126,4 +126,43 @@ describe("DesktopShell right-panel availability gate", () => {
     expect(handle).not.toBeNull();
     expect(width).not.toBe("0px");
   });
+
+  /**
+   * The ⋯ menu rows read the same availability answer as the dock gate: a row
+   * whose panel is unavailable stays listed but disabled, so a click can never
+   * close the menu onto nothing (the shell context is plumbed in — TitleBar
+   * cannot fabricate one).
+   */
+  it("disables the ⋯ menu row for a panel unavailable to the active document", async () => {
+    const host = await mount();
+    // No document open, so Version history (gated on documentPath) is
+    // unavailable; in happy-dom the narrow breakpoint lists every panel.
+    const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Action items"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+
+    const menuEl = host.querySelector('#desktop-action-items-menu[role="menu"]');
+    const row = [...menuEl!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === "Version history");
+    expect(row).not.toBeNull();
+    expect(row!.disabled).toBe(true);
+    // An available row — Assistant — stays enabled for contrast.
+    const assistant = [...menuEl!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === "Assistant");
+    expect(assistant!.disabled).toBe(false);
+  });
+
+  /**
+   * `LeftPanelContribution.availability` is consulted on the rail too, but
+   * only as a hint: the `tags` panel declares `() => false`, so its icon is
+   * dimmed — yet still opens the panel, whose body explains the unavailability.
+   */
+  it("dims the always-unavailable tags rail icon but keeps it clickable", async () => {
+    const host = await mount();
+
+    const tags = host.querySelector<HTMLButtonElement>('button[aria-label="Tags"]');
+    expect(tags).not.toBeNull();
+    expect(tags!.className).toContain("opacity-40");
+    expect(host.querySelector('button[aria-label="Files"]')?.className).not.toContain("opacity-40");
+  });
 });

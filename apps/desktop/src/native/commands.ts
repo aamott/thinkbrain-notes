@@ -425,6 +425,26 @@ export interface NativeCommandMap {
     readonly args: { readonly directory: string; readonly relativePath: string };
     readonly result: string;
   };
+  // Shows the native open dialog on the Rust side and reads the file the user
+  // picks there — the renderer never hands the host a path, which is what lets
+  // the unscoped `fs:allow-*` permissions stay revoked. `null` = cancelled.
+  readonly pick_and_read_text_file: {
+    readonly args: {
+      readonly title: string;
+      readonly extensions: readonly string[] | null;
+    };
+    readonly result: NativePickedTextFile | null;
+  };
+  // Shows the native save dialog on the Rust side and writes `contents` to the
+  // path the user picks there. `false` = cancelled.
+  readonly save_and_write_text_file: {
+    readonly args: {
+      readonly title: string;
+      readonly defaultName: string;
+      readonly contents: string;
+    };
+    readonly result: boolean;
+  };
   // Places file paths on the system clipboard as file references (file-manager
   // paste copies the files). Desktop-only; stubbed with `clipboard.unavailable`
   // on mobile.
@@ -545,6 +565,12 @@ export interface NativeWorkspaceSnapshot {
 export interface NativeThemeEntry {
   readonly name: string;
   readonly path: string;
+}
+
+/** A file the user picked in a native open dialog, returned with its contents. */
+export interface NativePickedTextFile {
+  readonly path: string;
+  readonly contents: string;
 }
 
 export interface NativeGitLinkPreview {

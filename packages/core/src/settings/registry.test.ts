@@ -476,6 +476,55 @@ describe("settings registry", () => {
       })
     ).toThrow("overlaps existing range [0, 2)");
   });
+
+  it("notifies subscribers once per registration and once per disposal", () => {
+    const registry = registryWithBuiltIns();
+    let notifications = 0;
+    const unsubscribe = registry.subscribe(() => {
+      notifications += 1;
+    });
+
+    const module: SettingsModule = {
+      id: "late-module",
+      label: "Late",
+      scope: "app",
+      sections: []
+    };
+    const registration = registry.register(module);
+    expect(notifications).toBe(1);
+
+    registration.dispose();
+    expect(notifications).toBe(2);
+
+    // Idempotent dispose and unsubscribe must not fire again.
+    registration.dispose();
+    unsubscribe();
+    registry.register({ ...module, label: "Again" }).dispose();
+    expect(notifications).toBe(2);
+  });
+
+  it("keeps module/definition snapshots referentially stable between changes", () => {
+    // `useSyncExternalStore` compares snapshots by reference: a fresh array on
+    // every call would loop the subscriber.
+    const registry = registryWithBuiltIns();
+
+    expect(registry.getAllModules()).toBe(registry.getAllModules());
+    expect(registry.getModulesByScope("app")).toBe(registry.getModulesByScope("app"));
+    expect(registry.getAllDefinitions()).toBe(registry.getAllDefinitions());
+
+    const registration = registry.register({
+      id: "late-module",
+      label: "Late",
+      scope: "app",
+      sections: []
+    });
+    expect(registry.getAllModules().map((m) => m.id)).toContain("late-module");
+
+    const modulesAfterRegister = registry.getModulesByScope("app");
+    registration.dispose();
+    expect(registry.getModulesByScope("app")).not.toBe(modulesAfterRegister);
+    expect(registry.getModulesByScope("app")).toBe(registry.getModulesByScope("app"));
+  });
 });
 
 describe("extractDefaults", () => {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 import { ActivityBar } from "./ActivityBar";
@@ -24,11 +24,14 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
   return container;
 };
 
-const activityBar = (): React.ReactElement => (
+const activityBar = (
+  isPanelAvailable: (panelId: string) => boolean = () => true
+): React.ReactElement => (
   <ActivityBar
     leftPanel={null}
     onSelectLeftPanel={() => undefined}
     onOpenSettings={() => undefined}
+    isPanelAvailable={isPanelAvailable}
   />
 );
 
@@ -62,6 +65,33 @@ describe("ActivityBar", () => {
     } finally {
       registration.dispose();
     }
+  });
+
+  /**
+   * `LeftPanelContribution.availability` is consulted here — the registry's
+   * own `tags` panel declares `() => false` — but only as a visual hint:
+   * left contributions render their own `Unavailable` placeholder, so the
+   * icon stays clickable and opening it explains why it is unavailable.
+   */
+  it("dims an unavailable panel's icon but keeps it clickable", async () => {
+    const onSelect = vi.fn();
+    const host = await render(
+      <ActivityBar
+        leftPanel={null}
+        onSelectLeftPanel={onSelect}
+        onOpenSettings={() => undefined}
+        isPanelAvailable={(id) => id !== "tags"}
+      />
+    );
+
+    const tags = host.querySelector<HTMLButtonElement>('button[aria-label="Tags"]');
+    expect(tags).not.toBeNull();
+    expect(tags!.className).toContain("opacity-40");
+    // Clicking still selects the panel — its body renders the explanation.
+    tags!.click();
+    expect(onSelect).toHaveBeenCalledWith("tags");
+    // Available neighbours stay ordinary buttons.
+    expect(host.querySelector('button[aria-label="Files"]')?.className).not.toContain("opacity-40");
   });
 
   it("drops a panel whose registration is disposed", async () => {

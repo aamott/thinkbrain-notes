@@ -24,6 +24,7 @@ const render = async (props: {
   readonly onToggleRightPanel?: (panel: RightPanel) => void;
   readonly onKeepTab?: (tabId: string) => void;
   readonly onNewTab?: () => void;
+  readonly isPanelAvailable?: (panelId: string) => boolean;
 } = {}): Promise<HTMLDivElement> => {
   container = document.createElement("div");
   document.body.append(container);
@@ -45,6 +46,7 @@ const render = async (props: {
         onNewTab={props.onNewTab ?? (() => undefined)}
         onToggleRightPanel={props.onToggleRightPanel ?? (() => undefined)}
         onOpenCommandPalette={() => undefined}
+        isPanelAvailable={props.isPanelAvailable ?? (() => true)}
       />
     )
   );
@@ -196,6 +198,44 @@ describe("TitleBar", () => {
     expect(onToggleRightPanel).toHaveBeenCalledWith("outline");
     expect(menu(host)).toBeNull();
     expect(trigger(host).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  /**
+   * The shell gates the dock on `desktopPanelRegistry.isAvailable`; a menu row
+   * that ignores the same answer selects a panel nothing renders — the menu
+   * closes and the user sees nothing happen. Unavailable rows stay listed but
+   * disabled, matching the phone's ActionItemsMenu.
+   */
+  it("keeps an unavailable panel's menu row visible but disabled", async () => {
+    stubWidth(false);
+    const onToggleRightPanel = vi.fn();
+    const host = await render({
+      onToggleRightPanel,
+      isPanelAvailable: (id) => id !== "history"
+    });
+
+    await act(async () => trigger(host).click());
+    const history = [...menu(host)!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === "Version history");
+
+    expect(history).not.toBeNull();
+    expect(history!.disabled).toBe(true);
+    await act(async () => history!.click());
+    expect(onToggleRightPanel).not.toHaveBeenCalled();
+    // A disabled row must not close the menu around it.
+    expect(menu(host)).not.toBeNull();
+  });
+
+  it("dims an unavailable pinned panel's bar icon instead of offering a dead toggle", async () => {
+    // Pin history so it gets a bar icon, then make it unavailable.
+    await pin(["history"]);
+    const host = await render({ isPanelAvailable: (id) => id !== "history" });
+
+    const icon = host.querySelector('[role="button"][aria-label="Version history"]');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute("aria-disabled")).toBe("true");
+    // Not a clickable IconButton: no <button> under that label.
+    expect(host.querySelector('button[aria-label="Version history"]')).toBeNull();
   });
 
   it("closes on Escape and returns focus to the trigger", async () => {

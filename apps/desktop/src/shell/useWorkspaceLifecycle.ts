@@ -1,5 +1,8 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from "react";
+import { getExtensionBootstrap } from "../extensions/bootstrapRef";
+import { splitContributionId } from "../extensions/desktopExtensionHost";
+import { createLazyExtensionTab } from "../extensions/LazyExtensionPanel";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { createDebounced } from "../lib/debounce";
 import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
@@ -22,7 +25,11 @@ import {
   type DesktopTabAction,
   type DesktopTabState
 } from "../tabs/tabModel";
-import { desktopTabRegistry } from "../tabs/tabRegistry";
+import {
+  desktopTabRegistry,
+  type DesktopTabContext,
+  type DesktopTabView
+} from "../tabs/tabRegistry";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { usePanelLayout } from "./usePanelLayout";
 import { clearWorkspaceStores, indexWorkspaceStores, useWorkspaceIndexes } from "./useWorkspaceIndexes";
@@ -314,9 +321,84 @@ function restoreTab(persisted: PersistedTab, fallbackRootPath: string | null): D
     return createFileTab({ rootPath, relativePath });
   }
   // Validate the persisted static kind against the tab registry before casting.
-  if (desktopTabRegistry.get(persisted.kind) === undefined) return null;
+  // An unknown kind shaped like `<extensionId>.<kind>` is not necessarily lost:
+  // extension kinds register only inside `activate`, so its owner may simply
+  // still be asleep. `ensureLazyExtensionTabKind` stubs it — dropping the tab
+  // silently would be data loss.
+  if (
+    desktopTabRegistry.get(persisted.kind) === undefined &&
+    !ensureLazyExtensionTabKind(persisted)
+  ) {
+    return null;
+  }
   return createStaticTab(
     persisted.kind as Exclude<import("@thinkbrain/core").TabKind, "editor">,
     persisted.title
   );
+}
+
+/**
+ * Installs a placeholder view for a persisted extension-owned tab kind.
+ *
+ * Mirrors the panel stubs in `bootstrap.ts`: the placeholder keeps the kind
+ * registered so the tab restores, activates the owning extension (kicked off
+ * eagerly here — the tab being persisted means the extension was almost
+ * certainly awake last session — and retried idempotently on first render),
+ * and is swapped atomically when the real view registers under the kind. When
+ * activation fails or the extension is gone, the placeholder stays and renders
+ * the failure message instead of dropping the tab.
+ *
+ * @returns Whether the kind is restorable now.
+ */
+function ensureLazyExtensionTabKind(persisted: PersistedTab): boolean {
+  const owner = splitContributionId(persisted.kind);
+  // Without the `extensionId.kind` shape there is no owner to wake — the kind
+  // is genuinely unknown (e.g. persisted by a newer version) and stays skipped.
+  if (!owner) return false;
+
+  const view: DesktopTabView = {
+    kind: persisted.kind,
+    label: persisted.title,
+    isAvailable: true,
+    placeholder: true,
+    factory: (context: DesktopTabContext) =>
+      createLazyExtensionTab({
+        ensureActive: () => activateExtension(owner.extensionId),
+        resolve: (resolveContext) => {
+          const real = desktopTabRegistry.get(persisted.kind);
+          // Still this placeholder (or a factory-less view) after activation:
+          // the extension woke without providing the kind it persisted — an
+          // authoring bug or a since-removed contribution, diagnosed rather
+          // than silently blank.
+          if (!real || real === view || !real.factory) {
+            console.error(
+              `[extensions] "${owner.extensionId}" activated but never registered persisted tab kind "${persisted.kind}".`
+            );
+            return null;
+          }
+          return real.factory(resolveContext);
+        },
+        context
+      })
+  };
+  try {
+    desktopTabRegistry.register(view);
+  } catch {
+    // A concurrent registration won the kind (the extension itself, or another
+    // restore pass). Whoever holds it decides whether the tab can restore.
+    return desktopTabRegistry.get(persisted.kind) !== undefined;
+  }
+  void activateExtension(owner.extensionId).catch(() => undefined);
+  return true;
+}
+
+/** Wakes an extension by id through the published bootstrap. */
+function activateExtension(extensionId: string): Promise<void> {
+  const activate = getExtensionBootstrap()?.activate;
+  if (!activate) {
+    return Promise.reject(
+      new Error(`Cannot activate "${extensionId}": the extension bootstrap is not running.`)
+    );
+  }
+  return activate(extensionId);
 }

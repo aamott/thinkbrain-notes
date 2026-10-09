@@ -14,7 +14,11 @@ import {
   mobileNewNoteActionRegistry,
   type MobileNewNoteActionRegistry
 } from "../commands/mobileNewNoteActionRegistry";
-import { desktopPanelRegistry, type DesktopPanelContext } from "../panels/panelRegistryModel";
+import {
+  desktopPanelRegistry,
+  type DesktopPanelContext,
+  type DesktopPanelContribution
+} from "../panels/panelRegistryModel";
 import { builtInExtensions, type BuiltInExtension } from "./builtins";
 import {
   desktopExtensionHost,
@@ -80,8 +84,17 @@ interface EntryState {
   readonly directory: string | undefined;
   status: BootstrapEntryStatus;
   reasons: readonly BootstrapReason[];
-  /** Stub registrations, disposed immediately before activation. */
-  stubs: Disposable[];
+  /** Command stubs, disposed immediately before activation frees their ids. */
+  commandStubs: Disposable[];
+  /**
+   * Panel stubs persist through activation: the panel registry swaps each for
+   * the real contribution inside the real registration's own `register` call,
+   * so the popout's lazy placeholder — "Starting extension…", or the failure
+   * message when activation rejects — never loses the id mid-activation and
+   * unmounts into "Panel not registered". A stub still present after a failed
+   * activation is what keeps that failure message reachable.
+   */
+  panelStubs: Disposable[];
   /**
    * New-note action registrations. Unlike command stubs these persist through
    * activation: the row survives while its command stub swaps to the real
@@ -106,9 +119,14 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const states = new Map<string, EntryState>();
   const failedManifests: BootstrapEntry[] = [];
 
+  const disposeAll = (disposables: Disposable[]): Disposable[] => {
+    for (const disposable of disposables) disposable.dispose();
+    return [];
+  };
+
   const disposeStubs = (state: EntryState): void => {
-    for (const stub of state.stubs) stub.dispose();
-    state.stubs = [];
+    state.commandStubs = disposeAll(state.commandStubs);
+    state.panelStubs = disposeAll(state.panelStubs);
   };
 
   const disposeActionRegistrations = (state: EntryState): void => {
@@ -119,14 +137,19 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   /**
    * Activates an extension at most once.
    *
-   * Stubs are disposed *before* activation so the extension's own registration
-   * of the same id does not collide with them. On failure the stubs stay gone:
-   * re-registering would offer the user a contribution that only fails again.
+   * Command stubs are disposed *before* activation so the extension's own
+   * registration of the same id does not collide with them — a command has no
+   * placeholder to keep alive. Panel stubs are deliberately kept: they carry
+   * `placeholder` so the panel registry swaps each out atomically when the
+   * real panel registers under its id. On failure the stubs stay gone for
+   * commands (re-registering would offer a command that only fails again) but
+   * the panel stubs remain — they are what render the designed failure
+   * message in the popout instead of "Panel not registered".
    */
   const ensureActive = (state: EntryState): Promise<void> => {
     if (state.activation) return state.activation;
 
-    disposeStubs(state);
+    state.commandStubs = disposeAll(state.commandStubs);
     const activation = host
       .activate(state.manifest.id)
       .then(() => {
@@ -156,7 +179,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const registerStubs = (state: EntryState): void => {
     for (const command of state.manifest.contributes.commands) {
       const fullId = qualifyContributionId(state.manifest.id, command.id);
-      state.stubs.push(
+      state.commandStubs.push(
         commands.register({
           id: fullId,
           title: command.title,
@@ -181,34 +204,40 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
 
     for (const panel of state.manifest.contributes.panels) {
       const fullId = qualifyContributionId(state.manifest.id, panel.id);
-      state.stubs.push(
-        panels.register({
-          id: fullId,
-          label: panel.label,
-          icon: panel.icon,
-          side: panel.side,
-          factory: (panelContext: DesktopPanelContext) =>
-            createLazyExtensionPanel({
-              ensureActive: () => ensureActive(state),
-              // Only ever called after activation resolves, by which point the
-              // stub has been disposed and `get` returns the extension's real
-              // panel. Calling it earlier would re-enter this same factory.
-              resolve: (resolveContext) => {
-                const real = panels.get(fullId);
-                if (!real) {
-                  // Same authoring bug as a missing command: the manifest
-                  // promised this panel and activation did not provide it.
-                  console.error(
-                    `[extensions] "${state.manifest.id}" activated but never registered declared panel "${fullId}".`
-                  );
-                  return null;
-                }
-                return real.factory(resolveContext);
-              },
-              context: panelContext
-            })
-        })
-      );
+      const stub: DesktopPanelContribution = {
+        id: fullId,
+        label: panel.label,
+        icon: panel.icon,
+        side: panel.side,
+        // `placeholder` keeps this stub registered through activation; the
+        // registry swaps it for the real panel inside that registration's own
+        // `register` call, so the placeholder below stays mounted the whole
+        // time — including after a rejection, whose failure UI it renders.
+        placeholder: true,
+        factory: (panelContext: DesktopPanelContext) =>
+          createLazyExtensionPanel({
+            ensureActive: () => ensureActive(state),
+            // `resolve` runs only after activation resolves. The stub is still
+            // registered until the real panel swaps it, so a lookup that finds
+            // this same stub means the extension never delivered its declared
+            // panel — an authoring bug that deserves a diagnostic, not silent
+            // recursion through the placeholder factory.
+            resolve: (resolveContext) => {
+              const real = panels.get(fullId);
+              if (!real || real === stub) {
+                // Same authoring bug as a missing command: the manifest
+                // promised this panel and activation did not provide it.
+                console.error(
+                  `[extensions] "${state.manifest.id}" activated but never registered declared panel "${fullId}".`
+                );
+                return null;
+              }
+              return real.factory(resolveContext);
+            },
+            context: panelContext
+          })
+      };
+      state.panelStubs.push(panels.register(stub));
     }
   };
 
@@ -298,7 +327,8 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       directory: undefined,
       status: compatibility.compatible ? "registered" : "incompatible",
       reasons: compatibility.reasons,
-      stubs: [],
+      commandStubs: [],
+      panelStubs: [],
       mobileNewNoteActionRegistrations: [],
       registration: null,
       activation: undefined
@@ -356,6 +386,14 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       return () => listeners.delete(listener);
     },
 
+    activate: (id: string): Promise<void> => {
+      const state = states.get(id);
+      if (!state || state.registration === null) {
+        return Promise.reject(new Error(`Extension "${id}" is not registered.`));
+      }
+      return ensureActive(state);
+    },
+
     activateAll: async (): Promise<void> => {
       await Promise.all(
         [...states.values()]
@@ -384,7 +422,8 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         // Load diagnostics ride along as reasons so the Extensions panel shows
         // an author why, for example, a declared panel did not appear.
         reasons: [...toReasons(diagnostics), ...compatibility.reasons],
-        stubs: [],
+        commandStubs: [],
+        panelStubs: [],
         mobileNewNoteActionRegistrations: [],
         registration: null,
         activation: undefined

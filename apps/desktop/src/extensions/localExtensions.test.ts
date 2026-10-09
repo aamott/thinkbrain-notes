@@ -252,6 +252,101 @@ describe("directory persistence", () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  /**
+   * A stored directory that never loaded has no extension id for `remove` to
+   * resolve — `forget` is its removal path: unpersisted, cleared from the
+   * failures list, and subscribers notified.
+   */
+  it("forgets a failing stored directory and clears its failure", async () => {
+    const store = memoryStore(["/ext/gone"]);
+    const { local } = setup(
+      {
+        "/ext/gone": {
+          extension: null,
+          diagnostics: [{ code: "manifest_unreadable", message: "no manifest", severity: "error" }]
+        }
+      },
+      store
+    );
+    const listener = vi.fn();
+    local.subscribe(listener);
+    await local.restore();
+    expect(local.startupFailures()).toHaveLength(1);
+
+    await local.forget("/ext/gone");
+
+    expect(store.saved()).toEqual([]);
+    expect(local.startupFailures()).toEqual([]);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("forgets a directory spelled with a trailing separator", async () => {
+    const store = memoryStore(["/ext/gone"]);
+    const { local } = setup(
+      {
+        "/ext/gone": {
+          extension: null,
+          diagnostics: [{ code: "manifest_unreadable", message: "no manifest", severity: "error" }]
+        }
+      },
+      store
+    );
+    await local.restore();
+
+    await local.forget("/ext/gone/");
+
+    expect(store.saved()).toEqual([]);
+    expect(local.startupFailures()).toEqual([]);
+  });
+
+  it("keeps a failure listed when forgetting its directory cannot be saved", async () => {
+    const directories: readonly string[] = ["/ext/gone"];
+    const store: ExtensionDirectoryStore = {
+      load: async () => directories,
+      save: async () => {
+        throw new Error("disk full");
+      }
+    };
+    const { local } = setup(
+      {
+        "/ext/gone": {
+          extension: null,
+          diagnostics: [{ code: "manifest_unreadable", message: "no manifest", severity: "error" }]
+        }
+      },
+      store
+    );
+    await local.restore();
+
+    await expect(local.forget("/ext/gone")).rejects.toThrow("disk full");
+
+    // The write failed, so the directory is still stored — the failure must
+    // stay visible rather than claiming a removal that did not happen.
+    expect(local.startupFailures()).toHaveLength(1);
+  });
+
+  it("retries a failed directory through add once it is fixed", async () => {
+    const store = memoryStore(["/ext/a"]);
+    const results: Record<string, LoadExtensionResult> = {
+      "/ext/a": {
+        extension: null,
+        diagnostics: [{ code: "entry_unreadable", message: "gone", severity: "error" }]
+      }
+    };
+    const { commands, local } = setup(results, store);
+    await local.restore();
+    expect(local.startupFailures()).toHaveLength(1);
+
+    results["/ext/a"] = ok("/ext/a");
+    const outcome = await local.add("/ext/a");
+
+    expect(outcome.loaded).toBe(true);
+    expect(commands.get("sample.go")?.title).toBe("Go");
+    expect(local.startupFailures()).toEqual([]);
+    // Already stored — the retry writes the same single entry, not a dupe.
+    expect(store.saved()).toEqual(["/ext/a"]);
+  });
+
   it("clears a startup failure when a later restore succeeds", async () => {
     const store = memoryStore(["/ext/a"]);
     const results: Record<string, LoadExtensionResult> = {

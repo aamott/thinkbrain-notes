@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * Theme import/export logic tests.
  *
- * The native dialog/fs modules are mocked via `vi.mock` so tests can control
- * the file paths and contents returned by `saveFilePath`, `pickFilePath`,
- * `writeTextFileNative`, and `readTextFileNative`. The DOM-reading helpers
+ * The native fs module is mocked via `vi.mock` so tests can control the file
+ * paths and contents returned by `saveAndWriteTextFile` and
+ * `pickAndReadTextFile`. The DOM-reading helpers
  * (`readCurrentTokenValues`, `readCurrentThemeBase`) read from
  * `document.documentElement` and `getComputedStyle`, so tests stub
  * `getComputedStyle` and set the `data-thinkbrain-theme` attribute directly to
@@ -15,18 +15,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * singleton is seeded directly via `setState`.
  */
 
-// Mock the native dialogs module so we can control save/open dialog results.
-vi.mock("../native/dialogs", () => ({
-  saveFilePath: vi.fn<(title: string, defaultName: string) => Promise<string | null>>(),
-  pickFilePath: vi.fn<
-    (title?: string, extensions?: readonly string[]) => Promise<string | null>
-  >()
-}));
-
-// Mock the native fs module so we can control read/write results.
+// Mock the native fs module so we can control dialog+read/write results.
 vi.mock("../native/fs", () => ({
-  writeTextFileNative: vi.fn<(path: string, contents: string) => Promise<boolean>>(),
-  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+  saveAndWriteTextFile: vi.fn<
+    (title: string, defaultName: string, contents: string) => Promise<boolean>
+  >(),
+  pickAndReadTextFile: vi.fn<
+    (
+      title: string,
+      extensions?: readonly string[]
+    ) => Promise<{ path: string; contents: string } | null>
+  >()
 }));
 
 // Import the mocked functions AFTER vi.mock so we get the mock implementations.
@@ -35,8 +34,7 @@ vi.mock("./themeAdapter", () => ({
 }));
 
 import { readThemeFile } from "./themeAdapter";
-import { saveFilePath, pickFilePath } from "../native/dialogs";
-import { writeTextFileNative, readTextFileNative } from "../native/fs";
+import { saveAndWriteTextFile, pickAndReadTextFile } from "../native/fs";
 import {
   buildThemeExport,
   buildThemeExportPayload,
@@ -72,10 +70,8 @@ beforeEach(() => {
   seedSettingsStore();
 
   // Reset mock call counts and default implementations.
-  vi.mocked(saveFilePath).mockReset();
-  vi.mocked(pickFilePath).mockReset();
-  vi.mocked(writeTextFileNative).mockReset();
-  vi.mocked(readTextFileNative).mockReset();
+  vi.mocked(saveAndWriteTextFile).mockReset();
+  vi.mocked(pickAndReadTextFile).mockReset();
 
   // Default DOM state: light theme with the mock tokens.
   document.documentElement.dataset.thinkbrainTheme = "light";
@@ -199,34 +195,30 @@ describe("buildThemeExportPayload", () => {
 
 describe("writeThemeExportFile", () => {
   it("writes the file when the user selects a path", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue("/tmp/theme.tbtheme.json");
-    vi.mocked(writeTextFileNative).mockResolvedValue(true);
+    vi.mocked(saveAndWriteTextFile).mockResolvedValue(true);
 
     const result = await writeThemeExportFile('{"name":"x"}');
 
     expect(result).toBe(true);
-    expect(saveFilePath).toHaveBeenCalledWith(
+    expect(saveAndWriteTextFile).toHaveBeenCalledWith(
       "Export theme",
-      "theme.tbtheme.json"
-    );
-    expect(writeTextFileNative).toHaveBeenCalledWith(
-      "/tmp/theme.tbtheme.json",
+      "theme.tbtheme.json",
       '{"name":"x"}'
     );
   });
 
   it("returns false when the user cancels the save dialog", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue(null);
+    vi.mocked(saveAndWriteTextFile).mockResolvedValue(false);
 
     const result = await writeThemeExportFile('{"name":"x"}');
 
     expect(result).toBe(false);
-    expect(writeTextFileNative).not.toHaveBeenCalled();
   });
 
   it("throws when the write fails (fail-loud)", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue("/tmp/theme.tbtheme.json");
-    vi.mocked(writeTextFileNative).mockResolvedValue(false);
+    vi.mocked(saveAndWriteTextFile).mockRejectedValue(
+      new Error("The chosen file could not be written.")
+    );
 
     // Write failures now throw instead of returning false, so the caller can
     // surface a destructive status message. Cancel (above) still returns false.
@@ -243,8 +235,10 @@ describe("importTheme", () => {
       tokens: { "--tn-color-background": "#000000" }
     });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/my-theme.tbtheme.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(themeJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/my-theme.tbtheme.json",
+      contents: themeJson
+    });
 
     // Spy on stageChange so we can assert it was called with the path. The spy
     // replicates the real staging logic so the resulting stagedChanges reflect
@@ -258,7 +252,7 @@ describe("importTheme", () => {
     expect(result!.diagnostics).toHaveLength(0);
 
     // The open dialog should be filtered to `.tbtheme.json` files.
-    expect(pickFilePath).toHaveBeenCalledWith("Import theme", ["tbtheme.json"]);
+    expect(pickAndReadTextFile).toHaveBeenCalledWith("Import theme", ["tbtheme.json"]);
 
     // The file path should be staged under appearance.themeFile.
     expect(stageChangeSpy).toHaveBeenCalledWith(
@@ -272,8 +266,10 @@ describe("importTheme", () => {
     // name.missing error diagnostic.
     const badJson = JSON.stringify({ base: "dark", version: 1, tokens: {} });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/bad.tbtheme.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(badJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/bad.tbtheme.json",
+      contents: badJson
+    });
 
     const stageChangeSpy = installStageChangeSpy();
 
@@ -291,17 +287,17 @@ describe("importTheme", () => {
   });
 
   it("returns null when the user cancels the open dialog", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue(null);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue(null);
 
     const result = await importTheme();
 
     expect(result).toBeNull();
-    expect(readTextFileNative).not.toHaveBeenCalled();
   });
 
   it("throws when the file cannot be read (fail-loud)", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/missing.tbtheme.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(null);
+    vi.mocked(pickAndReadTextFile).mockRejectedValue(
+      new Error("The picked file could not be read.")
+    );
 
     const stageChangeSpy = installStageChangeSpy();
 
@@ -312,8 +308,10 @@ describe("importTheme", () => {
   });
 
   it("returns diagnostics for malformed JSON (fail-loud)", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/broken.tbtheme.json");
-    vi.mocked(readTextFileNative).mockResolvedValue("not valid json {{{");
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/broken.tbtheme.json",
+      contents: "not valid json {{{"
+    });
 
     const stageChangeSpy = installStageChangeSpy();
 
@@ -340,8 +338,10 @@ describe("importTheme", () => {
       tokens: { "--tn-color-unknown-token": "#ff0000" }
     });
 
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/warned.tbtheme.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(themeJson);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue({
+      path: "/tmp/warned.tbtheme.json",
+      contents: themeJson
+    });
 
     const stageChangeSpy = installStageChangeSpy();
 

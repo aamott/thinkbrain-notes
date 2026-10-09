@@ -218,8 +218,12 @@ test("restores stored extension directories at startup and reports one that fail
   await expect(list).toContainText("Hello Disk");
   await expect(list).toContainText("/ext/hello-disk");
 
-  // The vanished directory stays reported instead of silently disappearing.
-  await expect(page.getByRole("list", { name: "Extension load errors" })).toContainText("/ext/vanished");
+  // The vanished directory stays reported instead of silently disappearing,
+  // as an actionable failure entry with Retry/Remove.
+  const failures = page.getByRole("list", { name: "Extensions that failed to load" });
+  await expect(failures).toContainText("/ext/vanished");
+  await expect(failures).toContainText("missing directory /ext/vanished");
+  await expect(page.getByRole("button", { name: "Remove /ext/vanished" })).toBeVisible();
 });
 
 test("reports a broken extension directory without registering anything", async ({ page }) => {

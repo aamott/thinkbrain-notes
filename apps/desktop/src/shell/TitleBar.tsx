@@ -61,6 +61,13 @@ type TitleBarProps = {
   readonly onToggleRightPanel: (panel: RightPanel) => void;
   /** Called when the user clicks the command palette entry point. */
   readonly onOpenCommandPalette: () => void;
+  /**
+   * Whether a panel may be opened right now, built by the shell from the
+   * same panel context the dock gates on. A panel that is unavailable stays
+   * visible but inert — the same answer `ActionItemsMenu` gives — rather
+   * than a control whose click selects a dock nothing renders.
+   */
+  readonly isPanelAvailable: (panelId: string) => boolean;
 };
 
 /**
@@ -93,7 +100,8 @@ export function TitleBar({
   onKeepTab,
   onNewTab,
   onToggleRightPanel,
-  onOpenCommandPalette
+  onOpenCommandPalette,
+  isPanelAvailable
 }: TitleBarProps) {
   const rightPanels = useRightPanelContributions();
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -358,21 +366,43 @@ export function TitleBar({
           surfaces in the row unpinned, wearing the count. */}
       <div className="relative flex shrink-0 items-center border-l border-border gap-1 h-full px-2">
         <div className="flex items-center gap-1 max-[900px]:hidden">
-          {visible.map((action) => (
-            <IconButton
-              key={action.id}
-              label={action.label}
-              symbol={action.icon}
-              active={rightPanel === action.id}
-              badge={notified.get(action.id)}
-              className="w-[1.6rem] h-[1.6rem] border-l-0 rounded-small text-titlebar-foreground"
-              onClick={() => onToggleRightPanel(action.id)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
-              }}
-            />
-          ))}
+          {visible.map((action) =>
+            // Unavailable panels stay on the bar but inert — a greyed icon
+            // says "temporarily not for this document" where a vanished one
+            // would look like a bug. A span, not a disabled IconButton:
+            // IconButton takes no `disabled` prop, and a real `disabled`
+            // attribute would also swallow the right-click pin menu.
+            isPanelAvailable(action.id) ? (
+              <IconButton
+                key={action.id}
+                label={action.label}
+                symbol={action.icon}
+                active={rightPanel === action.id}
+                badge={notified.get(action.id)}
+                className="w-[1.6rem] h-[1.6rem] border-l-0 rounded-small text-titlebar-foreground"
+                onClick={() => onToggleRightPanel(action.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
+                }}
+              />
+            ) : (
+              <span
+                key={action.id}
+                role="button"
+                aria-disabled="true"
+                aria-label={action.label}
+                title={action.label}
+                className="inline-flex w-[1.6rem] h-[1.6rem] items-center justify-center rounded-small text-titlebar-foreground opacity-40 [&>svg]:w-[1.05rem] [&>svg]:h-[1.05rem] [&>svg]:stroke-current"
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
+                }}
+              >
+                <PanelIcon name={action.icon} />
+              </span>
+            )
+          )}
         </div>
         <button
           ref={actionsTriggerRef}
@@ -416,6 +446,7 @@ export function TitleBar({
                     className="flex-1"
                     icon={<PanelIcon name={action.icon} />}
                     current={rightPanel === action.id}
+                    disabled={!isPanelAvailable(action.id)}
                     title={action.label}
                     onClick={() => {
                       setActionsOpen(false);
@@ -452,6 +483,7 @@ export function TitleBar({
             <MenuButton
               label={`Open ${pinMenu.panel.label}`}
               icon={<PanelIcon name={pinMenu.panel.icon} />}
+              disabled={!isPanelAvailable(pinMenu.panel.id)}
               onClick={() => {
                 setPinMenu(null);
                 onToggleRightPanel(pinMenu.panel.id);

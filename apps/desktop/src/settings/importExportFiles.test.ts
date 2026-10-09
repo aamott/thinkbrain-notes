@@ -1,46 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../native/dialogs", () => ({
-  saveFilePath: vi.fn(),
-  pickFilePath: vi.fn()
-}));
 vi.mock("../native/fs", () => ({
-  writeTextFileNative: vi.fn(),
-  readTextFileNative: vi.fn()
+  saveAndWriteTextFile: vi.fn(),
+  pickAndReadTextFile: vi.fn()
 }));
 
-import { pickFilePath, saveFilePath } from "../native/dialogs";
-import { readTextFileNative, writeTextFileNative } from "../native/fs";
+import { pickAndReadTextFile, saveAndWriteTextFile } from "../native/fs";
 import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
 
-const save = vi.mocked(saveFilePath);
-const pick = vi.mocked(pickFilePath);
-const write = vi.mocked(writeTextFileNative);
-const read = vi.mocked(readTextFileNative);
+const write = vi.mocked(saveAndWriteTextFile);
+const read = vi.mocked(pickAndReadTextFile);
 
 beforeEach(() => {
-  save.mockReset();
-  pick.mockReset();
   write.mockReset();
   read.mockReset();
 });
 
 describe("writing a document through the save dialog", () => {
-  it("writes what it was given to the chosen path", async () => {
-    save.mockResolvedValue("/tmp/out.json");
+  it("delegates the write to the native save-and-write command", async () => {
     write.mockResolvedValue(true);
 
     await expect(writeJsonViaSaveDialog("Export theme", "theme.json", "{}")).resolves.toBe(true);
-    expect(write).toHaveBeenCalledWith("/tmp/out.json", "{}");
-    expect(save).toHaveBeenCalledWith("Export theme", "theme.json");
+    expect(write).toHaveBeenCalledWith("Export theme", "theme.json", "{}");
   });
 
   /** Dismissing a dialog is a non-event; the caller should stay quiet. */
   it("reports a cancel as a plain false", async () => {
-    save.mockResolvedValue(null);
+    write.mockResolvedValue(false);
 
     await expect(writeJsonViaSaveDialog("Export theme", "theme.json", "{}")).resolves.toBe(false);
-    expect(write).not.toHaveBeenCalled();
   });
 
   /**
@@ -48,8 +36,7 @@ describe("writing a document through the save dialog", () => {
    * `false` for both is what let a failed export pass silently.
    */
   it("throws when the write fails", async () => {
-    save.mockResolvedValue("/tmp/out.json");
-    write.mockResolvedValue(false);
+    write.mockRejectedValue(new Error("The chosen file could not be written."));
 
     await expect(writeJsonViaSaveDialog("Export theme", "theme.json", "{}")).rejects.toThrow(
       /could not be written/i
@@ -59,35 +46,31 @@ describe("writing a document through the save dialog", () => {
 
 describe("reading a document through the open dialog", () => {
   it("hands back the file's contents", async () => {
-    pick.mockResolvedValue("/tmp/in.json");
-    read.mockResolvedValue("{\"a\":1}");
+    read.mockResolvedValue({ path: "/tmp/in.json", contents: "{\"a\":1}" });
 
     await expect(readPickedFile("Import theme", ["tbtheme.json"])).resolves.toEqual({
       path: "/tmp/in.json",
       contents: "{\"a\":1}"
     });
-    expect(pick).toHaveBeenCalledWith("Import theme", ["tbtheme.json"]);
+    expect(read).toHaveBeenCalledWith("Import theme", ["tbtheme.json"]);
   });
 
   it("passes no filter when none is given", async () => {
-    pick.mockResolvedValue("/tmp/in.json");
-    read.mockResolvedValue("{}");
+    read.mockResolvedValue({ path: "/tmp/in.json", contents: "{}" });
 
     await readPickedFile("Import settings");
 
-    expect(pick).toHaveBeenCalledWith("Import settings", undefined);
+    expect(read).toHaveBeenCalledWith("Import settings", undefined);
   });
 
   it("reports a cancel as null", async () => {
-    pick.mockResolvedValue(null);
+    read.mockResolvedValue(null);
 
     await expect(readPickedFile("Import theme")).resolves.toBeNull();
-    expect(read).not.toHaveBeenCalled();
   });
 
   it("throws when the file cannot be read", async () => {
-    pick.mockResolvedValue("/tmp/in.json");
-    read.mockResolvedValue(null);
+    read.mockRejectedValue(new Error("The picked file could not be read."));
 
     await expect(readPickedFile("Import theme")).rejects.toThrow(/could not be read/i);
   });

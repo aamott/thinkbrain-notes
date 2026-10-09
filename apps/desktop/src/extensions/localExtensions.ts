@@ -51,6 +51,13 @@ export interface LocalExtensions {
   reload(id: string): Promise<LoadOutcome>;
   /** Unloads an extension, disposes its registrations, and forgets it. */
   remove(id: string): Promise<void>;
+  /**
+   * Forgets a stored directory without resolving an extension id — the
+   * removal path for a startup failure, which has no loaded entry for
+   * {@link remove} to find. Also clears the directory from
+   * {@link startupFailures}.
+   */
+  forget(directory: string): Promise<void>;
   /** Loads the directories remembered from a previous session. */
   restore(): Promise<void>;
   /** Stored directories that failed to load during {@link restore}. */
@@ -196,6 +203,20 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
             error
           );
         }
+      }
+    },
+
+    forget: async (directory) => {
+      const normalized = normalizeDirectory(directory);
+      if (stored.includes(normalized)) {
+        // Unlike `remove`, nothing is unloaded first — forgetting is the
+        // whole operation, so a failed save rejects rather than logging and
+        // swallowing: the directory would be retried (and re-reported) at the
+        // next launch while the panel already claimed it gone.
+        await persist(stored.filter((entry) => entry !== normalized));
+      }
+      if (failures.some((failure) => failure.directory === normalized)) {
+        setFailures(failures.filter((failure) => failure.directory !== normalized));
       }
     },
 

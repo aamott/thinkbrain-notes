@@ -61,6 +61,18 @@ export interface SettingsRegistry {
   getModulesByScope(scope: SettingScope): readonly SettingsModule[];
   /** Returns all resolved definitions in module and declaration order. */
   getAllDefinitions(): readonly SettingDefinition[];
+  /**
+   * Observes module registrations and disposals.
+   *
+   * The snapshots returned by {@link getAllModules}, {@link getModulesByScope},
+   * and {@link getAllDefinitions} are referentially stable between changes, so
+   * they can be read directly as `useSyncExternalStore` snapshots without
+   * looping.
+   *
+   * @param listener Called after each change, once per change.
+   * @returns A function that removes the listener.
+   */
+  subscribe(listener: () => void): () => void;
 }
 
 /**
@@ -82,6 +94,23 @@ class SettingsRegistryImpl implements SettingsRegistry {
    * global uniqueness of section ids across modules at registration time.
    */
   private readonly sectionOwners = new Map<string, string>();
+  private readonly listeners = new Set<() => void>();
+  /**
+   * Snapshot caches invalidated by {@link changed}. Subscribers depend on the
+   * getters returning the same reference until the next registry mutation.
+   */
+  private allModulesSnapshot: readonly SettingsModule[] | null = null;
+  private allDefinitionsSnapshot: readonly SettingDefinition[] | null = null;
+  private readonly scopeSnapshots = new Map<SettingScope, readonly SettingsModule[]>();
+
+  /** Invalidates the cached snapshots and notifies subscribers of one change. */
+  private changed(): void {
+    this.allModulesSnapshot = null;
+    this.allDefinitionsSnapshot = null;
+    this.scopeSnapshots.clear();
+    // Copy the set so a listener may (un)subscribe without skipping peers.
+    for (const listener of [...this.listeners]) listener();
+  }
 
   register(module: SettingsModule): Disposable {
     assertValidModuleId(module.id);
@@ -109,6 +138,7 @@ class SettingsRegistryImpl implements SettingsRegistry {
     for (const sectionId of sectionIds) {
       this.sectionOwners.set(sectionId, module.id);
     }
+    this.changed();
 
     let disposed = false;
     return {
@@ -130,6 +160,7 @@ class SettingsRegistryImpl implements SettingsRegistry {
             this.sectionOwners.delete(sectionId);
           }
         }
+        this.changed();
       }
     };
   }
@@ -177,7 +208,9 @@ class SettingsRegistryImpl implements SettingsRegistry {
   }
 
   getAllModules(): readonly SettingsModule[] {
-    return this.moduleOrder.map((id) => this.requireModule(id).module);
+    return (this.allModulesSnapshot ??= Object.freeze(
+      this.moduleOrder.map((id) => this.requireModule(id).module)
+    ));
   }
 
   getDefinition(fullKey: string): SettingDefinition | undefined {
@@ -199,23 +232,31 @@ class SettingsRegistryImpl implements SettingsRegistry {
   }
 
   getModulesByScope(scope: SettingScope): readonly SettingsModule[] {
+    const cached = this.scopeSnapshots.get(scope);
+    if (cached) return cached;
     const modules: SettingsModule[] = [];
     for (const id of this.moduleOrder) {
       const projected = projectModuleToScope(this.requireModule(id).module, scope);
       if (projected) modules.push(projected);
     }
-    return modules;
+    const frozen = Object.freeze(modules);
+    this.scopeSnapshots.set(scope, frozen);
+    return frozen;
   }
 
   getAllDefinitions(): readonly SettingDefinition[] {
-    const all: SettingDefinition[] = [];
-    for (const id of this.moduleOrder) {
-      const registered = this.requireModule(id);
-      for (const def of registered.definitions.values()) {
-        all.push(def);
-      }
-    }
-    return all;
+    return (this.allDefinitionsSnapshot ??= Object.freeze(
+      this.moduleOrder.flatMap((id) => [
+        ...this.requireModule(id).definitions.values()
+      ])
+    ));
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   /**

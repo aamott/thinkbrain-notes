@@ -124,13 +124,10 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
   const [busy, setBusy] = useState(false);
 
   // Stored directories that failed to load at startup stay stored so the user
-  // can fix them; they are reported here alongside interactive load errors.
-  const startupErrors = startupFailures.flatMap((failure) =>
-    failure.diagnostics
-      .filter((diagnostic) => diagnostic.severity === "error")
-      .map((diagnostic) => `${failure.directory}: ${diagnostic.message}`)
-  );
-  const allErrors = [...startupErrors, ...errors];
+  // can fix and retry — or forget them, the only removal path for a directory
+  // that never produced an extension id. They render as their own list rather
+  // than plain error text so each carries its Retry/Remove actions.
+
 
   const report = useCallback((outcome: LoadOutcome): void => {
     setErrors(
@@ -205,13 +202,61 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
         </button>
       </div>
 
-      {allErrors.length > 0 && (
-        // role="alert" so a failure that appears after an action is announced;
-        // index in the key because two diagnostics may share a message.
-        <ul role="alert" className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
-          {allErrors.map((message, index) => (
-            <li key={`${index}-${message}`} className="text-[0.6875rem] text-danger">
-              {message}
+      {errors.length > 0 && (
+        // role="alert" on the wrapper so a failure appearing after an action is
+        // announced without overriding the list's role; index in the key because
+        // two diagnostics may share a message.
+        <div role="alert">
+          <ul className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
+            {errors.map((message, index) => (
+              <li key={`${index}-${message}`} className="text-[0.6875rem] text-danger">
+                {message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {startupFailures.length > 0 && (
+        <ul className="m-0 list-none border-b border-border p-2" aria-label="Extensions that failed to load">
+          {startupFailures.map((failure) => (
+            <li key={failure.directory} className="rounded-small px-2 py-2">
+              <p className="m-0 truncate text-muted-foreground text-[0.6875rem]" title={failure.directory}>
+                {failure.directory}
+              </p>
+              {/* role="alert" matches the error list above: startup failures
+                  are still reported, they just carry actions now. */}
+              <ul role="alert" className="m-0 list-none p-0" aria-label="Load errors">
+                {failure.diagnostics
+                  .filter((diagnostic) => diagnostic.severity === "error")
+                  .map((diagnostic, index) => (
+                    <li key={`${index}-${diagnostic.message}`} className="text-[0.6875rem] text-danger">
+                      {diagnostic.message}
+                    </li>
+                  ))}
+              </ul>
+              <div className="mt-1 flex gap-2">
+                {/* Retry re-runs `add`, the same path a fresh pick takes: on
+                    success the failure clears and the directory stays stored. */}
+                <button
+                  type="button"
+                  aria-label={`Retry loading ${failure.directory}`}
+                  className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
+                  onClick={() => void runLocal((local) => local.add(failure.directory))}
+                  disabled={busy}
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${failure.directory}`}
+                  className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
+                  onClick={() => void runLocal((local) => local.forget(failure.directory))}
+                  disabled={busy}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
         </ul>

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  createSettingsRegistry,
   ExtensionActivationError,
   InvalidExtensionIdError,
   type Disposable
@@ -7,6 +8,7 @@ import {
 
 import {
   appSettingsRegistry,
+  createSettingsStore,
   useSettingsStore
 } from "../settings/settingsStore";
 import { appEvents } from "../events/appEvents";
@@ -512,17 +514,34 @@ describe("workspace-scoped extension settings", () => {
     ]
   };
 
-  // The settings registry is app-wide, so each test has to hand its module back
-  // or the next activation collides on the same namespace.
-  let host: ReturnType<typeof createDesktopExtensionHost> | null = null;
+  // Each activation gets a fully isolated host: a fresh schema registry and
+  // store injected through DesktopExtensionHostRegistries, so nothing here
+  // mutates the app-wide singletons or has to hand modules back between tests.
+  let host: DesktopExtensionHost | null = null;
+  let settingsStore: ReturnType<typeof createSettingsStore> | null = null;
+
+  const isolatedGateway = {
+    readAppSettings: async () => null,
+    writeAppSettings: async (revise: (current: string | null) => string) =>
+      revise(null),
+    readWorkspaceSettings: async () => null,
+    writeWorkspaceSettings: async (
+      _rootPath: string,
+      revise: (current: string | null) => string
+    ) => revise(null)
+  };
 
   afterEach(async () => {
     await host?.dispose();
     host = null;
+    settingsStore = null;
   });
 
   const activate = async (): Promise<DesktopExtensionContext> => {
-    host = createTrackedHost();
+    const settingsRegistry = createSettingsRegistry();
+    const store = createSettingsStore(isolatedGateway, settingsRegistry);
+    settingsStore = store;
+    host = createTrackedHost({ settingsRegistry, settingsStore: store });
     let context: DesktopExtensionContext | undefined;
     host.register(definition("journal-calendar", (received) => {
       context = received;
@@ -537,7 +556,7 @@ describe("workspace-scoped extension settings", () => {
 
   it("reads the override for the workspace that is open", async () => {
     const context = await activate();
-    useSettingsStore.setState({
+    settingsStore?.setState({
       appValues: {},
       workspaceValues: { [KEY]: "diary" },
       workspaceRootPath: "/notes/work",
@@ -549,7 +568,7 @@ describe("workspace-scoped extension settings", () => {
 
   it("falls back to the default when no workspace is open", async () => {
     const context = await activate();
-    useSettingsStore.setState({
+    settingsStore?.setState({
       appValues: {},
       workspaceValues: null,
       workspaceRootPath: null,
@@ -562,7 +581,7 @@ describe("workspace-scoped extension settings", () => {
   it("notifies a subscriber when the active workspace changes", async () => {
     // An open journal panel has to follow the user into the next vault.
     const context = await activate();
-    useSettingsStore.setState({
+    settingsStore?.setState({
       appValues: {},
       workspaceValues: { [KEY]: "diary" },
       workspaceRootPath: "/notes/work",
@@ -571,7 +590,7 @@ describe("workspace-scoped extension settings", () => {
     const seen: unknown[] = [];
     context.settings.onDidChange("root", (value) => seen.push(value));
 
-    useSettingsStore.setState({
+    settingsStore?.setState({
       workspaceValues: { [KEY]: "personal" },
       workspaceRootPath: "/notes/home"
     });

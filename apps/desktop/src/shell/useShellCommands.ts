@@ -6,7 +6,7 @@
  * a command does — and the chromes only see the results.
  */
 
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import {
   useDesktopCommands,
@@ -24,6 +24,36 @@ import {
   type LeftPanel,
   type RightPanel
 } from "./shellTypes";
+
+/**
+ * Context-effect overrides published by the chrome that is mounted.
+ *
+ * `runCommand` is built once in `useShellState` — before a chrome is chosen —
+ * yet several `DesktopCommandContext` effects write desktop dock state the
+ * phone chrome never reads: PhoneShell's left "dock" is a history route and
+ * its right dock an inspector overlay, so `setLeftPanel`/`setRightPanel`
+ * writes (and the `explorerOpen` persistence riding along) would land on
+ * state nothing renders. The mounted chrome registers its own equivalents
+ * through {@link useCommandSurface}; `null` means the desktop wiring built in
+ * `runCommand` below is in effect. Any field is overridable, so a chrome can
+ * substitute an explicit logged no-op for an effect it cannot express.
+ */
+let commandSurface: Partial<DesktopCommandContext> | null = null;
+
+/**
+ * Registers `overrides` as the live command surface for as long as the calling
+ * chrome is mounted, restoring the previous surface on unmount. ShellRoot
+ * renders exactly one chrome at a time, so a single slot suffices.
+ */
+export function useCommandSurface(overrides: Partial<DesktopCommandContext>): void {
+  useEffect(() => {
+    const previous = commandSurface;
+    commandSurface = overrides;
+    return () => {
+      commandSurface = previous;
+    };
+  }, [overrides]);
+}
 
 interface UseShellCommandsOptions {
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
@@ -127,7 +157,11 @@ export function useShellCommands({
         if (isSelectableLeftPanel(panelId)) revealLeft(panelId);
       },
       openSettings: openSettingsTab,
-      closePalette
+      closePalette,
+      // Spread last: the mounted chrome's rerouted effects (see
+      // `useCommandSurface`) replace the desktop dock wiring above. The
+      // desktop chrome registers nothing, so this is a no-op there.
+      ...commandSurface
     };
     void Promise.resolve()
       .then(() => command.handler(context))

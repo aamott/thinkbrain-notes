@@ -203,6 +203,41 @@ describe("desktop panel registry", () => {
     );
   });
 
+  /**
+   * A lazy-activation stub keeps its panel id through the whole activation
+   * window; the real contribution retiring it inside `register` is what keeps
+   * the popout's placeholder ("Starting extension…" / failure UI) mounted.
+   */
+  it("swaps a placeholder for the real contribution in place instead of rejecting it", () => {
+    const registry = createDesktopPanelRegistry([]);
+    registry.register(contribution("ext.before"));
+    const stubHandle = registry.register({ ...contribution("ext.view"), placeholder: true });
+    registry.register(contribution("ext.after"));
+
+    const real = { ...contribution("ext.view"), label: "Real view" };
+    expect(() => registry.register(real)).not.toThrow();
+
+    expect(registry.get("ext.view")).toEqual(real);
+    // The swap kept the stub's ordering slot, not the end of the list.
+    expect(registry.entries().map((panel) => panel.id)).toEqual([
+      "ext.before",
+      "ext.view",
+      "ext.after"
+    ]);
+
+    // The retired stub's handle is inert — disposing it must not remove the real panel.
+    stubHandle.dispose();
+    expect(registry.get("ext.view")).toEqual(real);
+  });
+
+  it("still rejects a duplicate over a real contribution", () => {
+    const registry = createDesktopPanelRegistry([]);
+    registry.register(contribution("ext.view"));
+    expect(() =>
+      registry.register({ ...contribution("ext.view"), placeholder: true })
+    ).toThrow("already registered");
+  });
+
   it("renders a panel through its typed React factory", () => {
     const panel = contribution("search");
     expect(renderToStaticMarkup(panel.factory(context))).toBe("<span>search</span>");

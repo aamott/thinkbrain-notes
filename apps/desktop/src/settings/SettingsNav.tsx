@@ -21,7 +21,7 @@ import {
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { createDebounced } from "../lib/debounce";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingDefinitions, useSettingsModules, useSettingsStore } from "./settingsStore";
 import { fuzzySearch, type FuzzySearchField } from "./fuzzyMatch";
 import { requestSettingHighlight } from "./settingHighlight";
 import { findSectionLabelPath, qualifiedSectionId, sectionAnchorId } from "./sectionUtils";
@@ -214,11 +214,12 @@ function buildSectionPath(definition: SettingDefinition): string {
   return `${moduleLabel} > ${sectionLabel}`;
 }
 
-/** Searches all registry definitions and returns them best-match first. */
-function filterDefinitions(query: string): readonly SettingDefinition[] {
-  return fuzzySearch(query, appSettingsRegistry.getAllDefinitions(), SEARCH_FIELDS).map(
-    ({ item }) => item
-  );
+/** Searches the given definitions and returns them best-match first. */
+function filterDefinitions(
+  query: string,
+  definitions: readonly SettingDefinition[]
+): readonly SettingDefinition[] {
+  return fuzzySearch(query, definitions, SEARCH_FIELDS).map(({ item }) => item);
 }
 
 /** Renders the flat search results list, scroll-reset on each new result set. */
@@ -298,12 +299,18 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
     [debouncedSetSearchQuery]
   );
 
-  const appModules = appSettingsRegistry.getModulesByScope("app");
-  const workspaceModules = appSettingsRegistry.getModulesByScope("workspace");
+  // Subscribed, not read once: extension schemas register on activation —
+  // possibly while this nav is open — and a disposed module must disappear
+  // rather than leave a stale tree pointing at dead definitions.
+  const appModules = useSettingsModules("app");
+  const workspaceModules = useSettingsModules("workspace");
   const isSearching = searchQuery.trim() !== "";
+  // Subscribed so a schema registered while the search is open is findable
+  // immediately rather than after the next unrelated re-render.
+  const allDefinitions = useSettingDefinitions();
   const results = useMemo(
-    () => (isSearching ? filterDefinitions(searchQuery) : []),
-    [isSearching, searchQuery]
+    () => (isSearching ? filterDefinitions(searchQuery, allDefinitions) : []),
+    [isSearching, searchQuery, allDefinitions]
   );
 
   /** Scrolls to a section without closing the responsive navigation. */

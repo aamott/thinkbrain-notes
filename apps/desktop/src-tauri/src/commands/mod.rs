@@ -12,6 +12,7 @@
 //! - `sync`: Auto Sync native layer — the hidden per-workspace repository.
 //! - `themes`: Discovery and listing of `.tbtheme.json` theme files in the app-data themes directory.
 //! - `extensions`: Contained reads of files inside a locally loaded extension directory.
+//! - `picked_files`: Dialog-mediated text read/write — the only paths reachable are ones the user just picked.
 //! - `watcher`: Watches the open workspace for edits made outside the app and reports them.
 //!
 //! Command names are **not** a supported contract. Extensions run in the app's
@@ -33,6 +34,7 @@ pub mod clipboard;
 pub mod extensions;
 pub mod markdown;
 pub mod media;
+pub mod picked_files;
 pub mod search;
 pub mod settings;
 pub mod sync;
@@ -86,6 +88,8 @@ macro_rules! app_command_list {
         settings::write_workspace_settings,
         themes::list_themes,
         themes::read_theme_file,
+        picked_files::pick_and_read_text_file,
+        picked_files::save_and_write_text_file,
         extensions::read_extension_file,
         backup::list_note_versions,
         backup::restore_note_backup,
@@ -185,7 +189,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            59,
+            61,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }
