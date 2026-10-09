@@ -3,7 +3,7 @@ import {
   parseFrontmatter,
   type ExtensionManifest
 } from "@thinkbrain/core";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
@@ -41,9 +41,12 @@ export const journalManifest: ExtensionManifest = {
   version: "1.0.0",
   apiVersion: "^1.0.0",
   engines: { platform: ["desktop", "mobile"] },
-  // Lazy (D65): the journal costs nothing until someone opens it or runs one
-  // of its commands.
+  // Warm (D65 revisited): the journal is a first-class surface, so it
+  // activates at startup and its kept-mounted panel warms its listing while
+  // hidden — every open is a reveal, never a load. The view/command events
+  // stay as a retry path should the startup activation fail.
   activationEvents: [
+    "onStartup",
     "onView:journal",
     "onCommand:new-entry",
     "onCommand:today",
@@ -263,9 +266,13 @@ export function activateJournal(context: DesktopExtensionContext): void {
     icon: "notebook-pen",
     side: "left",
     showWorkspaceSelector: true,
+    // Kept mounted once registered: the popout only hides it, so reopening is
+    // a CSS toggle and the listing/state survive. Freshness comes from the
+    // container's note-event subscriptions, not remounts.
+    keepMounted: true,
     // No PanelActions: D71 puts New entry, Today and Open calendar in the
     // panel's own action row, leaving the chrome row to the overflow alone.
-    factory: () => <JournalPanelRoot />
+    factory: (panelContext) => <JournalPanelRoot workspaceRoot={panelContext.rootPath} />
   });
 
   /**
@@ -277,11 +284,21 @@ export function activateJournal(context: DesktopExtensionContext): void {
    * index reports ready, because an enabled box backed by a half-built index
    * would answer wrongly rather than not at all.
    */
-  function JournalPanelRoot() {
+  function JournalPanelRoot({ workspaceRoot }: { readonly workspaceRoot: string | null }) {
     const indexStatus = useSearchIndexStore((state) => state.status.kind);
     const indexRoot = useSearchIndexStore((state) => state.rootPath);
     // D53: what the user collapsed outlives the panel, per workspace.
     const [collapsed, setCollapsed] = useCollapsedGroups("journal");
+
+    // A kept-mounted panel has no remount to notice a changed `root` setting,
+    // so the effective value is part of the listing's key below.
+    const [rootSetting, setRootSetting] = useState(configuredRoot);
+    useEffect(() => {
+      const subscription = context.settings.onDidChange("root", () =>
+        setRootSetting(configuredRoot())
+      );
+      return () => void subscription.dispose();
+    }, []);
 
     const searchEntries = useCallback(
       (query: string): Promise<ReadonlySet<string>> =>
@@ -308,6 +325,10 @@ export function activateJournal(context: DesktopExtensionContext): void {
       // API has no route to yet; the states render without them until it does.
       <JournalPanelContainer
         service={service}
+        // What the listing is of: this vault, this journal folder. A switch of
+        // either re-reads; the workspace part matters because `root` is
+        // workspace-scoped and can read the same on both sides of a switch.
+        listKey={`${workspaceRoot ?? ""}${rootSetting}`}
         onOpenCalendar={openCalendar}
         indexAvailable={indexStatus === "ready"}
         searchEntries={searchEntries}

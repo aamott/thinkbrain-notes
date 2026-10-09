@@ -78,8 +78,9 @@ describe("journal built-in", () => {
     ]);
   });
 
-  it("activates lazily, on its view or any of its commands (D65)", () => {
+  it("activates at startup, with its view and commands as the retry path", () => {
     expect(journalManifest.activationEvents).toEqual([
+      "onStartup",
       "onView:journal",
       "onCommand:new-entry",
       "onCommand:today",

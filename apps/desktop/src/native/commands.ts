@@ -65,7 +65,12 @@ export interface NativeCommandMap {
   readonly open_workspace_window: { readonly args: { readonly rootPath: string }; readonly result: null };
   readonly window_workspace_root: { readonly args: undefined; readonly result: string | null };
   readonly list_workspace_entries: {
-    readonly args: { readonly rootPath: string; readonly includeHidden: boolean };
+    readonly args: {
+      readonly rootPath: string;
+      readonly includeHidden: boolean;
+      /** Scopes the listing to one folder subtree instead of the whole vault. */
+      readonly pathPrefix?: string;
+    };
     readonly result: readonly NativeWorkspaceEntry[];
   };
   readonly quarantined_settings: {

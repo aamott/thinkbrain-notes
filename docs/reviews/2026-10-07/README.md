@@ -113,9 +113,9 @@ this branch (fixed or resolved as duplicates); 12 remain below.
 ## Notes
 
 - **Already tracked elsewhere:** `read_extension_file`'s renderer-chosen
-  `directory` root (`pending-ipc_hardening-low-med.md`) and `listNotes`
-  full-vault filtering (`pending-extension_listnotes_prefix-low-med.md`)
-  were deliberately not re-filed.
+  `directory` root (`pending-ipc_hardening-low-med.md`) was deliberately
+  not re-filed. `listNotes` full-vault filtering was fixed in the journal
+  latency pass (`done-extension_listnotes_prefix-low-med.md`).
 - **Security posture:** extension code is deliberately trusted same-realm
   JS (documented). The remaining real primitives are
   `unscoped-fs-plugin-permissions` plus the already-tracked IPC gap.

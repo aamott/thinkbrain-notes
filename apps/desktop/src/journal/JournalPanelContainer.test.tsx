@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { appEvents } from "../events/appEvents";
 import { JournalPanelContainer } from "./JournalPanelContainer";
 import {
   getJournalFilter,
@@ -571,5 +572,70 @@ describe("metadata filters", () => {
     // Nothing claims to be filtering by something it cannot check.
     expect(host.textContent).toContain("6:02 PM");
     expect(host.textContent).not.toContain("Mood good");
+  });
+});
+
+describe("kept-mounted freshness", () => {
+  // The panel no longer remounts on every open, so these are what keep a
+  // warm listing honest: note events and a change of what it is listing.
+  it("re-reads the folder when a note is created", async () => {
+    const listEntries = vi
+      .fn<JournalService["listEntries"]>()
+      .mockResolvedValue(listing(["2026-08-07-1802.md"]));
+    await mount({ service: service({ listEntries }) });
+    expect(listEntries).toHaveBeenCalledTimes(1);
+
+    await act(async () =>
+      appEvents.emit("note.created", {
+        rootPath: "/vault",
+        relativePath: "journal/2026-08-08-0900.md"
+      })
+    );
+
+    expect(listEntries).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads the folder when the listing key changes", async () => {
+    const listEntries = vi
+      .fn<JournalService["listEntries"]>()
+      .mockResolvedValue(listing(["2026-08-07-1802.md"]));
+    const svc = service({ listEntries });
+    await mount({ service: svc, listKey: "vault-a\0journal" });
+    expect(listEntries).toHaveBeenCalledTimes(1);
+
+    await act(async () =>
+      root?.render(
+        <JournalPanelContainer
+          service={svc}
+          listKey={"vault-b\0journal"}
+          onOpenCalendar={() => undefined}
+        />
+      )
+    );
+
+    expect(listEntries).toHaveBeenCalledTimes(2);
+  });
+
+  it("refetches the saved entry's preview rather than relisting", async () => {
+    const listEntries = vi
+      .fn<JournalService["listEntries"]>()
+      .mockResolvedValue(listing(["2026-08-07-1802.md"]));
+    const readPreview = vi.fn<JournalService["readPreview"]>(async () => "A line.");
+    const host = await mount({ service: service({ listEntries, readPreview }) });
+    await act(async () => {});
+    const reads = readPreview.mock.calls.length;
+    const listings = listEntries.mock.calls.length;
+
+    await act(async () =>
+      appEvents.emit("note.saved", {
+        rootPath: "/vault",
+        relativePath: "journal/2026-08-07-1802.md"
+      })
+    );
+    await act(async () => {});
+
+    expect(readPreview.mock.calls.length).toBeGreaterThan(reads);
+    expect(listEntries).toHaveBeenCalledTimes(listings);
+    expect(host.textContent).toContain("A line.");
   });
 });

@@ -494,6 +494,87 @@ fn rename_workspace_entry_classifies_extension_changes_independently() {
 }
 
 #[test]
+fn list_workspace_entries_scopes_to_a_path_prefix() {
+    let root = temp_test_dir("list-prefix");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "journal/2026-01-01.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("journal entry is created");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "journal/2026-01-02.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("journal entry is created");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "other/note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("outside note is created");
+
+    let entries = list_workspace_entries(
+        root.to_string_lossy().to_string(),
+        false,
+        Some("journal".to_string()),
+    )
+    .expect("prefixed listing succeeds");
+
+    let paths: Vec<&str> = entries
+        .iter()
+        .map(|entry| entry.relative_path.as_str())
+        .collect();
+    assert!(paths.contains(&"journal/2026-01-01.md"));
+    assert!(paths.contains(&"journal/2026-01-02.md"));
+    assert!(
+        paths.iter().all(|path| path.starts_with("journal/")),
+        "prefixed listing stays inside the subtree: {paths:?}"
+    );
+
+    fs::remove_dir_all(root).expect("temp list-prefix directory is cleaned up");
+}
+
+#[test]
+fn list_workspace_entries_missing_prefix_is_an_empty_listing() {
+    let root = temp_test_dir("list-missing-prefix");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("note is created");
+
+    let entries = list_workspace_entries(
+        root.to_string_lossy().to_string(),
+        false,
+        Some("journal".to_string()),
+    )
+    .expect("missing prefix is not an error");
+
+    assert!(entries.is_empty());
+
+    fs::remove_dir_all(root).expect("temp list-missing-prefix directory is cleaned up");
+}
+
+#[test]
+fn list_workspace_entries_rejects_a_prefix_that_escapes() {
+    let root = temp_test_dir("list-escape-prefix");
+
+    let error = list_workspace_entries(
+        root.to_string_lossy().to_string(),
+        false,
+        Some("../".to_string()),
+    )
+    .expect_err("escaping prefix is rejected");
+
+    assert_eq!(error.code, "workspace.invalid_path");
+
+    fs::remove_dir_all(root).expect("temp list-escape-prefix directory is cleaned up");
+}
+
+#[test]
 fn collect_moved_files_fails_loudly_at_the_workspace_limit() {
     let root = temp_test_dir("move-limit");
     create_workspace_file(

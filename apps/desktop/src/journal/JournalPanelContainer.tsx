@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { appEvents } from "../events/appEvents";
 import { createDebounced } from "../lib/debounce";
 import { JournalPanel } from "./JournalPanel";
 import {
@@ -34,6 +35,12 @@ const PREVIEW_CONCURRENCY = 8;
 
 export interface JournalPanelContainerProps {
   readonly service: JournalService;
+  /**
+   * What the listing is of — workspace root plus journal folder. A
+   * kept-mounted panel has no remount to notice a vault switch or a `root`
+   * setting change, so both arrive through this key and re-read the folder.
+   */
+  readonly listKey?: string;
   /** False until the platform index is ready for this workspace (D41). */
   readonly indexAvailable?: boolean;
   /**
@@ -77,6 +84,7 @@ export interface JournalPanelContainerProps {
 
 export function JournalPanelContainer({
   service,
+  listKey = "",
   indexAvailable = false,
   searchEntries,
   loadFacets,
@@ -103,6 +111,7 @@ export function JournalPanelContainer({
     matchingPaths
   } = useJournalEntriesQuery({
     service,
+    listKey,
     indexAvailable,
     searchEntries,
     loadFacets,
@@ -144,6 +153,34 @@ export function JournalPanelContainer({
     setPreviewState({ listing, previews: new Map() });
   }
   const previews = previewState.previews;
+
+  // The panel is kept mounted, so nothing remounts it into freshness: the
+  // listing follows the folder changes every surface announces (D68), the
+  // same rule the calendar tab applies. `note.saved` is absent — a prose
+  // edit changes no listing field, and relisting on every autosave would
+  // churn the folder while the user types.
+  useEffect(() => {
+    const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
+      (event) => appEvents.on(event, reload)
+    );
+    return () => {
+      for (const subscription of subscriptions) void subscription.dispose();
+    };
+  }, [reload]);
+
+  // A save can change the one thing the listing borrows from file contents:
+  // the preview. Drop just that path so the visible window refetches it.
+  useEffect(() => {
+    const subscription = appEvents.on("note.saved", ({ relativePath }) => {
+      setPreviewState((current) => {
+        if (!current.previews.has(relativePath)) return current;
+        const previews = new Map(current.previews);
+        previews.delete(relativePath);
+        return { listing: current.listing, previews };
+      });
+    });
+    return () => void subscription.dispose();
+  }, []);
 
   /**
    * Reads the first line of the entries the panel says are on screen (D9).

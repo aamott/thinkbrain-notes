@@ -196,12 +196,20 @@ describe("listNotes", () => {
     expect(notes.map((note) => note.relativePath)).toEqual(["journal/a.md"]);
   });
 
+  it("passes the folder prefix to the native listing", async () => {
+    const { workspace, listWorkspaceEntries } = setup("/vault", []);
+
+    await workspace.listNotes("journal");
+
+    expect(listWorkspaceEntries).toHaveBeenCalledWith("/vault", false, "journal/");
+  });
+
   it("does not ask the native side for hidden entries", async () => {
     const { workspace, listWorkspaceEntries } = setup("/vault", []);
 
     await workspace.listNotes();
 
-    expect(listWorkspaceEntries).toHaveBeenCalledWith("/vault", false);
+    expect(listWorkspaceEntries).toHaveBeenCalledWith("/vault", false, undefined);
   });
 
   it("rejects when no workspace is open", async () => {

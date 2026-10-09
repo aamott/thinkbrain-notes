@@ -181,7 +181,9 @@ export function createExtensionWorkspace(
         folder = prefix.endsWith("/") ? prefix : `${prefix}/`;
       }
 
-      const found = await entries.listWorkspaceEntries(root, false);
+      // The prefix is pushed down so a folder query scans just that subtree;
+      // the filter stays as a contract check on what came back.
+      const found = await entries.listWorkspaceEntries(root, false, folder || undefined);
       return found
         .filter(
           (entry) =>
