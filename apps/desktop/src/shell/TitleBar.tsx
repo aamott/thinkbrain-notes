@@ -393,13 +393,18 @@ export function TitleBar({
                 aria-disabled="true"
                 aria-label={action.label}
                 title={action.label}
-                className="inline-flex w-[1.6rem] h-[1.6rem] items-center justify-center rounded-small text-titlebar-foreground opacity-40 [&>svg]:w-[1.05rem] [&>svg]:h-[1.05rem] [&>svg]:stroke-current"
+                className="inline-flex w-[1.6rem] h-[1.6rem] items-center justify-center rounded-small text-titlebar-foreground opacity-40"
                 onContextMenu={(event) => {
                   event.preventDefault();
                   setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
                 }}
               >
-                <PanelIcon name={action.icon} />
+                <span
+                  aria-hidden="true"
+                  className="inline-flex items-center justify-center [&>svg]:w-[1.05rem] [&>svg]:h-[1.05rem] [&>svg]:stroke-current"
+                >
+                  <PanelIcon name={action.icon} />
+                </span>
               </span>
             )
           )}

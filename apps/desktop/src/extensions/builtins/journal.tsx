@@ -18,6 +18,7 @@ import {
   searchJournalEntries
 } from "../../journal/journalIndex";
 import { useSearchIndexStore } from "../../search/searchIndexStore";
+import { subscribeWorkspaceBridge } from "../workspaceBridge";
 import { searchService } from "../../search/searchService";
 import type { JournalFacet, JournalPredicate } from "../../journal/journalFacets";
 import { useCollapsedGroups } from "../../journal/journalCollapse";
@@ -272,7 +273,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     keepMounted: true,
     // No PanelActions: D71 puts New entry, Today and Open calendar in the
     // panel's own action row, leaving the chrome row to the overflow alone.
-    factory: (panelContext) => <JournalPanelRoot workspaceRoot={panelContext.rootPath} />
+    factory: () => <JournalPanelRoot />
   });
 
   /**
@@ -284,14 +285,24 @@ export function activateJournal(context: DesktopExtensionContext): void {
    * index reports ready, because an enabled box backed by a half-built index
    * would answer wrongly rather than not at all.
    */
-  function JournalPanelRoot({ workspaceRoot }: { readonly workspaceRoot: string | null }) {
+  function JournalPanelRoot() {
     const indexStatus = useSearchIndexStore((state) => state.status.kind);
     const indexRoot = useSearchIndexStore((state) => state.rootPath);
     // D53: what the user collapsed outlives the panel, per workspace.
     const [collapsed, setCollapsed] = useCollapsedGroups("journal");
 
-    // A kept-mounted panel has no remount to notice a changed `root` setting,
-    // so the effective value is part of the listing's key below.
+    // A kept-mounted panel has no remount to notice a workspace switch or a
+    // changed `root` setting, so both feed the listing's key. The workspace
+    // root comes from the bridge — the same source the service reads — and
+    // the subscription fires inside the publish itself, where an effect
+    // reading `panelContext.rootPath` could still see the stale root.
+    const [bridgeRoot, setBridgeRoot] = useState(() => context.workspace.rootPath());
+    useEffect(() => {
+      const subscription = subscribeWorkspaceBridge((bridge) =>
+        setBridgeRoot(bridge?.rootPath ?? null)
+      );
+      return () => void subscription.dispose();
+    }, []);
     const [rootSetting, setRootSetting] = useState(configuredRoot);
     useEffect(() => {
       const subscription = context.settings.onDidChange("root", () =>
@@ -328,7 +339,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
         // What the listing is of: this vault, this journal folder. A switch of
         // either re-reads; the workspace part matters because `root` is
         // workspace-scoped and can read the same on both sides of a switch.
-        listKey={`${workspaceRoot ?? ""}${rootSetting}`}
+        listKey={`${bridgeRoot ?? ""}${rootSetting}`}
         onOpenCalendar={openCalendar}
         indexAvailable={indexStatus === "ready"}
         searchEntries={searchEntries}
