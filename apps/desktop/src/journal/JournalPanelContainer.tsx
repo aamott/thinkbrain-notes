@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { appEvents } from "../events/appEvents";
 import { createDebounced } from "../lib/debounce";
 import { JournalPanel } from "./JournalPanel";
+import { useJournalListRefresh } from "./journalChrome";
 import {
   predicateChips,
   predicateId,
@@ -155,18 +156,8 @@ export function JournalPanelContainer({
   const previews = previewState.previews;
 
   // The panel is kept mounted, so nothing remounts it into freshness: the
-  // listing follows the folder changes every surface announces (D68), the
-  // same rule the calendar tab applies. `note.saved` is absent — a prose
-  // edit changes no listing field, and relisting on every autosave would
-  // churn the folder while the user types.
-  useEffect(() => {
-    const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
-      (event) => appEvents.on(event, reload)
-    );
-    return () => {
-      for (const subscription of subscriptions) void subscription.dispose();
-    };
-  }, [reload]);
+  // listing follows the folder changes every surface announces (D68).
+  useJournalListRefresh(reload);
 
   // A save can change the one thing the listing borrows from file contents:
   // the preview. Drop just that path so the visible window refetches it.

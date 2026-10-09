@@ -76,7 +76,7 @@ export function PanelTitle({
           </button>
         )}
         {titleContent ?? (
-          <h2 className="m-0 truncate text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case pointer-coarse:font-semibold">
+          <h2 className="m-0 truncate text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case">
             {title}
           </h2>
         )}
@@ -174,9 +174,7 @@ function PanelMenuEntry({
   }
   const checked = optimistic ?? item.checked;
 
-  const separator = item.separatorBefore && (
-    <MenuSeparator />
-  );
+  const separator = item.separatorBefore && <MenuSeparator />;
   if (item.disabled) {
     return (
       <>

@@ -45,7 +45,7 @@ function useSubscribedSlice<S extends SubscribedSliceSource, T>(
 
       const attach = (): void => {
         const source = getSource();
-        if (source === null || source === undefined) {
+        if (!source) {
           if (checks < LATE_SOURCE_CHECKS) {
             checks += 1;
             timer = setTimeout(attach, LATE_SOURCE_CHECK_MS);
@@ -101,6 +101,10 @@ const STATUS_LABELS: Record<BootstrapEntry["status"], string> = {
   incompatible: "Incompatible"
 };
 
+/** Shared look for the Retry/Remove/Reload text buttons. */
+const ACTION_BUTTON =
+  "cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50";
+
 /**
  * Lists installed extensions and their live status, and loads development
  * extensions from a local directory.
@@ -127,7 +131,6 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
   // can fix and retry — or forget them, the only removal path for a directory
   // that never produced an extension id. They render as their own list rather
   // than plain error text so each carries its Retry/Remove actions.
-
 
   const report = useCallback((outcome: LoadOutcome): void => {
     setErrors(
@@ -241,7 +244,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                 <button
                   type="button"
                   aria-label={`Retry loading ${failure.directory}`}
-                  className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
+                  className={ACTION_BUTTON}
                   onClick={() => void runLocal((local) => local.add(failure.directory))}
                   disabled={busy}
                 >
@@ -250,7 +253,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                 <button
                   type="button"
                   aria-label={`Remove ${failure.directory}`}
-                  className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
+                  className={ACTION_BUTTON}
                   onClick={() => void runLocal((local) => local.forget(failure.directory))}
                   disabled={busy}
                 >
@@ -289,7 +292,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                   <div className="mt-1 flex gap-2">
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
+                      className={ACTION_BUTTON}
                       onClick={() => void runLocal((local) => local.reload(entry.id))}
                       disabled={busy}
                     >
@@ -297,7 +300,7 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                     </button>
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
+                      className={ACTION_BUTTON}
                       onClick={() => void runLocal((local) => local.remove(entry.id))}
                       disabled={busy}
                     >

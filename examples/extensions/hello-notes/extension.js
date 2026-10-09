@@ -233,7 +233,7 @@ function mountPanel(element, panel, context) {
   // Initial paint and live updates (a workspace opened while the panel is
   // up). Called only after captureBtn exists because renderStatus reads it.
   renderStatus(panel.state);
-  panel.onDidChange(renderStatus);
+  const stateChanges = panel.onDidChange(renderStatus);
 
   /** Captures the textarea content and clears the input. */
   const captureFromInput = async () => {
@@ -357,7 +357,7 @@ function mountPanel(element, panel, context) {
 
   // Optional: undo anything that outlives the element. The element's own
   // children are discarded for you.
-  return () => created.dispose();
+  return [stateChanges, created];
 }
 
 export function activate(context) {

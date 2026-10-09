@@ -130,9 +130,28 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   };
 
   const disposeActionRegistrations = (state: EntryState): void => {
-    for (const registration of state.mobileNewNoteActionRegistrations) registration.dispose();
-    state.mobileNewNoteActionRegistrations = [];
+    state.mobileNewNoteActionRegistrations = disposeAll(state.mobileNewNoteActionRegistrations);
   };
+
+  /** A fresh entry state; only the manifest-level fields vary between sources. */
+  const entryState = (
+    manifest: ExtensionManifest,
+    source: ExtensionSource,
+    directory: string | undefined,
+    status: BootstrapEntryStatus,
+    reasons: readonly BootstrapReason[]
+  ): EntryState => ({
+    manifest,
+    source,
+    directory,
+    status,
+    reasons,
+    commandStubs: [],
+    panelStubs: [],
+    mobileNewNoteActionRegistrations: [],
+    registration: null,
+    activation: undefined
+  });
 
   /**
    * Activates an extension at most once.
@@ -321,18 +340,13 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     }
 
     const compatibility = evaluateCompatibility(manifest, compatibilityHost);
-    const state: EntryState = {
+    const state = entryState(
       manifest,
-      source: "built-in",
-      directory: undefined,
-      status: compatibility.compatible ? "registered" : "incompatible",
-      reasons: compatibility.reasons,
-      commandStubs: [],
-      panelStubs: [],
-      mobileNewNoteActionRegistrations: [],
-      registration: null,
-      activation: undefined
-    };
+      "built-in",
+      undefined,
+      compatibility.compatible ? "registered" : "incompatible",
+      compatibility.reasons
+    );
     states.set(manifest.id, state);
 
     if (!compatibility.compatible) {
@@ -414,20 +428,15 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       // the registry boundary, so any future producer of a `LoadedExtension`
       // that skips the loader is still held to the platform/apiVersion check.
       const compatibility = evaluateCompatibility(extension.manifest, compatibilityHost);
-      const state: EntryState = {
-        manifest: extension.manifest,
-        source: "local-directory",
-        directory: extension.directory,
-        status: compatibility.compatible ? "registered" : "incompatible",
-        // Load diagnostics ride along as reasons so the Extensions panel shows
-        // an author why, for example, a declared panel did not appear.
-        reasons: [...toReasons(diagnostics), ...compatibility.reasons],
-        commandStubs: [],
-        panelStubs: [],
-        mobileNewNoteActionRegistrations: [],
-        registration: null,
-        activation: undefined
-      };
+      // Load diagnostics ride along as reasons so the Extensions panel shows
+      // an author why, for example, a declared panel did not appear.
+      const state = entryState(
+        extension.manifest,
+        "local-directory",
+        extension.directory,
+        compatibility.compatible ? "registered" : "incompatible",
+        [...toReasons(diagnostics), ...compatibility.reasons]
+      );
       states.set(state.manifest.id, state);
 
       if (!compatibility.compatible) {

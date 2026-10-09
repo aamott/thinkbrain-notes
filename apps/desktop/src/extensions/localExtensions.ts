@@ -104,6 +104,13 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
     stored = deduped;
   };
 
+  /** Clears a directory's recorded startup failure, if it has one. */
+  const clearFailure = (directory: string): void => {
+    if (failures.some((failure) => failure.directory === directory)) {
+      setFailures(failures.filter((failure) => failure.directory !== directory));
+    }
+  };
+
   const directoryOf = (id: string): string | undefined =>
     bootstrap.entries().find((entry) => entry.id === id)?.directory;
 
@@ -119,8 +126,7 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
       // `addLocalExtension` throws synchronously on a duplicate id. Convert the
       // throw into a failed outcome so the caller sees a clear message instead
       // of a raw "already registered" error escaping `add`.
-      const message = getErrorMessage(error);
-      return { loaded: false, diagnostics: [{ code: "extension_already_registered", message, severity: "error" }] };
+      return failed(getErrorMessage(error), "extension_already_registered");
     }
     return { loaded: true, diagnostics: result.diagnostics };
   };
@@ -165,9 +171,7 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
           ]
         };
       }
-      if (failures.some((failure) => failure.directory === normalized)) {
-        setFailures(failures.filter((failure) => failure.directory !== normalized));
-      }
+      clearFailure(normalized);
       return outcome;
     },
 
@@ -215,9 +219,7 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
         // next launch while the panel already claimed it gone.
         await persist(stored.filter((entry) => entry !== normalized));
       }
-      if (failures.some((failure) => failure.directory === normalized)) {
-        setFailures(failures.filter((failure) => failure.directory !== normalized));
-      }
+      clearFailure(normalized);
     },
 
     restore: async () => {

@@ -9,7 +9,6 @@ type OutlinePanelProps = {
 
 type OutlineNode = {
   readonly heading: Heading;
-  readonly level: number;
   readonly children: OutlineNode[];
 };
 
@@ -43,17 +42,17 @@ export function OutlinePanel({ contents }: OutlinePanelProps) {
  * heading beneath the nearest preceding lower-level heading.
  */
 function buildOutlineTree(headings: readonly Heading[]): readonly OutlineNode[] {
-  const root: { level: 0; children: OutlineNode[] } = { level: 0, children: [] };
-  const stack: Array<{ level: number; children: OutlineNode[] }> = [root];
+  const root: { level: number; children: OutlineNode[] } = { level: 0, children: [] };
+  const stack: { level: number; children: OutlineNode[] }[] = [root];
 
   for (const heading of headings) {
     while (stack.at(-1)!.level >= heading.level) {
       stack.pop();
     }
 
-    const node: OutlineNode = { heading, level: heading.level, children: [] };
+    const node: OutlineNode = { heading, children: [] };
     stack.at(-1)!.children.push(node);
-    stack.push(node);
+    stack.push({ level: heading.level, children: node.children });
   }
 
   return root.children;

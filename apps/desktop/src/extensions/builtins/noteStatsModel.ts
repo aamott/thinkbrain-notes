@@ -28,7 +28,8 @@ export const FALLBACK_WPM = 200;
 export function computeNoteStats(contents: string | null, wordsPerMinute: number): NoteStats {
   const text = contents ?? "";
   const trimmed = text.trim();
-  const words = trimmed.length === 0 ? 0 : trimmed.split(/\s+/).filter(Boolean).length;
+  // A trimmed string split on whitespace runs cannot yield empty tokens.
+  const words = trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
   const rate = Number.isFinite(wordsPerMinute) && wordsPerMinute > 0 ? wordsPerMinute : FALLBACK_WPM;
 
   return {

@@ -8,13 +8,12 @@ import {
 } from "react";
 
 import { listWindow, rowOffsets } from "../lib/listWindow";
+import { noteName } from "../lib/utils";
 import { Menu, MenuButton, MenuSeparator, type MenuPosition } from "../shell/Menu";
 import { EmptyState, JournalTrouble } from "./journalChrome";
 import { Row } from "./JournalRow";
 import { JournalPanelHeader } from "./JournalPanelHeader";
 import type { JournalChip, JournalFacet, JournalPredicate } from "./journalFacets";
-
-export type { JournalChip };
 import {
   ESTIMATED_ROW_HEIGHTS,
   journalRowHeights,
@@ -101,7 +100,6 @@ export interface JournalPanelProps {
   readonly onCreateFolder: () => void;
 }
 
-/** A header's accessible name carries its count; the visible badge is not enough. */
 // `rowName` lives in `journalRowUtils.ts`; `Row` lives in `JournalRow.tsx` — presentational, no panel state.
 
 export function JournalPanel({
@@ -285,9 +283,8 @@ export function JournalPanel({
   const commitRename = (): void => {
     if (!renaming) return;
     const trimmed = renaming.draft.trim();
-    const slash = renaming.path.lastIndexOf("/");
-    const folder = slash >= 0 ? renaming.path.slice(0, slash + 1) : "";
-    const currentName = slash >= 0 ? renaming.path.slice(slash + 1) : renaming.path;
+    const currentName = noteName(renaming.path);
+    const folder = renaming.path.slice(0, renaming.path.length - currentName.length);
     if (trimmed && trimmed !== currentName && onRenameEntry) {
       onRenameEntry(renaming.path, `${folder}${trimmed}`);
     }
@@ -441,9 +438,7 @@ export function JournalPanel({
           <MenuButton label="Open" onClick={() => { onOpenEntry(contextMenu.entryPath); setContextMenu(null); }} />
           {onRenameEntry && (
             <MenuButton label="Rename" onClick={() => {
-              const slash = contextMenu.entryPath.lastIndexOf("/");
-              const name = slash >= 0 ? contextMenu.entryPath.slice(slash + 1) : contextMenu.entryPath;
-              setRenaming({ path: contextMenu.entryPath, draft: name });
+              setRenaming({ path: contextMenu.entryPath, draft: noteName(contextMenu.entryPath) });
               setContextMenu(null);
             }} />
           )}

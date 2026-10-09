@@ -177,23 +177,12 @@ export function activateJournal(context: DesktopExtensionContext): void {
   }
 
   /**
-   * Re-reads the field definitions whenever they change.
-   *
-   * Nothing re-renders an open editor when a setting changes, so a field added
-   * in Settings stayed invisible on the note in front of you until you happened
-   * to type. Subscribing through the extension API keeps the widget honest
-   * about what is configured right now.
-   */
-  const useDefinitions = () =>
-    useWatchedSetting<string, string>("fieldDefinitions", (raw) => raw ?? "[]");
-
-  /**
-   * The watched raw definitions, parsed and validated once per settings
+   * The watched raw field definitions, parsed and validated once per settings
    * change rather than on every re-render (which happens on every keystroke
    * in an open editor).
    */
   const useParsedDefinitions = () => {
-    const raw = useDefinitions();
+    const raw = useWatchedSetting<string, string>("fieldDefinitions", (v) => v ?? "[]");
     return useMemo(() => parseFieldDefinitions(raw).definitions, [raw]);
   };
 
@@ -303,13 +292,10 @@ export function activateJournal(context: DesktopExtensionContext): void {
       );
       return () => void subscription.dispose();
     }, []);
-    const [rootSetting, setRootSetting] = useState(configuredRoot);
-    useEffect(() => {
-      const subscription = context.settings.onDidChange("root", () =>
-        setRootSetting(configuredRoot())
-      );
-      return () => void subscription.dispose();
-    }, []);
+    const rootSetting = useWatchedSetting<string, string>(
+      "root",
+      (raw) => raw ?? DEFAULT_ROOT
+    );
 
     const searchEntries = useCallback(
       (query: string): Promise<ReadonlySet<string>> =>
@@ -387,20 +373,24 @@ export function activateJournal(context: DesktopExtensionContext): void {
     factory: () => <CalendarTabRoot />
   });
 
+  /**
+   * Fail loudly: the service rejects with a JournalError (no workspace,
+   * invalid root, unreadable folder) whose copy the journal panel already
+   * renders — a discarded promise would only surface as console noise.
+   * Revealing the panel to show that copy needs a left-panel reveal the
+   * command context cannot express yet (see the open-calendar route).
+   */
+  const reportFailure = (what: string) => (error: unknown) => {
+    console.error(`[journal] ${what} failed.`, error);
+  };
+
   context.commands.register({
     id: "new-entry",
     title: "New journal entry",
     keywords: ["journal", "diary", "entry"],
     availability: "available",
     handler: ({ closePalette }) => {
-      // Fail loudly: the service rejects with a JournalError (no workspace,
-      // invalid root, unreadable folder) whose copy the journal panel already
-      // renders — a discarded promise would only surface as console noise.
-      // Revealing the panel to show that copy needs a left-panel reveal the
-      // command context cannot express yet (see the open-calendar route).
-      service.createEntry().catch((error: unknown) => {
-        console.error("[journal] New journal entry failed.", error);
-      });
+      service.createEntry().catch(reportFailure("New journal entry"));
       closePalette();
     }
   });
@@ -411,10 +401,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     keywords: ["journal", "today", "diary"],
     availability: "available",
     handler: ({ closePalette }) => {
-      // See `new-entry` above: the rejection is reported, never swallowed.
-      service.openToday().catch((error: unknown) => {
-        console.error("[journal] Open today's journal entry failed.", error);
-      });
+      service.openToday().catch(reportFailure("Open today's journal entry"));
       closePalette();
     }
   });

@@ -172,10 +172,7 @@ export function createJournalService(options: JournalServiceOptions): JournalSer
   let tail: Promise<unknown> = Promise.resolve();
   const serialize = <T>(work: () => Promise<T>): Promise<T> => {
     const next = tail.then(work, work);
-    tail = next.then(
-      () => undefined,
-      () => undefined
-    );
+    tail = next.catch(() => undefined);
     return next;
   };
 

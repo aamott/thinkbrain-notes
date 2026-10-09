@@ -11,7 +11,7 @@ import {
 } from "@thinkbrain/core";
 import { useRef, useState } from "react";
 
-import { JournalTrouble, type JournalTroubleCode } from "./journalChrome";
+import { JournalTrouble, TOUCH, type JournalTroubleCode } from "./journalChrome";
 
 /**
  * The journal calendar, as a canvas tab (D14/D27).
@@ -61,8 +61,7 @@ export interface CalendarTabProps {
   readonly onOpenSettings?: () => void;
 }
 
-const STRIP_BUTTON =
-  "h-6 min-w-6 pointer-coarse:min-h-11 pointer-coarse:min-w-11 px-2 rounded-small border border-border text-muted-foreground text-xs cursor-pointer hover:text-foreground";
+const STRIP_BUTTON = `h-6 min-w-6 ${TOUCH} px-2 rounded-small border border-border text-muted-foreground text-xs cursor-pointer hover:text-foreground`;
 
 function DayCell({
   date,
@@ -99,7 +98,7 @@ function DayCell({
       onClick={onSelect}
       className={[
         "flex min-h-[4.4rem] flex-col gap-1 border-b border-r border-border p-1.5 text-left cursor-pointer",
-        isSelected ? "bg-accent outline outline-2 -outline-offset-2 outline-ring" : ""
+        isSelected ? "bg-accent outline-solid outline-2 -outline-offset-2 outline-ring" : ""
       ].join(" ")}
     >
       <span
@@ -114,7 +113,7 @@ function DayCell({
       {count > 0 && (
         <span className="flex items-center gap-0.5" aria-hidden="true">
           {Array.from({ length: Math.min(count, MAX_DOTS) }, (_unused, index) => (
-            <span key={index} className="h-[5px] w-[5px] rounded-full bg-primary" />
+            <span key={index} className="h-1.25 w-1.25 rounded-full bg-primary" />
           ))}
           {count > MAX_DOTS && (
             // D57: under a 40px cell — a container under 280px — the dots stand
@@ -212,7 +211,7 @@ export function CalendarTab({
               aria-label={option === "week" ? "Week" : "Month"}
               aria-checked={view === option}
               onClick={() => onViewChange(option)}
-              className={`pointer-coarse:min-h-11 pointer-coarse:min-w-11 px-2.5 py-0.5 text-xs capitalize cursor-pointer ${
+              className={`${TOUCH} px-2.5 py-0.5 text-xs capitalize cursor-pointer ${
                 view === option
                   ? "bg-accent font-semibold text-accent-foreground"
                   : "text-muted-foreground"

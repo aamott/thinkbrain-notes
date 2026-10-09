@@ -19,11 +19,6 @@ import {
   type LocalDirectoryLoader
 } from "./localDirectoryLoader";
 
-/** Reads a file inside an extension directory through the native bridge. */
-async function readExtensionFile(directory: string, relativePath: string): Promise<string> {
-  return invokeNativeCommand("read_extension_file", { directory, relativePath });
-}
-
 /** Evaluates one url as an ES module. Injected so tests need no real blob. */
 type DynamicImport = (url: string) => Promise<unknown>;
 
@@ -55,7 +50,9 @@ export function createExtensionModuleImporter(
 /** The loader used by the running desktop app. */
 export function createDesktopLocalDirectoryLoader(): LocalDirectoryLoader {
   return createLocalDirectoryLoader({
-    readFile: readExtensionFile,
+    // A file inside an extension directory is read through the native bridge.
+    readFile: (directory, relativePath) =>
+      invokeNativeCommand("read_extension_file", { directory, relativePath }),
     importModule: createExtensionModuleImporter()
   });
 }

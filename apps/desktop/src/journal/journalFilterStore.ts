@@ -35,10 +35,6 @@ export function selectJournalDay(day: JournalDate | null): void {
   useJournalFilterStore.setState(next === null ? EMPTY : { selectedDay: next });
 }
 
-export function subscribeJournalFilter(listener: () => void): () => void {
-  return useJournalFilterStore.subscribe(listener);
-}
-
 /** Test seam: no UI clears the whole filter set yet, but tests must. */
 export function resetJournalFilter(): void {
   useJournalFilterStore.setState(EMPTY);

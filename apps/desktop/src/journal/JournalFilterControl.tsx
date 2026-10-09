@@ -40,7 +40,6 @@ export function JournalFilterControl({
   const [anchor, setAnchor] = useState<MenuPosition | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const active = new Set(predicates.map(predicateId));
-  const count = activeCount;
   // A field the index found no values for has nothing to offer, and an empty
   // heading reads as a bug.
   const shown = facets.filter((facet) => facet.values.length > 0);
@@ -68,9 +67,9 @@ export function JournalFilterControl({
         aria-expanded={anchor !== null}
         // The count belongs in the name, not only in the badge (D31).
         aria-label={
-          count === 0
+          activeCount === 0
             ? "Filter entries"
-            : `Filter entries, ${count} filter${count === 1 ? "" : "s"} active`
+            : `Filter entries, ${activeCount} filter${activeCount === 1 ? "" : "s"} active`
         }
         onClick={() => {
           if (anchor !== null) {
@@ -84,12 +83,12 @@ export function JournalFilterControl({
       >
         <PanelIcon name="filter" className="w-[0.7rem] h-[0.7rem] translate-y-px" />
         Filter
-        {count > 0 && (
+        {activeCount > 0 && (
           <span
             aria-hidden="true"
             className="rounded-small bg-primary px-1 text-[0.6rem] font-semibold text-primary-foreground"
           >
-            {count}
+            {activeCount}
           </span>
         )}
       </button>

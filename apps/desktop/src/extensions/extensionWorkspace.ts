@@ -150,12 +150,10 @@ export function createExtensionWorkspace(
     },
 
     openNote: async (relativePath) => {
-      assertRelativePath(relativePath);
-      const current = bridge();
-      if (!current.rootPath) {
-        throw new Error("No workspace is open.");
-      }
-      current.openNote(relativePath);
+      // `resolve` runs the same path validation and mounted-shell/open-workspace
+      // gates; the returned root is unused — the bridge takes the relative path.
+      resolve(relativePath);
+      bridge().openNote(relativePath);
     },
 
     renameNote: async (relativePath, newRelativePath) => {

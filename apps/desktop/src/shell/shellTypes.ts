@@ -77,18 +77,6 @@ export type PanelSide = "left" | "right";
  */
 export type BottomPanel = "terminal";
 
-/**
- * Declares the data-provider boundary for a bottom-panel surface.
- *
- * Panels remain visually present before their backing services are available,
- * while this contract prevents the UI from implying a capability exists.
- */
-export interface BottomPanelProvider {
-  readonly id: BottomPanel;
-  readonly isAvailable: boolean;
-  readonly unavailableMessage: string;
-}
-
 /** Lifecycle + contents of a single open Markdown document view. */
 export type DocumentViewState = {
   readonly contents: string;
