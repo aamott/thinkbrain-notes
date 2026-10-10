@@ -29,6 +29,7 @@ import type {
   SettingSection
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
+import { SCROLL_ANCHOR_ATTR, useScrollAnchor } from "../lib/scrollAnchors";
 import { Unavailable } from "../shell/Unavailable";
 import { appSettingsRegistry, useSettingsModules, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
@@ -119,6 +120,7 @@ function SettingRow({
   return (
     <div
       data-setting-key={definition.key}
+      {...{ [SCROLL_ANCHOR_ATTR]: definition.key }}
       data-highlighted={highlighted ? "true" : undefined}
       className={cn(
         "grid gap-4 rounded-small border-b border-border py-2.5 transition-[background-color,box-shadow] duration-150 max-[760px]:gap-2",
@@ -232,6 +234,7 @@ function SettingsSection({
   return (
     <section
       id={sectionAnchorId(qualifiedId)}
+      {...{ [SCROLL_ANCHOR_ATTR]: `section:${qualifiedId}` }}
       ref={(element) => setSectionRef(qualifiedId, element)}
       className="scroll-mt-4 py-4 first:pt-4 max-[760px]:py-3 max-[760px]:first:pt-3"
       aria-labelledby={`${sectionAnchorId(qualifiedId)}-heading`}
@@ -291,8 +294,9 @@ function SettingsSection({
 /**
  * The one-page settings document and its content-rooted scroll-spy.
  */
-export function SettingsContent() {
+export function SettingsContent({ active = true }: { readonly active?: boolean }) {
   const workspaceValues = useSettingsStore((state) => state.workspaceValues);
+  const workspaceRootPath = useSettingsStore((state) => state.workspaceRootPath);
   const appValues = useSettingsStore((state) => state.appValues);
   const stagedChanges = useSettingsStore((state) => state.stagedChanges);
   // Subscribe so inline validation diagnostics render and clear reactively.
@@ -307,6 +311,10 @@ export function SettingsContent() {
   const showAdvanced = useEffectiveValue("settings.showAdvanced") === true;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
+  // Remounts (tab switch) and hides (files route on phone) restore the last
+  // visible anchor; the ui.scale writer captures/restores it live through
+  // the registry while this container is active.
+  useScrollAnchor(containerRef, `settings:${workspaceRootPath ?? "none"}`, active);
 
   // Scope projection matches the navigation: app sections precede workspace
   // sections, and workspace sections only exist while a workspace is open.

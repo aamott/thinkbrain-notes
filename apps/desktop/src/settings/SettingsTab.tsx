@@ -122,7 +122,7 @@ export function SettingsTab({ active = true }: { readonly active?: boolean }) {
         )}
         <SettingsNav open={active && navOpen} onClose={closeNavAndRestoreFocus} />
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-editor">
-          <SettingsContent />
+          <SettingsContent active={active} />
         </main>
       </div>
     </div>

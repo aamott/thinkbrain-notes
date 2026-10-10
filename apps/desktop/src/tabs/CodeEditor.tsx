@@ -110,7 +110,7 @@ export function CodeEditor({
     <section className="flex min-h-0 flex-1 flex-col" aria-busy={isSaving} aria-label="Code editor">
       {error && <EditorErrorBanner error={error} />}
       <div
-        className="tn-cm-editor min-h-0 flex-1 overflow-auto cursor-text"
+        className="tn-cm-editor min-h-0 flex-1 overflow-hidden cursor-text"
         ref={hostRef}
         onPointerDown={onHostPointerDown}
       />

@@ -222,7 +222,9 @@
    checker can't tell they target different elements. */
 @utility tn-cm-editor {
   .cm-editor {
-    min-height: 100%;
+    /* Full height inside an overflow-hidden host so `.cm-scroller` — not the
+       host — is the scrollable element CodeMirror measures. */
+    height: 100%;
     cursor: text;
     background-color: var(--color-editor);
     font-family: var(--font-mono);
@@ -310,8 +312,8 @@
    the shell root) so their last lines can scroll above the bubbles. Scoped
    under the phone shell's data attribute so the desktop chrome — which has
    no bubbles — is untouched. */
-/* `.cm-content` is the pad, not `.cm-scroller`: the editor's outer host div is
-   the element that scrolls, so scroller scroll-padding would never apply. */
+/* `.cm-content` is the pad inside the scrolling `.cm-scroller`, so the bubble
+   clearance belongs on it rather than on any scroll container. */
 [data-phone-shell] .cm-content {
   padding-bottom: var(--tn-phone-bubble-clearance);
 }

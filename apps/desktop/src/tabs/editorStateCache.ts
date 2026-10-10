@@ -1,4 +1,5 @@
 import type { EditorState } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 
 /**
  * What an editor knew that its document does not.
@@ -17,8 +18,14 @@ import type { EditorState } from "@codemirror/state";
 
 export interface RememberedEditor {
   readonly state: EditorState;
-  /** DOM state, so it has to be captured separately from `state`. */
-  readonly scrollTop: number;
+  /**
+   * DOM scroll state as a measurement-aware CodeMirror snapshot, so it has to
+   * be captured separately from `state`. The snapshot records positions in
+   * document coordinates, so a remount that reflows the layout (font metrics,
+   * wrapping, gutters) still lands on the same text. Optional because parked
+   * states constructed in tests have no live view to snapshot.
+   */
+  readonly scrollSnapshot?: ReturnType<EditorView["scrollSnapshot"]>;
 }
 
 /**

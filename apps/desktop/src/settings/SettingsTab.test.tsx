@@ -38,6 +38,7 @@ import {
   createSettingsTestHarness,
   seedSettingsStore
 } from "./settingsTestHelpers";
+import { clearScrollAnchorSnapshots } from "../lib/scrollAnchors";
 
 /** SettingsTab DOM tests backed by the real module-scoped settings store. */
 
@@ -79,6 +80,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await harness.unmount();
+  clearScrollAnchorSnapshots();
   vi.unstubAllGlobals();
   vi.mocked(isTauri).mockReset();
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockReset();
@@ -232,6 +234,38 @@ describe("SettingsTab", () => {
     // must not lose them.
     expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
     expect(selectIsDirty(useSettingsStore.getState())).toBe(true);
+  });
+
+  it("restores the content scroll position across hide/show and remount", async () => {
+    let setActive: (active: boolean) => void = () => undefined;
+    const Host = () => {
+      const [active, setActiveState] = useState(true);
+      setActive = setActiveState;
+      return <SettingsTab active={active} />;
+    };
+    const el = await harness.render(<Host />);
+    const scroller = el.querySelector<HTMLElement>(
+      '[data-testid="settings-content-scroll"]'
+    )!;
+
+    scroller.scrollTop = 300;
+    await harness.dispatch(scroller, new Event("scroll"));
+
+    // Hide/show cycle (phone files route): the snapshot must survive.
+    await act(async () => setActive(false));
+    scroller.scrollTop = 0;
+    await act(async () => setActive(true));
+    expect(scroller.scrollTop).toBe(300);
+
+    // Full unmount/remount (desktop tab boundary): same restore.
+    scroller.scrollTop = 300;
+    await harness.dispatch(scroller, new Event("scroll"));
+    await harness.unmount();
+    const el2 = await harness.render(<SettingsTab />);
+    const scroller2 = el2.querySelector<HTMLElement>(
+      '[data-testid="settings-content-scroll"]'
+    )!;
+    expect(scroller2.scrollTop).toBe(300);
   });
 
   it("shows the Workspace group when a workspace is open", async () => {

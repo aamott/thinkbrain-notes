@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   type PointerEvent as ReactPointerEvent,
   type RefObject
@@ -74,6 +75,9 @@ export function useCodeMirrorView({
 } {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // Snapshot taken while the host is still attached — see the layout effect
+  // below for why a passive cleanup reads it too late.
+  const earlyScrollRef = useRef<ReturnType<EditorView["scrollSnapshot"]> | undefined>(undefined);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
@@ -82,6 +86,18 @@ export function useCodeMirrorView({
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
   }, [onChange, onSave]);
+
+  // A detached `.cm-scroller` reports scrollTop 0, and passive-effect
+  // cleanups run after React has removed the DOM — so an unmount would park
+  // a snapshot of "scrolled to top". Layout-effect cleanups fire before the
+  // host nodes go away, which is the last moment scrollDOM still tells the
+  // truth. (Effect re-runs keep the DOM attached; the passive cleanup then
+  // snapshots live and clears this.)
+  useLayoutEffect(() => {
+    return () => {
+      earlyScrollRef.current = viewRef.current?.scrollSnapshot();
+    };
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -106,7 +122,13 @@ export function useCodeMirrorView({
             ? {}
             : { selection: { anchor: mounted.selectionAnchor(valueRef.current) } }),
           extensions: mounted.extensions
-        })
+        }),
+      // The parked snapshot was taken against the same document this state
+      // carries, so `scrollTo` restores the exact measured position — raw px
+      // would only be correct if the reflow could never move the text.
+      ...(parked?.scrollSnapshot === undefined
+        ? {}
+        : { scrollTo: parked.scrollSnapshot })
     });
     viewRef.current = view;
 
@@ -128,7 +150,6 @@ export function useCodeMirrorView({
       // rebinds them to this one; the state fields keyed to the same extension
       // instances — the undo history above all — carry across untouched.
       view.dispatch({ effects: StateEffect.reconfigure.of(mounted.extensions) });
-      view.scrollDOM.scrollTop = parked.scrollTop;
     }
 
     mounted.afterMount?.(view, viewRef);
@@ -137,12 +158,17 @@ export function useCodeMirrorView({
       unregisterCommands?.();
       if (stateKey !== undefined) {
         // Scroll position is DOM state rather than editor state, so it has to
-        // be taken before the view goes.
+        // be taken before the view goes — as a scrollSnapshot, which survives
+        // the layout reflow a remount can cause.
         rememberEditorState(stateKey, {
           state: view.state,
-          scrollTop: view.scrollDOM.scrollTop
+          scrollSnapshot: earlyScrollRef.current ?? view.scrollSnapshot()
         });
       }
+      // Whether or not this mount parked anything, the early snapshot is only
+      // valid for the teardown it was captured in — a stale value must not
+      // travel into a later unmount under another key (or no key).
+      earlyScrollRef.current = undefined;
       view.destroy();
       viewRef.current = null;
     };
