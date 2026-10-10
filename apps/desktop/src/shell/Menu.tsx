@@ -1,7 +1,6 @@
 import {
   useEffect,
   useLayoutEffect,
-  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -10,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { useDismissable } from "@thinkbrain/ui";
 
 import { cn } from "../lib/utils";
 import { handleMenuKeyDown } from "./menuKeyboard";
@@ -82,7 +82,10 @@ export function Menu({
   readonly anchorRef?: RefObject<HTMLElement | null>;
   readonly children: ReactNode;
 }) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { containerRef: menuRef } = useDismissable({
+    open: true,
+    onDismiss: () => onClose("escape")
+  });
 
   // Where the menu actually lands. It starts at the pointer; a layout effect —
   // which runs before the browser paints — measures the mounted menu and flips
@@ -98,7 +101,7 @@ export function Menu({
       y: at.y + rect.height > window.innerHeight ? Math.max(0, at.y - rect.height) : at.y,
     };
     setPosition((prev) => (prev?.x === next.x && prev?.y === next.y ? prev : next));
-  }, [at]);
+  }, [at, menuRef]);
 
   // The item to land on: whichever one is already the answer, or the first.
   // Opening a list of workspaces on the one you are in is the difference
@@ -107,11 +110,10 @@ export function Menu({
     const menu = menuRef.current;
     const current = menu?.querySelector<HTMLButtonElement>("button[aria-current='true']");
     (current ?? menu?.querySelector("button"))?.focus();
-  }, []);
+  }, [menuRef]);
 
-  // Close when the user goes elsewhere, or presses Escape from anywhere. The
-  // window listener matters because focus can leave a menu — by Tab, or by a
-  // control that took it — and Escape should still be the way out.
+  // Close when the user goes elsewhere. Escape belongs to the shared overlay
+  // stack so only the top-most menu, dialog, or sheet is dismissed.
   useEffect(() => {
     const closeOnOutsidePointer = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -123,20 +125,12 @@ export function Menu({
         onClose("outside");
       }
     };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose("escape");
-    };
     window.addEventListener("pointerdown", closeOnOutsidePointer);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("pointerdown", closeOnOutsidePointer);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose, anchorRef]);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [onClose, anchorRef, menuRef]);
 
-  // Escape reaches `onClose` from here as well when focus is inside, which is
-  // the ordinary case. Closing twice costs nothing — every caller's close is
-  // setting a flag to false.
+  // Escape reaches `onClose` from here when focus is inside; preventDefault
+  // keeps the document-level stack from dismissing the overlay beneath it.
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     handleMenuKeyDown(event, menuRef, () => onClose("escape"));
   };

@@ -45,11 +45,24 @@ fn deleting_a_managed_vault_removes_it_and_all_its_metadata() {
         create_managed_workspace_in(&app_data, "Recipes").expect("managed workspace is created");
     let vault_path = PathBuf::from(&vault.root_path);
     fs::write(vault_path.join("note.md"), "x").unwrap();
+    let canonical = vault_path.to_string_lossy().to_string();
+    crate::commands::sync::registry::attach(
+        &app_data,
+        &vault_path,
+        &canonical,
+        "managed-delete-window",
+    )
+    .expect("sync engine is attached");
+    crate::commands::watcher::remember_root_for_test(&canonical, "managed-delete-window");
     let metadata = seed_metadata(&app_data, &vault_path);
 
     delete_managed_workspace_in(&app_data, &vault.root_path).expect("delete succeeds");
 
     assert!(!vault_path.exists());
+    assert!(crate::commands::sync::registry::engine(&canonical).is_none());
+    assert!(!crate::commands::watcher::is_root_watched_for_test(
+        &canonical
+    ));
     for path in metadata {
         assert!(!path.exists(), "{path:?} survived the delete");
     }

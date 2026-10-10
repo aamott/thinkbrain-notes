@@ -283,7 +283,7 @@ describe("WorkspaceExplorer presentation", () => {
     await click(trigger);
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(container?.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);

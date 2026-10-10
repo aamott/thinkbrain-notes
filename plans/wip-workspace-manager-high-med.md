@@ -38,3 +38,5 @@ welcome page. Mockup: `plans/workspace-manager/assets/workspace-manager-mockup.h
   - Selector placement kept as-is: `ui.workspaceSelectorPlacement` (title bar or panel headers) on desktop; always in the drawer on phone.
 - ✅ Focus an already-open workspace window — `focus_open_workspace_window`
 - ✅ Show in file manager (needs opener plugin) — `reveal_workspace_folder`
+- ✅ Detach sync engine and watcher before managed-vault delete — `detach_engine_on_delete`
+- ⬜ Show in file manager (needs opener plugin) — `reveal_workspace_folder`

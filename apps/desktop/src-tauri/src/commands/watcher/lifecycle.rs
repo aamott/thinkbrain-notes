@@ -1,6 +1,6 @@
 //! Starts, shares, and stops per-workspace watchers.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -35,6 +35,8 @@ type WorkspaceDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 pub struct WatchInterest {
     /// Workspace root -> window label -> outstanding requests from that window.
     holders: HashMap<String, HashMap<String, u32>>,
+    /// Labels already destroyed while an asynchronous attach was in flight.
+    dead: HashSet<String>,
 }
 
 impl WatchInterest {
@@ -44,13 +46,17 @@ impl WatchInterest {
     }
 
     /// Registers one request from `label` to watch `root`.
-    pub fn acquire(&mut self, root: &str, label: &str) {
+    pub fn acquire(&mut self, root: &str, label: &str) -> bool {
+        if self.dead.contains(label) {
+            return false;
+        }
         *self
             .holders
             .entry(root.to_string())
             .or_default()
             .entry(label.to_string())
             .or_insert(0) += 1;
+        true
     }
 
     /// Drops one request, returning whether the last interest just went away.
@@ -71,11 +77,20 @@ impl WatchInterest {
         false
     }
 
+    /// Drops every window's interest in `root`, naming the released labels.
+    pub fn release_root(&mut self, root: &str) -> Vec<String> {
+        self.holders
+            .remove(root)
+            .map(|windows| windows.into_keys().collect())
+            .unwrap_or_default()
+    }
+
     /// Drops everything `label` held, naming the roots nobody wants any more.
     ///
     /// A window destroyed by the OS never runs its teardown, so without this its
     /// watchers would be held until the process exits.
     pub fn release_window(&mut self, label: &str) -> Vec<String> {
+        self.dead.insert(label.to_string());
         let mut released = Vec::new();
         self.holders.retain(|root, windows| {
             if windows.remove(label).is_none() {
@@ -125,11 +140,17 @@ pub fn watch_workspace(
 
     // Start the watcher before registering interest, so a failure to start
     // leaves nothing claiming a watcher that does not exist.
-    if !state.interest.is_watched(&key) {
+    let started = !state.interest.is_watched(&key);
+    if started {
         let debouncer = spawn_debouncer(app.clone(), root.clone(), key.clone())?;
         state.debouncers.insert(key.clone(), debouncer);
     }
-    state.interest.acquire(&key, &label);
+    if !state.interest.acquire(&key, &label) {
+        if started {
+            state.debouncers.remove(&key);
+        }
+        return Ok(key);
+    }
     drop(guard);
 
     // Auto Sync shares this lifecycle exactly: one engine per workspace, held
@@ -213,6 +234,34 @@ pub fn release_window_watchers(label: &str) {
     for root in state.interest.release_window(label) {
         state.debouncers.remove(&root);
     }
+}
+
+/// Releases every engine and watcher attached to one canonical root.
+pub fn release_root(root: &str) {
+    // Same ordering as unwatch_workspace: release the engine before the watcher.
+    // Deletion deliberately does not flush into metadata it is about to remove.
+    drop(crate::commands::sync::registry::release_root(root));
+    let mut guard = lock_or_recover(&WATCHERS);
+    let Some(state) = guard.as_mut() else {
+        return;
+    };
+    state.interest.release_root(root);
+    state.debouncers.remove(root);
+}
+
+#[cfg(test)]
+pub(crate) fn remember_root_for_test(root: &str, label: &str) {
+    let mut guard = lock_or_recover(&WATCHERS);
+    let state = guard.get_or_insert_with(WatchState::default);
+    state.interest.acquire(root, label);
+}
+
+#[cfg(test)]
+pub(crate) fn is_root_watched_for_test(root: &str) -> bool {
+    let guard = lock_or_recover(&WATCHERS);
+    guard
+        .as_ref()
+        .is_some_and(|state| state.interest.is_watched(root))
 }
 
 /// Registers the canonical "what happens when a window dies" cleanup on a

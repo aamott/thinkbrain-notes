@@ -19,8 +19,8 @@ Escape order is wrong. See `useDismissable`'s overlay stack.
 
 ## Acceptance
 
-- [ ] `delete_managed_workspace` detaches engine + watcher interest for the
+- [x] `delete_managed_workspace` detaches engine + watcher interest for the
       canonical root before removing files
-- [ ] Test: deleting a vault with a live attachment leaves no resurrected
+- [x] Test: deleting a vault with a live attachment leaves no resurrected
       metadata
-- [ ] Body-portaled overlays join the overlay stack (or document why not)
+- [x] Body-portaled overlays join the overlay stack (or document why not)

@@ -3,6 +3,7 @@
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { dismissTopOverlay } from "@thinkbrain/ui";
 import { CommandPalette } from "./CommandPalette";
 import type { DesktopCommand } from "./commandRegistry";
 
@@ -54,7 +55,7 @@ async function renderPalette(options: Partial<ComponentProps<typeof CommandPalet
   });
 
   return {
-    input: container.querySelector<HTMLInputElement>("input")!,
+    input: document.querySelector<HTMLInputElement>("[role='dialog'] input")!,
     onClose,
     onCommand,
     onOpenFile
@@ -81,7 +82,7 @@ describe("CommandPalette", () => {
 
     expect(input.getAttribute("role")).toBe("combobox");
     expect(input.getAttribute("aria-expanded")).toBe("true");
-    const unavailable = container?.querySelector<HTMLButtonElement>("#command-unavailable");
+    const unavailable = document.querySelector<HTMLButtonElement>("#command-unavailable");
     expect(unavailable?.tabIndex).toBe(-1);
     expect(unavailable?.dataset.unavailable).toBe("true");
     expect(unavailable?.getAttribute("aria-disabled")).toBeNull();
@@ -101,7 +102,7 @@ describe("CommandPalette", () => {
     await keyDown(input, "Enter");
     expect(onCommand).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-    expect(container?.querySelector("[role='status']")?.textContent).toContain("Unavailable for this workspace.");
+    expect(document.querySelector("[role='status']")?.textContent).toContain("Unavailable for this workspace.");
 
     await keyDown(input, "Home");
     await keyDown(input, "Enter");
@@ -114,20 +115,28 @@ describe("CommandPalette", () => {
     const { input, onClose, onOpenFile } = await renderPalette();
 
     await changeInput(input, "draft");
-    expect(container?.querySelector("#file-draft\\.md")).not.toBeNull();
+    expect(document.querySelector("#file-draft\\.md")).not.toBeNull();
     await keyDown(input, "Enter");
     expect(onOpenFile).toHaveBeenCalledWith({ rootPath: "/notes", relativePath: "draft.md" });
     expect(onClose).toHaveBeenCalledWith(false);
 
-    const dialog = container?.querySelector<HTMLElement>("[role='dialog']");
+    const dialog = document.querySelector<HTMLElement>("[role='dialog']");
     if (!dialog) throw new Error("Command palette dialog was not rendered.");
+    expect(container?.contains(dialog)).toBe(false);
     await keyDown(dialog, "Tab");
     expect(document.activeElement).toBe(input);
     await act(async () => {
-      container?.querySelector<HTMLElement>("[role='presentation']")?.dispatchEvent(
+      document.querySelector<HTMLElement>("[role='presentation']")?.dispatchEvent(
         new MouseEvent("mousedown", { bubbles: true })
       );
     });
+    expect(onClose).toHaveBeenCalledWith();
+  });
+
+  it("is dismissed by the Android-back overlay bridge", async () => {
+    const { onClose } = await renderPalette();
+
+    expect(dismissTopOverlay()).toBe(true);
     expect(onClose).toHaveBeenCalledWith();
   });
 });
