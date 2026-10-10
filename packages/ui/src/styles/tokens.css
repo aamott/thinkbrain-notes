@@ -76,8 +76,10 @@
   --tn-size-sidebar-width: 16rem;
   --tn-size-right-sidebar-width: 18rem;
   --tn-shadow-soft: 0 18px 50px rgb(0 0 0 / 18%);
-  /* Floating dock popout shadow (small screens). */
-  --tn-shadow-panel: 0 0 24px 4px rgb(0 0 0 / 35%);
+  /* Floating dock popout shadow (small screens). Kept as a halo — drawers,
+     sheets and bubbles need separation on every visible side — but low-alpha
+     and spread-free so it lifts off a light surface instead of ringing it. */
+  --tn-shadow-panel: 0 0 32px rgb(0 0 0 / 15%);
   /* Phone overlay slide duration. Used by `.tn-slide` below and by the
      desktop `tn-slide-in-*` entrance animations. */
   --tn-duration-overlay: 200ms;

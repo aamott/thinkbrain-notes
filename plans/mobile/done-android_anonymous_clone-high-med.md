@@ -1,6 +1,6 @@
 # Android Git Import and Sync Verification
 
-**Status:** 🟨 wip · **Urgency:** high · **Difficulty:** med
+**Status:** ✅ done · **Urgency:** high · **Difficulty:** med
 
 The anonymous public-clone failure was traced to a required push after import.
 Imports now keep a successfully fetched vault when that optional push cannot
@@ -12,10 +12,9 @@ credential save/read, private import, note editing/autosave, fetch/merge/push,
 restart persistence, and credential deletion. Evidence:
 `docs/superpowers/specs/2026-08-27-android-git-access-design.md`.
 
-## Remaining
+## Verified
 
-- [ ] Repeat the public anonymous import on physical Android hardware when a
-      device is available. No separate product code path depends on this pass.
+- [x] Public anonymous import repeated on physical Android hardware.
 
 The original blind-tap diagnosis was retired after a deterministic WebView
 DevTools run showed fetch and merge had succeeded; the failed operation was
