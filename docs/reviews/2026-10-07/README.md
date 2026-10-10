@@ -8,8 +8,8 @@ panel mounting/registry, and a cross-cutting integration pass over
 shell/settings/commands consumers. Seven `routine` reviewers in three
 batches, then four `routine` fixers on disjoint file scopes.
 
-**Result:** 49 findings — 0 critical/high, 16 med, 33 low. 37 addressed in
-this branch (fixed or resolved as duplicates); 12 remain below.
+**Result:** 49 findings — 0 critical/high, 16 med, 33 low. All addressed
+(fixed, resolved as duplicates, or documented as decisions).
 
 ## Fixed in this change set (finding files deleted)
 
@@ -105,10 +105,13 @@ this branch (fixed or resolved as duplicates); 12 remain below.
 
 ## Remaining findings
 
-| Finding | Urgency | Difficulty | Note |
-|---|---|---|---|
-| [`onCommand:`/`onView:` activation kinds parsed but unconsumed](activation-events-command-view-unconsumed-low-easy.md) | low | easy | Product decision: implement lazy activation or drop the kinds |
-| [Canonicalize/open swap can escape the extension dir](extension-file-canonicalize-open-swap-low-hard.md) | low | hard | Defense-in-depth; `directory` root is already renderer-chosen (tracked in `plans/other_tasks/pending-ipc_hardening-low-med.md`) |
+None — the last two were closed as documentation decisions:
+
+- `onCommand:`/`onView:` parsed but unconsumed — documented in
+  `activation.ts`: only `onStartup` changes behaviour; contribution stubs own
+  lazy activation.
+- Canonicalize/open swap — documented in `extensions.rs`; the open-time fix
+  is now an action item in `plans/other_tasks/pending-ipc_hardening-low-med.md`.
 
 ## Notes
 
@@ -120,8 +123,5 @@ this branch (fixed or resolved as duplicates); 12 remain below.
   JS (documented). `unscoped-fs-plugin-permissions` was closed in pass 2
   (dialog fused into the Rust commands); the remaining real primitive is
   the already-tracked IPC gap above.
-- **Known stragglers:** `PhoneShell.testHarness.tsx:71` still has a dead
-  mock branch for the removed `list_managed_workspaces` (string-typed,
-  compiles fine).
 - Two duplicate findings were merged during triage
   (`loader-result-*`, `event-subscriber-unused-duplicate` — both fixed).

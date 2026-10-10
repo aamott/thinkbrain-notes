@@ -59,16 +59,16 @@ const nativeCommands = () =>
   };
 
 /**
- * Answers the two commands the Android managed-vault flow probes —
- * capabilities and the managed list — while every other command keeps the
- * harness's default null answer. Call before `render`/`renderWithShell`.
+ * Answers `workspace_access_capabilities` the way a managed-vault-only host
+ * (Android) does. The workspace list needs no answer: `listKnownWorkspaces`
+ * short-circuits to `[]` when `isTauri()` is false, which this harness
+ * already fakes. Call before `render`/`renderWithShell`.
  */
 export const mockManagedWorkspaceAccess = (): void => {
   nativeCommands().mockImplementation(async (command: string) => {
     if (command === "workspace_access_capabilities") {
       return { canOpenFolder: false, canCreateManagedWorkspace: true, opensWorkspaceInNewWindow: false };
     }
-    if (command === "list_managed_workspaces") return [];
     return null;
   });
 };

@@ -23,6 +23,12 @@
    `allow_directory(root, true)` per open; grants are process-global and live
    for the session. Revoke when the last window releases a vault (count like
    `WatchInterest`).
+4. **`read_extension_file` containment is path-time** (`extensions.rs`). The
+   canonicalize → `File::open` gap lets a directory component swapped for a
+   symlink escape the check. Bind containment to the open: `openat2` with
+   `RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS` on Linux, an `O_NOFOLLOW` component
+   walk elsewhere. Caveat: no open flag catches hard links — a checked-in
+   file hard-linked to an outside same-filesystem file still passes.
 
 ## Not done because
 
