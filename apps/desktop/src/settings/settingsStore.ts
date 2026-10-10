@@ -25,7 +25,6 @@ import {
   editorModule,
   settingsModule,
   syncModule,
-  uiModule,
   validateSettings,
   type SettingsDiagnostic,
   type SettingsRegistry
@@ -42,6 +41,7 @@ import {
   type SettingsModule
 } from "@thinkbrain/core";
 import { scheduleAutosave } from "./autosaveScheduler";
+import { uiModuleForFormFactor } from "./uiModuleDefaults";
 import {
   effectiveSettingValue,
   partitionByScope
@@ -64,7 +64,7 @@ appSettingsRegistry.register(appearanceModule);
 appSettingsRegistry.register(editorModule);
 appSettingsRegistry.register(settingsModule);
 appSettingsRegistry.register(syncModule);
-appSettingsRegistry.register(uiModule);
+appSettingsRegistry.register(uiModuleForFormFactor());
 
 // ---------------------------------------------------------------------------
 // Gateway: abstraction over native settings I/O (for testability).
