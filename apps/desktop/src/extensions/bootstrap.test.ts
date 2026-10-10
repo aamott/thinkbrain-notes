@@ -229,6 +229,72 @@ describe("lazy panel placeholders", () => {
   });
 });
 
+describe("startup-activated stubs", () => {
+  const startupManifest = (): ExtensionManifest =>
+    manifest({
+      activationEvents: ["onStartup"],
+      contributes: {
+        commands: [{ id: "go", title: "Go" }],
+        panels: [{ id: "stats", label: "Stats", icon: "∑", side: "right" }]
+      }
+    });
+
+  /**
+   * `onStartup` used to skip stub registration, so a popout opened while the
+   * async activation was still pending rendered "Panel not registered". The
+   * placeholder must exist from bootstrap's first synchronous turn and hold
+   * until the real panel swaps it.
+   */
+  it("keeps a placeholder stub registered through startup activation", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const activate = vi.fn(async (context: DesktopExtensionContext) => {
+      await gate;
+      context.panels.register({
+        id: "stats",
+        label: "Stats",
+        icon: "∑",
+        side: "right",
+        factory: () => null
+      });
+    });
+    const { panels } = setup({ manifest: startupManifest(), activate });
+
+    // Startup activation is in flight, but the declared panel is already
+    // registered as a placeholder.
+    expect(activate).toHaveBeenCalled();
+    expect(panels.get("sample.stats")).toMatchObject({ label: "Stats", placeholder: true });
+
+    release();
+    await vi.waitFor(() => {
+      expect(panels.get("sample.stats")?.placeholder).toBeUndefined();
+    });
+    expect(panels.entriesBySide("right").map((panel) => panel.id)).toEqual(["sample.stats"]);
+  });
+
+  it("keeps the placeholder after a failed startup activation, while command stubs go", async () => {
+    const activate = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const { commands, panels, boot } = setup({ manifest: startupManifest(), activate });
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      await vi.waitFor(() => {
+        expect(boot.entries()[0]?.status).toBe("failed");
+      });
+      // The placeholder is what renders the designed failure surface in the
+      // popout; the dead command stub is gone.
+      expect(panels.get("sample.stats")?.placeholder).toBe(true);
+      expect(commands.get("sample.go")).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
 describe("mobile New-note actions", () => {
   const withAction = (activate: BuiltInExtension["activate"]): BuiltInExtension => ({
     manifest: manifest(),

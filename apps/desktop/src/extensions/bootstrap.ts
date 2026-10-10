@@ -260,7 +260,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     }
   };
 
-  /** Registers with the host, then activates on startup or installs stubs. */
+  /** Registers with the host, installs contribution stubs, then activates on startup. */
   const registerAndStub = (
     state: EntryState,
     activate: DesktopExtensionActivation,
@@ -283,9 +283,14 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
         );
       }
       state.registration = host.register({ id: state.manifest.id, activate, deactivate });
-      if (!hasStartupActivation(state.manifest)) {
-        registerStubs(state);
-      }
+      // Stubs are installed for every extension — including `onStartup`
+      // ones. Startup activation is async, and without a placeholder a popout
+      // opened in that window (or after a failed activation) would render
+      // "Panel not registered" instead of the designed "Starting extension…"
+      // / failure surface. The placeholder swap disposes each panel stub
+      // inside the real registration; command stubs are disposed by
+      // `ensureActive` before activation so the real commands cannot collide.
+      registerStubs(state);
     } catch (error) {
       // Transactional: a duplicate or a failed registration anywhere in the
       // sequence must not leave stubs, action rows, or the host registration
