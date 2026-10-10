@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorHeaderSlot } from "./editorHeaderRegistry.tsx";
 import { notifyEditorCommands } from "./editorCommands";
 import { EditorErrorBanner } from "./EditorErrorBanner";
+import { frontmatterGuard } from "./frontmatterGuard";
 import { livePreview as livePreviewExtension } from "./livePreview";
 import {
   markdownEditorHookRegistry,
@@ -98,6 +99,9 @@ export function MarkdownEditor({
         extensions: [
           ...extensions,
           keymap.of(keybindings),
+          // Frontmatter is hidden by a line class, not an atomic range — the
+          // guard stops body deletions (held Backspace) from eating into it.
+          frontmatterGuard(),
           // Document edits and undo/redo all change the document — every one of
           // them can flip the header buttons' enabled state.
           EditorView.updateListener.of((update) => {
