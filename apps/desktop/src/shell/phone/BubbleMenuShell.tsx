@@ -12,10 +12,13 @@ import { PHONE_BUBBLE_MENU_BOTTOM } from "./overlayBounds";
  * the bubbles.
  *
  * The layer doubles as the undimmed outside-dismiss target and spans the
- * whole shell — bubbles included — so a tap on the trigger bubble while the
- * menu is open closes it rather than immediately reopening it. The menu is
- * anchored to `PHONE_BUBBLE_MENU_BOTTOM` and height-capped so a long list can
- * never reach up over the header.
+ * whole shell. It used to cover the bubbles too — but covering the trigger
+ * does not toggle-close it: the layer dismisses on pointerdown, hides, and
+ * the trailing click retargets to the bubble underneath and reopens the
+ * menu. PhoneShell raises the bubble group above this layer while a menu is
+ * open so the trigger takes the tap and toggles through its own onSelect.
+ * The menu is anchored to `PHONE_BUBBLE_MENU_BOTTOM` and height-capped so a
+ * long list can never reach up over the header.
  *
  * Stacking: the layer is z-40 and the menu z-50 — the same bands the
  * sheets' scrims and panels occupy, so DOM order keeps the later-rendered

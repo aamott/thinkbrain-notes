@@ -428,8 +428,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
         {/* `isolate` confines the popout's `z-30` (and any in-panel overlays)
             to this stacking context so the floating bubbles always paint above
-            route content while the z-30 menu-dismiss layers still sit above
-            the bubbles. */}
+            route content. Menu-dismiss layers sit above the resting z-20
+            bubbles; the group raises to z-50 while a bubble menu is open so
+            its trigger stays tappable for toggle-close. */}
         <div className="relative isolate flex min-h-0 flex-1 flex-col">
           {/* Both branches stay mounted and trade `hidden`/`aria-hidden` instead
               of unmounting: Explorer's expanded folders, selection and scroll —
@@ -492,6 +493,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             left={bubbleItems.left}
             right={bubbleItems.right}
             showLabels={showBubbleLabels}
+            // A bubble menu's dismiss layer covers the whole shell at z-40 —
+            // including the bubbles at z-20 — but a covered tap does not
+            // toggle-close: the layer dismisses on pointerdown, then the
+            // trailing click retargets to the bubble underneath and reopens
+            // it. Raise the group while a menu is open so the trigger bubble
+            // takes the tap and its own onSelect toggles. The menu itself is
+            // z-50 and later in DOM order, so it still paints on top.
+            className={actionsOpen || newNoteOpen ? "z-50" : undefined}
           />
         )}
 

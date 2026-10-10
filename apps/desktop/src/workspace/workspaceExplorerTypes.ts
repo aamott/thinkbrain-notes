@@ -3,15 +3,16 @@ import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import type { ExplorerSortOrder } from "./explorerSort";
 
-// Shared chrome-row icon button: 26px on fine pointers, touch-friendly 36px
-// on coarse ones. Lives here (not in a component file) so both the explorer
-// header and the sort menu can share it without breaking fast refresh.
+// Shared chrome-row icon button: 26px on fine pointers, 44px on coarse ones
+// — the platform touch-target minimum; 36px was still missed in practice.
+// Lives here (not in a component file) so both the explorer header and the
+// sort menu can share it without breaking fast refresh.
 export const HEADER_ACTION_CLASSES =
   "flex flex-none items-center justify-center size-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit" +
   " focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current [&>svg]:size-[0.95rem]" +
   " hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]" +
   " disabled:cursor-default disabled:opacity-50" +
-  " pointer-coarse:size-9";
+  " pointer-coarse:size-11";
 
 export type ContextMenuTarget =
   | { readonly kind: "background" }
