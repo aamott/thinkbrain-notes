@@ -398,7 +398,7 @@ describe("WorkspaceExplorer presentation", () => {
 
   it("routes recent and added workspaces through the window launch flow", async () => {
     const pickWorkspaceDirectory = vi.fn(() => Promise.resolve<string | null>("/notes/new"));
-    const openWorkspaceWindow = vi.fn(() => Promise.resolve());
+    const openWorkspaceWindow = vi.fn(async (): Promise<"opened" | "focused"> => "opened");
     const api = { ...workspaceDesktopApi, pickWorkspaceDirectory, openWorkspaceWindow };
     await renderExplorer(api, undefined, desktopCapabilities, { workspaceSelectorInPanel: true });
 
@@ -422,7 +422,7 @@ describe("WorkspaceExplorer presentation", () => {
 
   it("shows open/create actions and recents in the empty state instead of inert copy", async () => {
     const pickWorkspaceDirectory = vi.fn(() => Promise.resolve<string | null>("/notes/new"));
-    const openWorkspaceWindow = vi.fn(() => Promise.resolve());
+    const openWorkspaceWindow = vi.fn(async (): Promise<"opened" | "focused"> => "opened");
     const api = { ...workspaceDesktopApi, pickWorkspaceDirectory, openWorkspaceWindow };
     await renderExplorer(api);
 
@@ -458,7 +458,7 @@ describe("WorkspaceExplorer presentation", () => {
     const snapshot: NativeWorkspaceSnapshot = { workspace: descriptor, files: [] };
     const createManagedWorkspace = vi.fn(async () => descriptor);
     const openWorkspace = vi.fn(async () => snapshot);
-    const openWorkspaceWindow = vi.fn(async () => undefined);
+    const openWorkspaceWindow = vi.fn(async (): Promise<"opened" | "focused"> => "opened");
     const api = {
       ...workspaceDesktopApi,
       createManagedWorkspace,

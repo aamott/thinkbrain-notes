@@ -6,7 +6,8 @@ import type { NativeKnownWorkspace } from "../native/commands";
  */
 export interface WorkspaceRowState {
   readonly canOpen: boolean;
-  readonly badge: "current" | "missing" | null;
+  /** `open_elsewhere` rows still open — their action focuses that window. */
+  readonly badge: "current" | "missing" | "open_elsewhere" | null;
   /** `forget` removes the entry from recents; `delete` permanently deletes a managed vault. */
   readonly removal: "forget" | "delete" | null;
 }
@@ -18,11 +19,13 @@ export interface WorkspaceRowState {
  * (removing it would orphan live state). A missing folder cannot be opened but
  * can always be forgotten — for a managed vault that is the only sensible
  * removal too, since there is nothing left to delete. Otherwise external
- * entries get "forget" and managed vaults get "delete".
+ * entries get "forget" and managed vaults get "delete". A root another window
+ * already shows wears "open_elsewhere" — its Open becomes Focus.
  */
 export function workspaceRowState(
   entry: NativeKnownWorkspace,
-  currentPath: string | null | undefined
+  currentPath: string | null | undefined,
+  openElsewhere?: readonly string[]
 ): WorkspaceRowState {
   if (entry.rootPath === currentPath) {
     return { canOpen: false, badge: "current", removal: null };
@@ -32,7 +35,7 @@ export function workspaceRowState(
   }
   return {
     canOpen: true,
-    badge: null,
+    badge: openElsewhere?.includes(entry.rootPath) ? "open_elsewhere" : null,
     removal: entry.kind === "managed" ? "delete" : "forget"
   };
 }

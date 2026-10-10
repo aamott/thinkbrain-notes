@@ -107,6 +107,35 @@ describe("useWorkspaceSwitching workspace list", () => {
     });
   });
 
+  it("populates rootsOpenElsewhere from the api and refreshes it on window focus", async () => {
+    let elsewhere: readonly string[] = ["/vaults/Recipes"];
+    const listWorkspaceRootsOpenElsewhere = vi.fn(async () => elsewhere);
+    await render({ listWorkspaceRootsOpenElsewhere });
+
+    expect(controller?.rootsOpenElsewhere).toEqual(["/vaults/Recipes"]);
+
+    elsewhere = ["/vaults/Recipes", "/notes/work"];
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(listWorkspaceRootsOpenElsewhere).toHaveBeenCalledTimes(2);
+    expect(controller?.rootsOpenElsewhere).toEqual(["/vaults/Recipes", "/notes/work"]);
+  });
+
+  it("keeps the previous elsewhere list when the probe fails", async () => {
+    const probe = vi.fn()
+      .mockResolvedValueOnce(["/notes/work"])
+      .mockRejectedValueOnce(new Error("no such command"));
+    await render({ listWorkspaceRootsOpenElsewhere: probe });
+    expect(controller?.rootsOpenElsewhere).toEqual(["/notes/work"]);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(controller?.rootsOpenElsewhere).toEqual(["/notes/work"]);
+  });
+
   it("deletes a managed vault, forgets it, and reports success without undo", async () => {
     const deleteManagedWorkspace = vi.fn(async () => null);
     await render({ deleteManagedWorkspace });
@@ -150,7 +179,7 @@ describe("useWorkspaceSwitching launching", () => {
   };
 
   it("launches in a new window when the host opens workspaces that way", async () => {
-    const openWorkspaceWindow = vi.fn(async () => undefined);
+    const openWorkspaceWindow = vi.fn(async (): Promise<"opened" | "focused"> => "opened");
     const onWorkspaceLaunched = vi.fn();
     await render({ openWorkspaceWindow }, onWorkspaceLaunched);
 
@@ -162,7 +191,7 @@ describe("useWorkspaceSwitching launching", () => {
   });
 
   it("opens in the same window via openWorkspaceInWindow when the host does not spawn windows", async () => {
-    const openWorkspaceWindow = vi.fn(async () => undefined);
+    const openWorkspaceWindow = vi.fn(async (): Promise<"opened" | "focused"> => "opened");
     const onWorkspaceLaunched = vi.fn();
     await render({ ...inWindow, openWorkspaceWindow }, onWorkspaceLaunched);
 
@@ -174,7 +203,7 @@ describe("useWorkspaceSwitching launching", () => {
   });
 
   it("publishes a transient error notification when a launch fails", async () => {
-    const openWorkspaceWindow = vi.fn(async () => {
+    const openWorkspaceWindow = vi.fn(async (): Promise<"opened" | "focused"> => {
       throw new Error("window refused");
     });
     await render({ openWorkspaceWindow });

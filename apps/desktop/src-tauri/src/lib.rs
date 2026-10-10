@@ -89,14 +89,22 @@ pub fn run() {
             // declared in tauri.conf.json exists before any command runs. A
             // destroyed window never runs the frontend teardown, so without
             // this its file watchers outlive it whenever another window keeps
-            // the process alive. The main window is never registered as a
-            // workspace window, so it has no `WorkspaceWindowRoots` entry to
-            // unregister — pass `None` for the extra cleanup.
+            // the process alive. The main window does register a
+            // `WorkspaceWindowRoots` entry — lazily, when `open_workspace`
+            // first runs — so the extra cleanup unregisters its label; for a
+            // window that never opened a workspace it is a harmless no-op.
             for (label, window) in app.webview_windows().into_iter() {
+                let app_for_cleanup = app.handle().clone();
+                let label_for_cleanup = label.clone();
                 crate::commands::watcher::attach_window_destroy_cleanup(
                     &window,
-                    label.to_string(),
-                    None::<fn()>,
+                    label,
+                    Some(move || {
+                        crate::commands::workspace::unregister_workspace_window_root(
+                            &app_for_cleanup.state::<WorkspaceWindowRoots>(),
+                            &label_for_cleanup,
+                        );
+                    }),
                 );
             }
             Ok(())

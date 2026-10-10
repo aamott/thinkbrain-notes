@@ -67,6 +67,7 @@ export function WorkspaceSwitchingDialogs({
           workspaces={switching.knownWorkspaces}
           capabilities={accessCapabilities}
           currentPath={currentPath ?? null}
+          openElsewhere={switching.rootsOpenElsewhere}
           error={switching.manageWorkspacesError}
           onClearError={switching.clearManageWorkspacesError}
           onClose={() => switching.setManageWorkspacesOpen(false)}

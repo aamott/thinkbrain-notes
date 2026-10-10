@@ -94,6 +94,7 @@ macro_rules! app_command_list {
         backup::list_note_versions,
         backup::restore_note_backup,
         workspace::open_workspace_window,
+        workspace::open_workspace_roots_elsewhere,
         workspace::window_workspace_root,
         watcher::watch_workspace,
         watcher::unwatch_workspace,
@@ -189,7 +190,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            61,
+            62,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }

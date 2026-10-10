@@ -220,9 +220,10 @@ pub fn release_window_watchers(label: &str) {
 ///
 /// Every window needs its file watchers released when the OS destroys it
 /// (the frontend teardown never runs in that case). Workspace windows *also*
-/// need their entry in `WorkspaceWindowRoots` removed; pass an `extra_cleanup`
-/// closure for that, or `None` for the main window declared in
-/// `tauri.conf.json`, which is never registered as a workspace window.
+/// need their entry in `WorkspaceWindowRoots` removed — pass an `extra_cleanup`
+/// closure for that. Any window may carry an entry once it has opened a
+/// workspace (the main window included), so each window wires the same
+/// unregister rather than `None`.
 ///
 /// Centralizing the policy here means a reader only has to look in one place
 /// to know the full cleanup, instead of finding a near-duplicate closure in

@@ -43,6 +43,33 @@ pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &st
     lock_or_recover(&roots.0).remove(label);
 }
 
+/// The smallest label already showing `root`, so duplicate opens focus rather
+/// than spawn. `exclude_label` skips the caller's own window.
+pub fn window_for_root(
+    roots: &WorkspaceWindowRoots,
+    root: &str,
+    exclude_label: Option<&str>,
+) -> Option<String> {
+    lock_or_recover(&roots.0)
+        .iter()
+        .filter(|(label, path)| path.as_str() == root && Some(label.as_str()) != exclude_label)
+        .map(|(label, _)| label.clone())
+        .min()
+}
+
+/// Every root another window shows — for the manager's "open elsewhere" badge.
+/// The caller's own root is excluded; results are sorted and deduped.
+pub fn roots_open_elsewhere(roots: &WorkspaceWindowRoots, label: &str) -> Vec<String> {
+    let mut roots_elsewhere: Vec<String> = lock_or_recover(&roots.0)
+        .iter()
+        .filter(|(other_label, _)| other_label.as_str() != label)
+        .map(|(_, path)| path.clone())
+        .collect();
+    roots_elsewhere.sort();
+    roots_elsewhere.dedup();
+    roots_elsewhere
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WorkspaceSnapshot {
     pub workspace: WorkspaceDescriptor,
@@ -52,9 +79,21 @@ pub struct WorkspaceSnapshot {
 #[tauri::command]
 pub fn open_workspace(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    roots: tauri::State<WorkspaceWindowRoots>,
     root_path: String,
 ) -> Result<WorkspaceSnapshot, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+
+    // Register the caller's root so `open_workspace_window` can focus this
+    // window later instead of duplicating it. Overwriting keeps in-window
+    // switches correct, and the main window — created before any command
+    // runs — is covered the moment it opens a workspace.
+    register_workspace_window_root(
+        &roots,
+        window.label().to_string(),
+        root.to_string_lossy().into_owned(),
+    );
 
     // Grant `asset://` reads for this vault only. The static scope in
     // tauri.conf.json is empty, so the renderer can reach nothing until a
@@ -120,12 +159,72 @@ pub(crate) fn create_workspace_window_off_main_thread(
     Ok(())
 }
 
+/// What `open_workspace_window` did: spawned a window or focused an existing one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenWorkspaceWindowOutcome {
+    Opened,
+    Focused,
+}
+
+/// Opens a window for `root_path`, or focuses the window already showing it.
+///
+/// `exclude_label` is the calling window: a match there means the caller
+/// already shows the root, so it is focused rather than spawning a window that
+/// sits on top of itself. A registered label with no live window is stale —
+/// it is unregistered and a fresh window is created.
+pub(crate) fn open_or_focus_workspace_window(
+    app: tauri::AppHandle,
+    root_path: String,
+    exclude_label: Option<&str>,
+) -> Result<OpenWorkspaceWindowOutcome, NativeError> {
+    let root = resolve_workspace_root(&root_path)?;
+    let canonical = root.to_string_lossy().into_owned();
+    let roots = app.state::<WorkspaceWindowRoots>();
+    let mut focus_label = window_for_root(&roots, &canonical, exclude_label);
+    if focus_label.is_none()
+        && exclude_label.is_some_and(|caller| {
+            workspace_window_root(&roots, caller).as_deref() == Some(&canonical)
+        })
+    {
+        focus_label = exclude_label.map(str::to_string);
+    }
+    if let Some(label) = focus_label {
+        if let Some(target) = app.get_webview_window(&label) {
+            // Best-effort chrome calls: a failure to unminimize still leaves a
+            // focused existing window, which beats spawning a duplicate.
+            if let Err(error) = target.unminimize() {
+                eprintln!("[workspace] failed to unminimize {label}: {error}");
+            }
+            if let Err(error) = target.show() {
+                eprintln!("[workspace] failed to show {label}: {error}");
+            }
+            if let Err(error) = target.set_focus() {
+                eprintln!("[workspace] failed to focus {label}: {error}");
+            }
+            return Ok(OpenWorkspaceWindowOutcome::Focused);
+        }
+        unregister_workspace_window_root(&roots, &label);
+    }
+    create_workspace_window_off_main_thread(app, canonical)?;
+    Ok(OpenWorkspaceWindowOutcome::Opened)
+}
+
 #[tauri::command]
 pub async fn open_workspace_window(
     app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
     root_path: String,
-) -> Result<(), NativeError> {
-    create_workspace_window_off_main_thread(app, root_path)
+) -> Result<OpenWorkspaceWindowOutcome, NativeError> {
+    open_or_focus_workspace_window(app, root_path, Some(window.label()))
+}
+
+#[tauri::command]
+pub fn open_workspace_roots_elsewhere(
+    window: tauri::WebviewWindow,
+    roots: tauri::State<WorkspaceWindowRoots>,
+) -> Vec<String> {
+    roots_open_elsewhere(&roots, window.label())
 }
 
 #[tauri::command]

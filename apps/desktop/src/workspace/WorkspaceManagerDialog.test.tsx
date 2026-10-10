@@ -118,6 +118,16 @@ describe("WorkspaceManagerDialog", () => {
     expect(props.onForgetWorkspace).toHaveBeenCalledWith("/old/vault");
   });
 
+  it("marks a root open in another window and routes its row to focus", async () => {
+    const props = await renderDialog({ openElsewhere: ["/notes/work"] });
+    const row = rowNamed("Work");
+    expect(row.textContent).toContain("Open in another window");
+    expect(row.textContent).toContain("Focus");
+    await click(row.querySelectorAll("button")[0]);
+    expect(props.onOpenWorkspace).toHaveBeenCalledWith("/notes/work");
+    expect(props.onClose).toHaveBeenCalledOnce();
+  });
+
   it("opens an existing workspace through the row's main button", async () => {
     const props = await renderDialog();
     const row = rowNamed("Work");

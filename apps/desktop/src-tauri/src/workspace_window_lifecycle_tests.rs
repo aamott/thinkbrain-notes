@@ -4,9 +4,10 @@
 
 use crate::NativeError;
 use crate::commands::workspace::{
-    WorkspaceWindowRoots, describe_workspace, next_workspace_window_label, open_workspace_window,
-    register_workspace_window_root, resolve_workspace_root, unregister_workspace_window_root,
-    workspace_window_root,
+    OpenWorkspaceWindowOutcome, WorkspaceWindowRoots, describe_workspace,
+    next_workspace_window_label, open_workspace_window, register_workspace_window_root,
+    resolve_workspace_root, roots_open_elsewhere, unregister_workspace_window_root,
+    window_for_root, workspace_window_root,
 };
 use crate::tests::make_temp_test_dir;
 use std::fs;
@@ -21,8 +22,8 @@ use std::thread;
 fn workspace_window_creation_command_is_async() {
     fn assert_async_command<F, Fut>(_command: F)
     where
-        F: Fn(tauri::AppHandle, String) -> Fut,
-        Fut: std::future::Future<Output = Result<(), NativeError>>,
+        F: Fn(tauri::AppHandle, tauri::WebviewWindow, String) -> Fut,
+        Fut: std::future::Future<Output = Result<OpenWorkspaceWindowOutcome, NativeError>>,
     {
     }
 
@@ -57,6 +58,89 @@ fn workspace_window_roots_are_scoped_to_opaque_window_labels() {
     assert_eq!(
         workspace_window_root(&roots, &second),
         Some("/notes/second".to_string())
+    );
+}
+
+/// Re-registering a label replaces its root — in-window switches must not
+/// leave the label pointing at the previous vault.
+#[test]
+fn reregistering_a_label_replaces_its_root() {
+    let roots = WorkspaceWindowRoots::default();
+    register_workspace_window_root(&roots, "main".to_string(), "/notes/old".to_string());
+    register_workspace_window_root(&roots, "main".to_string(), "/notes/new".to_string());
+
+    assert_eq!(
+        workspace_window_root(&roots, "main"),
+        Some("/notes/new".to_string())
+    );
+    assert_eq!(window_for_root(&roots, "/notes/old", None), None);
+    assert_eq!(
+        window_for_root(&roots, "/notes/new", None),
+        Some("main".to_string())
+    );
+}
+
+// window_for_root
+
+/// Finds the window already showing a root, excluding the caller.
+#[test]
+fn window_for_root_excludes_the_callers_label() {
+    let roots = WorkspaceWindowRoots::default();
+    register_workspace_window_root(&roots, "main".to_string(), "/vault".to_string());
+
+    assert_eq!(
+        window_for_root(&roots, "/vault", Some("main")),
+        None,
+        "the caller already showing the root is not 'another window'"
+    );
+    assert_eq!(
+        window_for_root(&roots, "/vault", Some("workspace-7")),
+        Some("main".to_string())
+    );
+}
+
+/// Several windows on one root focus a deterministic label.
+#[test]
+fn window_for_root_picks_the_smallest_label() {
+    let roots = WorkspaceWindowRoots::default();
+    register_workspace_window_root(&roots, "workspace-9".to_string(), "/vault".to_string());
+    register_workspace_window_root(&roots, "workspace-3".to_string(), "/vault".to_string());
+    register_workspace_window_root(&roots, "main".to_string(), "/vault".to_string());
+
+    assert_eq!(
+        window_for_root(&roots, "/vault", None),
+        Some("main".to_string())
+    );
+}
+
+/// An unknown root and an empty registry both miss.
+#[test]
+fn window_for_root_returns_none_without_a_match() {
+    let roots = WorkspaceWindowRoots::default();
+    assert_eq!(window_for_root(&roots, "/vault", None), None);
+
+    register_workspace_window_root(&roots, "main".to_string(), "/other".to_string());
+    assert_eq!(window_for_root(&roots, "/vault", None), None);
+}
+
+// roots_open_elsewhere
+
+/// Other windows' roots, sorted and deduped, without the caller's.
+#[test]
+fn roots_open_elsewhere_excludes_the_caller_and_dedupes() {
+    let roots = WorkspaceWindowRoots::default();
+    register_workspace_window_root(&roots, "main".to_string(), "/b".to_string());
+    register_workspace_window_root(&roots, "workspace-1".to_string(), "/a".to_string());
+    register_workspace_window_root(&roots, "workspace-2".to_string(), "/a".to_string());
+    register_workspace_window_root(&roots, "workspace-3".to_string(), "/c".to_string());
+
+    assert_eq!(
+        roots_open_elsewhere(&roots, "main"),
+        vec!["/a".to_string(), "/c".to_string()]
+    );
+    assert_eq!(
+        roots_open_elsewhere(&roots, "workspace-1"),
+        vec!["/a".to_string(), "/b".to_string(), "/c".to_string()]
     );
 }
 

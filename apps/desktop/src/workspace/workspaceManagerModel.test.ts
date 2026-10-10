@@ -52,6 +52,21 @@ describe("workspaceRowState", () => {
       removal: "forget"
     });
   });
+
+  it("marks a root another window shows as open elsewhere — still openable", () => {
+    expect(workspaceRowState(entry(), "/notes/current", ["/notes/work"])).toEqual({
+      canOpen: true,
+      badge: "open_elsewhere",
+      removal: "forget"
+    });
+  });
+
+  it("does not mark the current or a missing workspace as open elsewhere", () => {
+    expect(workspaceRowState(entry(), "/notes/work", ["/notes/work"]).badge).toBe("current");
+    expect(
+      workspaceRowState(entry({ missing: true }), "/notes/current", ["/notes/work"]).badge
+    ).toBe("missing");
+  });
 });
 
 describe("filterWorkspaces", () => {

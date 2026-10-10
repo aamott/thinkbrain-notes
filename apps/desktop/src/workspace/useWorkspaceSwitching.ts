@@ -32,6 +32,8 @@ export interface WorkspaceSwitchingController {
    * managed vaults — including entries whose folder is currently missing.
    */
   readonly knownWorkspaces: readonly NativeKnownWorkspace[];
+  /** Roots other live windows already show — for the manager's "open elsewhere" badge. */
+  readonly rootsOpenElsewhere: readonly string[];
   readonly createManagedWorkspaceOpen: boolean;
   readonly managedStorageNoticeOpen: boolean;
   readonly importFromGitOpen: boolean;
@@ -92,6 +94,7 @@ export function useWorkspaceSwitching({
 }: UseWorkspaceSwitchingOptions): WorkspaceSwitchingController {
   const [accessCapabilities, setAccessCapabilities] = useState<NativeWorkspaceAccessCapabilities | null>(null);
   const [knownWorkspaces, setKnownWorkspaces] = useState<readonly NativeKnownWorkspace[]>([]);
+  const [rootsOpenElsewhere, setRootsOpenElsewhere] = useState<readonly string[]>([]);
   const [createManagedWorkspaceOpen, setCreateManagedWorkspaceOpenState] = useState(false);
   const [managedStorageNoticeOpen, setManagedStorageNoticeOpen] = useState(false);
   const [importFromGitOpen, setImportFromGitOpen] = useState(false);
@@ -119,6 +122,13 @@ export function useWorkspaceSwitching({
       // The manager is the only surface this list backs, so its failure goes
       // there — an empty list with no error reads as "your vaults are gone".
       .catch((error: unknown) => setManageWorkspacesError(workspaceErrorMessage(error)));
+    const probeElsewhere = apiRef.current.listWorkspaceRootsOpenElsewhere;
+    if (typeof probeElsewhere !== "function") return;
+    void probeElsewhere()
+      .then((roots) => setRootsOpenElsewhere(Array.isArray(roots) ? roots : []))
+      // A failed probe just means a missing badge — keep the previous list
+      // rather than reporting a workspace failure the user cannot act on.
+      .catch((error: unknown) => console.error("[workspace] roots-open-elsewhere probe failed:", error));
   }, []);
 
   useEffect(() => {
@@ -300,6 +310,7 @@ export function useWorkspaceSwitching({
     () => ({
       accessCapabilities,
       knownWorkspaces,
+      rootsOpenElsewhere,
       createManagedWorkspaceOpen,
       managedStorageNoticeOpen,
       importFromGitOpen,
@@ -324,6 +335,7 @@ export function useWorkspaceSwitching({
     [
       accessCapabilities,
       knownWorkspaces,
+      rootsOpenElsewhere,
       createManagedWorkspaceOpen,
       managedStorageNoticeOpen,
       importFromGitOpen,

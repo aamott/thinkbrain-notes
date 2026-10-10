@@ -349,11 +349,14 @@ fn run_imported(
     }) {
         Ok(imported) if open_in_new_window => {
             let not_sent = not_sent_reason(&imported.landed);
-            match crate::commands::workspace::create_workspace_window_off_main_thread(
+            // Focus-aware: an existing window for the imported root gets
+            // raised instead of duplicated.
+            match crate::commands::workspace::open_or_focus_workspace_window(
                 app.clone(),
                 imported.path.to_string_lossy().into_owned(),
+                None,
             ) {
-                Ok(()) => emit("ok", None, None, not_sent),
+                Ok(_) => emit("ok", None, None, not_sent),
                 Err(error) => emit(
                     "failed",
                     None,

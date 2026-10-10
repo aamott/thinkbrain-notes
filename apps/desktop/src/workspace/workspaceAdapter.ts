@@ -26,7 +26,10 @@ export interface WorkspaceDesktopApi {
     includeHidden: boolean,
     pathPrefix?: string
   ): Promise<readonly NativeWorkspaceEntry[]>;
-  openWorkspaceWindow(rootPath: string): Promise<void>;
+  /** Opens a window for the root — or focuses the one already showing it. */
+  openWorkspaceWindow(rootPath: string): Promise<"opened" | "focused">;
+  /** Roots other live windows show; absent on non-Tauri hosts/tests. */
+  listWorkspaceRootsOpenElsewhere?(): Promise<readonly string[]>;
   windowWorkspaceRoot(): Promise<string | null>;
   /** Creates a workspace file (any extension) and missing parent folders. */
   createWorkspaceFile(
@@ -78,7 +81,11 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
     return invokeNativeCommand("list_workspace_entries", { rootPath, includeHidden, pathPrefix });
   },
   openWorkspaceWindow(rootPath) {
-    return invokeNativeCommand("open_workspace_window", { rootPath }).then(() => undefined);
+    return invokeNativeCommand("open_workspace_window", { rootPath });
+  },
+  listWorkspaceRootsOpenElsewhere() {
+    if (!isTauri()) return Promise.resolve([]);
+    return invokeNativeCommand("open_workspace_roots_elsewhere");
   },
   windowWorkspaceRoot() {
     return invokeNativeCommand("window_workspace_root");

@@ -23,6 +23,7 @@ export function WorkspaceManagerDialog({
   workspaces,
   capabilities,
   currentPath,
+  openElsewhere,
   error,
   onClearError,
   onClose,
@@ -36,6 +37,8 @@ export function WorkspaceManagerDialog({
   readonly workspaces: readonly NativeKnownWorkspace[];
   readonly capabilities: NativeWorkspaceAccessCapabilities | null;
   readonly currentPath: string | null;
+  /** Roots other live windows show — their rows read "Open in another window" / "Focus". */
+  readonly openElsewhere?: readonly string[];
   /** A failure belonging to this surface — forget or delete. */
   readonly error: string | null;
   readonly onClearError: () => void;
@@ -144,7 +147,7 @@ export function WorkspaceManagerDialog({
         ) : (
           <ul className="m-0 grid list-none gap-1 p-0">
             {visible.map((entry) => {
-              const row = workspaceRowState(entry, currentPath);
+              const row = workspaceRowState(entry, currentPath, openElsewhere);
               const gitLinked = gitLinkedPaths.has(entry.rootPath);
               const Icon = gitLinked ? FolderGit2 : Folder;
               return (
@@ -177,6 +180,14 @@ export function WorkspaceManagerDialog({
                     {row.badge === "missing" && (
                       <span className="flex-none rounded-small border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[0.625rem] text-warning">
                         Folder missing
+                      </span>
+                    )}
+                    {row.badge === "open_elsewhere" && (
+                      <span className="flex flex-none flex-col items-end gap-0.5">
+                        <span className="rounded-small bg-surface px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">
+                          Open in another window
+                        </span>
+                        <span className="text-[0.625rem] font-semibold text-primary">Focus</span>
                       </span>
                     )}
                   </button>

@@ -62,7 +62,12 @@ export interface NativeCommandMap {
     readonly args: { readonly rootPath: string };
     readonly result: NativeWorkspaceSnapshot;
   };
-  readonly open_workspace_window: { readonly args: { readonly rootPath: string }; readonly result: null };
+  readonly open_workspace_window: {
+    readonly args: { readonly rootPath: string };
+    /** `"opened"` spawned a window; `"focused"` raised the window already showing the root. */
+    readonly result: "opened" | "focused";
+  };
+  readonly open_workspace_roots_elsewhere: { readonly args: undefined; readonly result: readonly string[] };
   readonly window_workspace_root: { readonly args: undefined; readonly result: string | null };
   readonly list_workspace_entries: {
     readonly args: {
