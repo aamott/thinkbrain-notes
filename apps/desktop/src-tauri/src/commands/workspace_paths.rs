@@ -285,6 +285,7 @@ pub struct EntryMetadata {
     pub parent_path: String,
     pub byte_size: u64,
     pub updated_at: Option<u64>,
+    pub created_at: Option<u64>,
 }
 
 /// Reads the shared metadata block (relative path, file name, parent path, byte size, mtime)
@@ -313,6 +314,11 @@ pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeE
         .ok()
         .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_millis() as u64);
+    let created_at = metadata
+        .created()
+        .ok()
+        .and_then(|created| created.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as u64);
     let file_name = path
         .file_name()
         .map(|file_name| file_name.to_string_lossy().into_owned())
@@ -328,6 +334,7 @@ pub fn entry_metadata(root: &Path, path: &Path) -> Result<EntryMetadata, NativeE
         parent_path,
         byte_size: metadata.len(),
         updated_at,
+        created_at,
     })
 }
 

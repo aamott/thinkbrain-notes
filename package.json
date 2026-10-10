@@ -1,6 +1,6 @@
 {
   "name": "thinkbrain-notes",
-  "version": "0.1.0",
+  "version": "0.4.0-1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.8.0",
@@ -21,6 +21,8 @@
     "test:e2e": "pnpm --filter @thinkbrain/desktop test:e2e",
     "build": "pnpm -r build",
     "qa": "node scripts/qa.mjs",
+    "version:set": "node scripts/version.mjs",
+    "version:check": "node scripts/version.mjs --check",
     "desktop:run": "pnpm build && node scripts/with-rust-env.mjs cargo run --manifest-path apps/desktop/src-tauri/Cargo.toml",
     "desktop:tauri": "node scripts/with-rust-env.mjs pnpm --filter @thinkbrain/desktop tauri",
     "android:dev": "pnpm desktop:tauri android dev",

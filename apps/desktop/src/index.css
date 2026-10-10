@@ -320,6 +320,12 @@
 [data-phone-shell] [data-phone-scroll-clearance] {
   padding-bottom: var(--tn-phone-bubble-clearance);
 }
+/* With the soft keyboard up the browser may still try to pan the document;
+   kill any scroll chaining so only the tab's own scroller moves. */
+html:has([data-phone-shell]),
+html:has([data-phone-shell]) body {
+  overscroll-behavior: none;
+}
 
 /* CodeMirror cursor: override the default black border so the cursor tracks
    the theme foreground and stays visible in dark mode. Kept outside @layer

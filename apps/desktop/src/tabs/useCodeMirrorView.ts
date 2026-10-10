@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { minimalChange } from "../lib/codemirror";
-import { cmHistoryCommands, registerEditorCommands } from "./editorCommands";
+import { cmHistoryCommands, registerEditorCommands, type EditorCommands } from "./editorCommands";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 
 /**
@@ -35,6 +35,8 @@ export interface MountedEditorView {
     view: EditorView,
     viewRef: RefObject<EditorView | null>
   ) => void;
+  /** Extra commands registered under `stateKey` beyond the shared undo/redo. */
+  readonly commands?: (getView: () => EditorView | null) => Partial<EditorCommands>;
 }
 
 /**
@@ -109,11 +111,16 @@ export function useCodeMirrorView({
     viewRef.current = view;
 
     // Undo/redo buttons in the header act on this view, keyed by the tab id
-    // the shell passed as `stateKey`.
+    // the shell passed as `stateKey`; `mounted.commands` adds per-editor
+    // commands (e.g. Markdown formatting for the phone bar).
+    const getView = () => viewRef.current;
     const unregisterCommands =
       stateKey === undefined
         ? undefined
-        : registerEditorCommands(stateKey, cmHistoryCommands(() => view));
+        : registerEditorCommands(stateKey, {
+            ...cmHistoryCommands(() => view),
+            ...mounted.commands?.(getView)
+          });
 
     if (parked) {
       // The parked state carries the previous mount's extensions, and those

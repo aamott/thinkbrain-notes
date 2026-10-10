@@ -39,7 +39,7 @@ apps/desktop/  # React UI + Tauri Rust host (See apps/desktop/AGENTS.md)
 packages/core/  # Platform-agnostic TS: note model, markdown, frontmatter, settings, layout, extensions (See packages/core/AGENTS.md)
 packages/ui/  # Design system: tokens, shadcn components (See packages/ui/AGENTS.md)
 plans/  # Epics, feature specs, task tracking (See ## Plans below)
-scripts/  # qa.mjs (run via `pnpm qa`), with-rust-env.mjs — cross-platform Node wrappers; plus qa.sh, rust-env.sh, with-rust-env.sh
+scripts/  # qa.mjs (run via `pnpm qa`), version.mjs (`pnpm version:set <v>` / `version:check`), with-rust-env.mjs — cross-platform Node wrappers; plus qa.sh, rust-env.sh, with-rust-env.sh
 docs/  # Reviews, known issues, superpowers specs
 examples/extensions/  # Sample extension (hello-notes)
 ```

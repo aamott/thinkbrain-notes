@@ -4,6 +4,14 @@
  * Extensions declare when they should load. Ids inside an event are relative to
  * the extension (`onCommand:show`, never `onCommand:note-stats.show`) because
  * the host owns prefixing.
+ *
+ * Only `onStartup` changes host behaviour. `onCommand:`/`onView:` events are
+ * validated and kept as declarative, forward-compatible metadata (VS
+ * Code-style) — they do not gate activation. Lazy activation is driven by
+ * contribution stubs instead: touching any contributed command or panel
+ * activates the extension regardless of `activationEvents`. The stub
+ * machinery is owned by the host's `bootstrap.ts`
+ * (`registerStubs`/`ensureActive`).
  */
 
 import type { ExtensionManifest } from "./manifest";

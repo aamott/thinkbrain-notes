@@ -23,13 +23,34 @@ describe("workspaceSettings", () => {
   });
 
   it("preserves an explicit boolean preference", () => {
-    expect(parseWorkspaceSettings(JSON.stringify({ showHidden: true }))).toEqual({ showHidden: true });
-    expect(parseWorkspaceSettings(JSON.stringify({ showHidden: false }))).toEqual({ showHidden: false });
+    expect(parseWorkspaceSettings(JSON.stringify({ showHidden: true }))).toEqual({
+      showHidden: true,
+      explorerSort: "modified-desc"
+    });
+    expect(parseWorkspaceSettings(JSON.stringify({ showHidden: false }))).toEqual({
+      showHidden: false,
+      explorerSort: "modified-desc"
+    });
+  });
+
+  it("parses a valid explorerSort, and defaults on invalid or missing ones", () => {
+    expect(
+      parseWorkspaceSettings(JSON.stringify({ showHidden: false, explorerSort: "name-desc" }))
+    ).toEqual({ showHidden: false, explorerSort: "name-desc" });
+    expect(
+      parseWorkspaceSettings(JSON.stringify({ showHidden: false, explorerSort: "by-size" }))
+    ).toEqual({ showHidden: false, explorerSort: "modified-desc" });
+    expect(parseWorkspaceSettings(JSON.stringify({ showHidden: false })).explorerSort).toBe(
+      "modified-desc"
+    );
   });
 
   it("reads settings through the native bridge and falls back to defaults on null", async () => {
     invokeNativeCommand.mockResolvedValueOnce(JSON.stringify({ showHidden: true }));
-    await expect(readWorkspaceSettings("/notes")).resolves.toEqual({ showHidden: true });
+    await expect(readWorkspaceSettings("/notes")).resolves.toEqual({
+      showHidden: true,
+      explorerSort: "modified-desc"
+    });
     expect(invokeNativeCommand).toHaveBeenCalledWith("read_workspace_settings", { rootPath: "/notes" });
 
     invokeNativeCommand.mockResolvedValueOnce(null);
@@ -73,6 +94,26 @@ describe("writing without destroying the rest of the file", () => {
       version: 1,
       "extension-journal-calendar.fieldDefinitions": "[{\"id\":\"mood\"}]",
       showHidden: true
+    });
+  });
+
+  it("merges a partial write — explorerSort alone does not drop other keys", async () => {
+    invokeNativeCommand.mockReset();
+    invokeNativeCommand.mockImplementation(async (command) =>
+      command === "read_workspace_settings"
+        ? JSON.stringify({ version: 1, showHidden: true })
+        : null
+    );
+
+    await writeWorkspaceSettings("/vault", { explorerSort: "name-desc" });
+
+    const write = invokeNativeCommand.mock.calls.find(
+      ([command]) => command === "write_workspace_settings"
+    );
+    expect(JSON.parse(String((write?.[1] as { contents: string }).contents))).toEqual({
+      version: 1,
+      showHidden: true,
+      explorerSort: "name-desc"
     });
   });
 

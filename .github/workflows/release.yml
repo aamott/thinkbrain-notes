@@ -63,6 +63,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # On a tag push the tag must equal the app version in
+      # apps/desktop/package.json — a mismatched tag fails here, before the
+      # expensive matrix build, rather than shipping the wrong version.
+      - name: Verify tag matches app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/version.mjs --check --tag "${{ github.ref_name }}"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -199,6 +206,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Same version gate as the desktop job: the tag must equal the app
+      # version before any Android build work starts.
+      - name: Verify tag matches app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/version.mjs --check --tag "${{ github.ref_name }}"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -316,7 +329,10 @@ jobs:
           set -euo pipefail
           out="apps/desktop/src-tauri/gen/android/app/build/outputs"
           mkdir -p staging
-          version="$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)"
+          # The version lives in apps/desktop/package.json; tauri.conf.json's
+          # version field is the path form "../package.json" and cannot be
+          # read directly.
+          version="$(jq -r .version apps/desktop/package.json)"
           # AAB for Play Store distribution
           find "$out/bundle" -name '*.aab' -exec cp {} "staging/ThinkbrainNotes-${version}-android.aab" \;
           # Universal APK for sideloading

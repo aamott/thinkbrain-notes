@@ -51,6 +51,14 @@ fn normalize_extension_relative_path(relative_path: &str) -> Result<PathBuf, Nat
 }
 
 /// Resolves a directory-relative path to a real file inside that directory.
+///
+/// The containment check is path-time: the target is canonicalized and
+/// compared here, then opened later by `read_extension_file`. It therefore
+/// assumes a quiescent extension directory — a concurrent component swap
+/// (dir replaced by a symlink) between canonicalize and open would escape,
+/// and a planted hard link needs no race since canonicalization cannot
+/// detect it. Binding containment to the open is tracked in
+/// `plans/other_tasks/pending-ipc_hardening-low-med.md`.
 fn resolve_extension_file(directory: &str, relative_path: &str) -> Result<PathBuf, NativeError> {
     let relative = normalize_extension_relative_path(relative_path)?;
 

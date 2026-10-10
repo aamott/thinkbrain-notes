@@ -538,6 +538,8 @@ export interface NativeWorkspaceEntry {
   readonly is_markdown: boolean;
   readonly byte_size: number;
   readonly updated_at: number | null;
+  /** Birth time in ms; absent from older hosts/fixtures, null where the filesystem has none. */
+  readonly created_at?: number | null;
 }
 
 /** One file's path change caused by a rename/move; folders produce one per descendant file. */

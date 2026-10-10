@@ -26,6 +26,7 @@ import {
   visibleDialog
 } from "./PhoneShell.testHarness";
 import { desktopCommandRegistry } from "../../commands/commandRegistry";
+import { registerEditorCommands } from "../../tabs/editorCommands";
 import { useNotificationStore } from "../../notifications/notificationStore";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { useShellState, type ShellState } from "../useShellState";
@@ -409,6 +410,110 @@ describe("PhoneShell", () => {
     const host = await render();
 
     expect(bubbleBar(host)).toBeNull();
+  });
+
+  it("pins the shell to the visual viewport box so only content scrolls", async () => {
+    // The Android edge-to-edge case: adjustResize is ignored, only the
+    // visual viewport shrinks — and it can pan inside the layout viewport,
+    // so the shell root must track both the height and the offset.
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", {
+      height: 500,
+      scale: 1,
+      offsetTop: 120,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    });
+
+    const host = await render();
+
+    const main = host.querySelector<HTMLElement>("main[data-phone-shell]");
+    expect(main?.style.height).toBe("500px");
+    expect(main?.style.top).toBe("120px");
+  });
+
+  it("shows the formatting bar above the soft keyboard on a markdown tab", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("screen", { height: 800 });
+    // The viewport stub records its listeners: the keyboard-inset hook only
+    // re-reads when the viewport itself says "resize".
+    const viewport = { height: 800 };
+    const viewportListeners: (() => void)[] = [];
+    const fireViewport = async () =>
+      act(async () => viewportListeners.forEach((listener) => listener()));
+    vi.stubGlobal("visualViewport", {
+      get height() {
+        return viewport.height;
+      },
+      offsetTop: 0,
+      scale: 1,
+      addEventListener: (_type: string, listener: () => void) => {
+        viewportListeners.push(listener);
+      },
+      removeEventListener: () => undefined
+    });
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
+    const format = vi.fn();
+    let unregister = (): void => undefined;
+    await act(async () => {
+      unregister = registerEditorCommands(shell().tabState.tabs[0]!.id, {
+        undo: () => undefined,
+        redo: () => undefined,
+        canUndo: () => false,
+        canRedo: () => false,
+        format
+      });
+    });
+    try {
+      // Keyboard up: the visual viewport shrank.
+      viewport.height = 500;
+      await fireViewport();
+
+      const bar = host.querySelector('[role="group"][aria-label="Formatting"]');
+      expect(bar).not.toBeNull();
+      await act(async () => {
+        bar?.querySelector<HTMLButtonElement>('button[aria-label="Bold"]')?.click();
+      });
+      expect(format).toHaveBeenCalledWith("bold");
+
+      // Keyboard down again: the bar leaves with it.
+      viewport.height = 800;
+      await fireViewport();
+      expect(host.querySelector('[role="group"][aria-label="Formatting"]')).toBeNull();
+    } finally {
+      unregister();
+    }
+  });
+
+  it("offers no formatting bar where the tab's commands lack format", async () => {
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("screen", { height: 800 });
+    vi.stubGlobal("visualViewport", {
+      height: 500,
+      offsetTop: 0,
+      scale: 1,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    });
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell);
+    // Registers after the real editor does, so this stub is the answer the
+    // shell sees — a non-Markdown surface registers exactly this shape.
+    let unregister = (): void => undefined;
+    await act(async () => {
+      unregister = registerEditorCommands(shell().tabState.tabs[0]!.id, {
+        undo: () => undefined,
+        redo: () => undefined,
+        canUndo: () => false,
+        canRedo: () => false
+      });
+    });
+    try {
+      expect(host.querySelector('[role="group"][aria-label="Formatting"]')).toBeNull();
+    } finally {
+      unregister();
+    }
   });
 
   it("carries conflict and notification counts in the bubbles' accessible names", async () => {
