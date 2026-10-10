@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Folder, FolderGit2, Trash2, X } from "lucide-react";
+import { isTauri } from "@tauri-apps/api/core";
+import { Folder, FolderGit2, FolderOpen, Trash2, X } from "lucide-react";
 import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities } from "../native/commands";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { ModalDialog } from "../shell/ModalDialog";
@@ -31,6 +32,7 @@ export function WorkspaceManagerDialog({
   onCreateWorkspace,
   onImportFromGit,
   onOpenWorkspace,
+  onRevealWorkspace,
   onForgetWorkspace,
   onDeleteWorkspace
 }: {
@@ -47,6 +49,8 @@ export function WorkspaceManagerDialog({
   readonly onCreateWorkspace: () => void;
   readonly onImportFromGit: () => void;
   readonly onOpenWorkspace: (rootPath: string) => void;
+  /** Reveals the workspace folder in the OS file manager (desktop only). */
+  readonly onRevealWorkspace: (rootPath: string) => void;
   readonly onForgetWorkspace: (rootPath: string) => void;
   readonly onDeleteWorkspace: (workspace: NativeKnownWorkspace) => Promise<boolean>;
 }) {
@@ -85,6 +89,11 @@ export function WorkspaceManagerDialog({
 
   const visible = useMemo(() => filterWorkspaces(workspaces, query), [workspaces, query]);
   const hasExternal = workspaces.some((entry) => entry.kind === "external");
+  // `canOpenFolder` is the native "desktop platform" marker — false on
+  // Android and iOS, where the opener plugin has no file manager to drive.
+  // The isTauri() half hides the action in plain-browser dev and tests,
+  // where a click could only no-op.
+  const canReveal = isTauri() && capabilities?.canOpenFolder === true;
 
   // Header actions close the manager first — the destination surface (folder
   // picker, create dialog, import dialog) should not sit under it.
@@ -191,6 +200,17 @@ export function WorkspaceManagerDialog({
                       </span>
                     )}
                   </button>
+                  {canReveal && !entry.missing && entry.kind !== "managed" && (
+                    <button
+                      type="button"
+                      aria-label={`Show ${entry.name} in file manager`}
+                      title="Show in file manager"
+                      className="flex size-9 flex-none items-center justify-center rounded-small text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring pointer-coarse:size-11"
+                      onClick={() => onRevealWorkspace(entry.rootPath)}
+                    >
+                      <FolderOpen aria-hidden="true" className="size-4" />
+                    </button>
+                  )}
                   {row.removal === "forget" && (
                     <button
                       type="button"

@@ -4,10 +4,17 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities } from "../native/commands";
+import { isTauri } from "@tauri-apps/api/core";
 import { WorkspaceManagerDialog } from "./WorkspaceManagerDialog";
 
 vi.mock("./workspaceSettings", () => ({
   isWorkspaceGitLinked: vi.fn((path: string) => Promise.resolve(path.includes("git-linked")))
+}));
+
+// Desktop host by default; the "Show in file manager" gate reads `isTauri()`
+// so tests can flip it to cover the non-Tauri path.
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: vi.fn(() => true)
 }));
 
 const desktopCapabilities: NativeWorkspaceAccessCapabilities = {
@@ -52,6 +59,7 @@ async function renderDialog(overrides: Partial<Parameters<typeof WorkspaceManage
     onCreateWorkspace: vi.fn(),
     onImportFromGit: vi.fn(),
     onOpenWorkspace: vi.fn(),
+    onRevealWorkspace: vi.fn(),
     onForgetWorkspace: vi.fn(),
     onDeleteWorkspace: vi.fn(async () => true),
     ...overrides
@@ -105,8 +113,10 @@ describe("WorkspaceManagerDialog", () => {
     await renderDialog();
     const row = rowNamed("Current");
     const buttons = Array.from(row.querySelectorAll("button"));
-    expect(buttons).toHaveLength(1);
+    // Disabled open plus "Show in file manager" — never a forget/delete.
+    expect(buttons).toHaveLength(2);
     expect(buttons[0]?.disabled).toBe(true);
+    expect(row.querySelector('button[aria-label="Show Current in file manager"]')).not.toBeNull();
   });
 
   it("disables open on a missing folder but keeps its remove action", async () => {
@@ -134,6 +144,38 @@ describe("WorkspaceManagerDialog", () => {
     await click(row.querySelectorAll("button")[0]);
     expect(props.onOpenWorkspace).toHaveBeenCalledWith("/notes/work");
     expect(props.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("reveals an external workspace's folder through the row action", async () => {
+    const props = await renderDialog();
+    const row = rowNamed("Work");
+    const reveal = row.querySelector('button[aria-label="Show Work in file manager"]');
+    await click(reveal);
+    expect(props.onRevealWorkspace).toHaveBeenCalledWith("/notes/work");
+  });
+
+  it("hides the reveal action on managed vaults and missing folders", async () => {
+    await renderDialog();
+    expect(rowNamed("Recipes").querySelector('button[aria-label="Show Recipes in file manager"]')).toBeNull();
+    expect(rowNamed("Old Vault").querySelector('button[aria-label="Show Old Vault in file manager"]')).toBeNull();
+  });
+
+  it("hides the reveal action where the platform has no external folders", async () => {
+    // `canOpenFolder` is the native desktop marker — false on Android/iOS.
+    await renderDialog({
+      capabilities: { ...desktopCapabilities, canOpenFolder: false }
+    });
+    expect(rowNamed("Work").querySelector('button[aria-label="Show Work in file manager"]')).toBeNull();
+  });
+
+  it("hides the reveal action outside Tauri", async () => {
+    vi.mocked(isTauri).mockReturnValue(false);
+    try {
+      await renderDialog();
+      expect(rowNamed("Work").querySelector('button[aria-label="Show Work in file manager"]')).toBeNull();
+    } finally {
+      vi.mocked(isTauri).mockReturnValue(true);
+    }
   });
 
   it("filters by name and path, case-insensitively", async () => {

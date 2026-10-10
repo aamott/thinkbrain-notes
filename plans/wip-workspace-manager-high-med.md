@@ -37,4 +37,4 @@ welcome page. Mockup: `plans/workspace-manager/assets/workspace-manager-mockup.h
 - ✅ Lift switching controller out of the explorer; unwind selector portal — `lift_workspace_switching`
   - Selector placement kept as-is: `ui.workspaceSelectorPlacement` (title bar or panel headers) on desktop; always in the drawer on phone.
 - ✅ Focus an already-open workspace window — `focus_open_workspace_window`
-- ⬜ Show in file manager (needs opener plugin) — `reveal_workspace_folder`
+- ✅ Show in file manager (needs opener plugin) — `reveal_workspace_folder`

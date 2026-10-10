@@ -75,6 +75,7 @@ export function WorkspaceSwitchingDialogs({
           onCreateWorkspace={() => switching.setCreateManagedWorkspaceOpen(true)}
           onImportFromGit={switching.openGitLinkImport}
           onOpenWorkspace={(rootPath) => void switching.launchWorkspace(rootPath)}
+          onRevealWorkspace={(rootPath) => void switching.revealWorkspaceFolder(rootPath)}
           onForgetWorkspace={(rootPath) => void switching.forgetWorkspaceEntry(rootPath)}
           onDeleteWorkspace={(workspace) => switching.deleteManagedWorkspace(workspace.rootPath)}
         />

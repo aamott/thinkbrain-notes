@@ -10,6 +10,9 @@ vi.mock("../native/commands", async (importOriginal) => ({
 vi.mock("../native/dialogs", () => ({
   pickDirectoryPath: vi.fn(async () => null)
 }));
+vi.mock("../native/opener", () => ({
+  revealPathInFileManager: vi.fn(async () => undefined)
+}));
 vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tauri-apps/api/core")>()),
   isTauri: () => true
@@ -17,6 +20,7 @@ vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
 
 import { invokeNativeCommand } from "../native/commands";
 import { pickDirectoryPath } from "../native/dialogs";
+import { revealPathInFileManager } from "../native/opener";
 import { appEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "./workspaceAdapter";
 
@@ -58,6 +62,11 @@ describe("workspace access", () => {
     expect(invokeNativeCommand).toHaveBeenCalledWith("delete_managed_workspace", {
       rootPath: "/app/vaults/Notes"
     });
+  });
+
+  it("reveals a workspace folder through the native opener", async () => {
+    await workspaceDesktopApi.revealWorkspaceFolder("/vault");
+    expect(revealPathInFileManager).toHaveBeenCalledWith("/vault");
   });
 });
 

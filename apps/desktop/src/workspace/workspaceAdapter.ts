@@ -10,6 +10,7 @@ import {
   type NativeWorkspaceSnapshot
 } from "../native/commands";
 import { pickDirectoryPath } from "../native/dialogs";
+import { revealPathInFileManager } from "../native/opener";
 import { appEvents } from "../events/appEvents";
 
 export interface WorkspaceDesktopApi {
@@ -30,6 +31,8 @@ export interface WorkspaceDesktopApi {
   openWorkspaceWindow(rootPath: string): Promise<"opened" | "focused">;
   /** Roots other live windows show; absent on non-Tauri hosts/tests. */
   listWorkspaceRootsOpenElsewhere?(): Promise<readonly string[]>;
+  /** Reveals the workspace folder in the OS file manager. Desktop hosts only. */
+  revealWorkspaceFolder(rootPath: string): Promise<void>;
   windowWorkspaceRoot(): Promise<string | null>;
   /** Creates a workspace file (any extension) and missing parent folders. */
   createWorkspaceFile(
@@ -86,6 +89,9 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   listWorkspaceRootsOpenElsewhere() {
     if (!isTauri()) return Promise.resolve([]);
     return invokeNativeCommand("open_workspace_roots_elsewhere");
+  },
+  revealWorkspaceFolder(rootPath) {
+    return revealPathInFileManager(rootPath);
   },
   windowWorkspaceRoot() {
     return invokeNativeCommand("window_workspace_root");

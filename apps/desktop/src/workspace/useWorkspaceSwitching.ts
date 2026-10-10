@@ -52,6 +52,8 @@ export interface WorkspaceSwitchingController {
   readonly refreshKnownWorkspaces: () => void;
   /** Opens the manager after refreshing the list it will show. */
   readonly openManageWorkspaces: () => void;
+  /** Reveals a workspace folder in the OS file manager. Desktop hosts only. */
+  readonly revealWorkspaceFolder: (rootPath: string) => Promise<void>;
   /** Removes a path from recents (with an Undo notification). Never the open workspace. */
   readonly forgetWorkspaceEntry: (rootPath: string) => Promise<void>;
   /** Deletes a managed vault and forgets it. False on failure (see manageWorkspacesError). */
@@ -221,6 +223,16 @@ export function useWorkspaceSwitching({
     setManageWorkspacesOpen(true);
   }, [refreshKnownWorkspaces]);
 
+  const revealWorkspaceFolder = useCallback(async (rootPath: string) => {
+    try {
+      await apiRef.current.revealWorkspaceFolder(rootPath);
+    } catch (error) {
+      // The reveal action lives on a manager row — its failure belongs to
+      // the manager's inline error, not a transient notification.
+      setManageWorkspacesError(workspaceErrorMessage(error));
+    }
+  }, []);
+
   const forgetWorkspaceEntry = useCallback(async (rootPath: string) => {
     const name =
       knownWorkspaces.find((entry) => entry.rootPath === rootPath)?.name ?? rootPath;
@@ -324,6 +336,7 @@ export function useWorkspaceSwitching({
       launchWorkspace,
       refreshKnownWorkspaces,
       openManageWorkspaces,
+      revealWorkspaceFolder,
       forgetWorkspaceEntry,
       deleteManagedWorkspace,
       setCreateManagedWorkspaceOpen,
@@ -349,6 +362,7 @@ export function useWorkspaceSwitching({
       launchWorkspace,
       refreshKnownWorkspaces,
       openManageWorkspaces,
+      revealWorkspaceFolder,
       forgetWorkspaceEntry,
       deleteManagedWorkspace,
       setCreateManagedWorkspaceOpen
