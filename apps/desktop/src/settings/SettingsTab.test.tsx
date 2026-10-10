@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the Tauri core `isTauri` check so we can toggle the mount-load branch.
@@ -47,6 +47,24 @@ const scrollSpy = createScrollSpyHarness();
 beforeEach(() => {
   scrollSpy.install();
 
+  // The settings nav registers with the shared overlay stack only under the
+  // narrow-viewport media query; happy-dom does not evaluate it, so stub
+  // matchMedia to report narrow — the drawer-dismiss tests exercise the real
+  // registered path. Other queries report no match, as happy-dom does.
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(max-width: 760px)",
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false
+    }))
+  );
+
   // `isTauri` is false by default so the mount effect is a no-op for existing
   // tests. The remount-persistence test overrides this to true.
   vi.mocked(isTauri).mockReturnValue(false);
@@ -61,6 +79,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await harness.unmount();
+  vi.unstubAllGlobals();
   vi.mocked(isTauri).mockReset();
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockReset();
   vi.mocked(invokeNativeCommand).mockReset();
@@ -156,7 +175,9 @@ describe("SettingsTab", () => {
     await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      // The shared overlay stack listens on `document` (real Escape events
+      // always pass through it); dispatch there, not on `window`.
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
     expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
@@ -183,6 +204,34 @@ describe("SettingsTab", () => {
     expect(useSettingsStore.getState().activeSection).toBeNull();
     // Nav stays open so the user can browse multiple sections.
     expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("true");
+  });
+
+  it("closes the nav and header menu while keeping staged edits when deactivated", async () => {
+    // The phone shell keeps the settings tab mounted under other routes; an
+    // invisible open drawer or header menu would stay registered on the
+    // shared overlay stack. Deactivation must close both — synchronously, so
+    // the first hidden frame already reports them closed.
+    let setActive: (active: boolean) => void = () => undefined;
+    const Host = () => {
+      const [active, setActiveState] = useState(true);
+      setActive = setActiveState;
+      return <SettingsTab active={active} />;
+    };
+    useSettingsStore.setState({ stagedChanges: { "editor.fontSize": 99 } });
+    const el = await harness.render(<Host />);
+    await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
+    await harness.click(el.querySelector('button[aria-label="More settings actions"]')!);
+    expect(el.querySelector('[role="menu"]')).not.toBeNull();
+
+    await act(async () => setActive(false));
+
+    expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
+    expect(el.querySelector('[data-testid="settings-navigation-scrim"]')).toBeNull();
+    expect(el.querySelector('[role="menu"]')).toBeNull();
+    // Staged edits are store state, not component state: hiding the surface
+    // must not lose them.
+    expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(99);
+    expect(selectIsDirty(useSettingsStore.getState())).toBe(true);
   });
 
   it("shows the Workspace group when a workspace is open", async () => {

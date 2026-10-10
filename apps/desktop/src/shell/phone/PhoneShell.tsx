@@ -146,14 +146,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   usePhoneAutosave(activeTab, activeDocument?.contents, saveDocument);
 
-  // A panel row tapped *inside the navigation drawer* replaces the current
-  // entry with the content route instead of pushing over it — the drawer is
-  // ephemeral chrome with no entry of its own, and a deliberate screen switch
-  // from the menu should not leave Back a step into the surface it replaced.
+  // A panel row tapped *inside the navigation drawer* pushes a new history
+  // entry — the drawer is ephemeral chrome with no entry of its own, and a
+  // deliberate screen switch from the menu is a real destination Back should
+  // undo (and Forward redo), never an overwrite of the root Files entry.
   const selectDrawerPanel = useCallback(
     (panelId: string) => {
       if (!isSelectableLeftPanel(panelId)) return;
-      navigation.replace(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
+      navigation.push(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
     },
     [navigation]
   );
@@ -464,6 +464,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               />
             )}
             <TabContent
+              active={route.kind === "tab"}
               tab={shell.activeTab}
               document={shell.activeDocument}
               onChange={shell.updateDocument}
@@ -566,8 +567,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           panel={inspectorPanel ?? lastInspectorPanel}
           context={rightContext}
           // Scrim tap closes the whole flow — under the actions menu that skips
-          // the menu entry too; only the header Back steps one level.
+          // the menu entry too; registered-overlay dismiss (Back, Escape) and
+          // the header Back step one level.
           onDismiss={() => navigation.dismissOverlay(true)}
+          onStepBack={() => navigation.dismissOverlay()}
           onBack={navigation.back}
         />
 
@@ -586,7 +589,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           currentWorkspacePath={shell.restoredWorkspacePath ?? undefined}
           onOpenSettings={() => {
             shell.openSettingsTab();
-            navigation.replace({ kind: "tab", tabId: "settings" });
+            navigation.push({ kind: "tab", tabId: "settings" });
           }}
         />
 

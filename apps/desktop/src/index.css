@@ -77,6 +77,7 @@
   --font-mono: var(--tn-font-mono);
   --shadow-soft: var(--tn-shadow-soft);
   --shadow-panel: var(--tn-shadow-panel);
+  --shadow-bubble: var(--tn-shadow-bubble);
 }
 
 /* Overlay slide (`.tn-slide` + `--tn-duration-overlay`) ships with

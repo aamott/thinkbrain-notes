@@ -155,7 +155,7 @@ export function ThemePicker() {
         id="theme-picker-select"
         value={selectValue}
         onChange={handleChange}
-        className="mt-1 max-w-sm rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-1 max-w-sm rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring max-[760px]:mt-0 max-[760px]:min-h-11 max-[760px]:w-full max-[760px]:max-w-none"
       >
         <optgroup label="Base">
           <option value="system">System</option>
@@ -256,7 +256,7 @@ export function ThemeToolbar() {
 
   return (
     <div
-      className="mb-3 flex items-center gap-[0.3rem]"
+      className="mb-3 flex items-center gap-[0.3rem] max-[760px]:flex-wrap"
       role="toolbar"
       aria-label="Theme actions"
     >
@@ -266,7 +266,7 @@ export function ThemeToolbar() {
         title="Export Theme"
         aria-label="Export Theme"
         className={cn(
-          "flex items-center gap-1 rounded-small px-1.5 py-0.5 text-xs",
+          "flex items-center gap-1 rounded-small px-1.5 py-0.5 text-xs max-[760px]:min-h-11",
           "text-muted-foreground bg-surface cursor-pointer",
           "hover:text-foreground hover:bg-accent transition-colors"
         )}
@@ -280,7 +280,7 @@ export function ThemeToolbar() {
         title="Import Theme"
         aria-label="Import Theme"
         className={cn(
-          "flex items-center gap-1 rounded-small px-1.5 py-0.5 text-xs",
+          "flex items-center gap-1 rounded-small px-1.5 py-0.5 text-xs max-[760px]:min-h-11",
           "text-muted-foreground bg-surface cursor-pointer",
           "hover:text-foreground hover:bg-accent transition-colors"
         )}

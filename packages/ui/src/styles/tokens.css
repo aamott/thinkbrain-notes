@@ -80,6 +80,9 @@
      sheets and bubbles need separation on every visible side — but low-alpha
      and spread-free so it lifts off a light surface instead of ringing it. */
   --tn-shadow-panel: 0 0 32px rgb(0 0 0 / 15%);
+  /* Floating phone bubbles: a directional drop, not a halo — the faint
+     all-around panel glow read as flat over content. */
+  --tn-shadow-bubble: 0 4px 12px rgb(0 0 0 / 22%), 0 1px 3px rgb(0 0 0 / 12%);
   /* Phone overlay slide duration. Used by `.tn-slide` below and by the
      desktop `tn-slide-in-*` entrance animations. */
   --tn-duration-overlay: 200ms;
@@ -158,6 +161,7 @@
 
   /* Stronger popout shadow for dark palettes. */
   --tn-shadow-panel: 0 0 24px 4px rgb(0 0 0 / 55%);
+  --tn-shadow-bubble: 0 4px 14px rgb(0 0 0 / 65%), 0 1px 3px rgb(0 0 0 / 40%);
 }
 
 /* Pre-React-mount dark-mode mitigation. The `:root` block above applies the

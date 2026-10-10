@@ -10,7 +10,7 @@ import {
   UI_SCALE_KEY,
   useUiScale
 } from "./useUiScale";
-import { useSettingsStore } from "../settings/settingsStore";
+import { useSettingsStore, appSettingsRegistry } from "../settings/settingsStore";
 import { installStageChangeSpy, seedSettingsStore } from "../settings/settingsTestHelpers";
 
 // Minimal harness: one host div, a component that only mounts the hook.
@@ -133,5 +133,25 @@ describe("adjustUiScale / resetUiScale", () => {
     resetUiScale();
     expect(spy).toHaveBeenNthCalledWith(1, UI_SCALE_KEY, 140);
     expect(spy).toHaveBeenNthCalledWith(2, UI_SCALE_KEY, 100);
+  });
+
+  it("resets to the coarse-pointer definition default of 110", () => {
+    const original = appSettingsRegistry.getDefinition.bind(appSettingsRegistry);
+    const getSpy = vi
+      .spyOn(appSettingsRegistry, "getDefinition")
+      .mockImplementation(((key: string) => {
+        const definition = original(key);
+        return key === UI_SCALE_KEY && definition
+          ? { ...definition, default: 110 }
+          : definition;
+      }) as typeof appSettingsRegistry.getDefinition);
+    try {
+      seedSettingsStore({ appValues: { "ui.scale": 140 } });
+      const spy = installStageChangeSpy();
+      resetUiScale();
+      expect(spy).toHaveBeenCalledWith(UI_SCALE_KEY, 110);
+    } finally {
+      getSpy.mockRestore();
+    }
   });
 });

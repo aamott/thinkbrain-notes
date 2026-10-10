@@ -121,7 +121,7 @@ function SettingRow({
       data-setting-key={definition.key}
       data-highlighted={highlighted ? "true" : undefined}
       className={cn(
-        "grid gap-4 rounded-small border-b border-border py-2.5 transition-[background-color,box-shadow] duration-150",
+        "grid gap-4 rounded-small border-b border-border py-2.5 transition-[background-color,box-shadow] duration-150 max-[760px]:gap-2",
         isCustomControl
           ? "grid-cols-[minmax(0,1fr)]"
           : "grid-cols-[minmax(0,1fr)_auto] max-[760px]:grid-cols-[minmax(0,1fr)]",
@@ -140,7 +140,7 @@ function SettingRow({
       </div>
       <div
         className={cn(
-          "mt-1",
+          "mt-1 max-[760px]:mt-0",
           isCustomControl
             ? "w-full"
             : "self-center justify-self-end max-[760px]:w-full max-[760px]:justify-self-stretch max-[760px]:[&_button:not([role=switch])]:min-h-11 max-[760px]:[&_input]:min-h-11 max-[760px]:[&_select]:min-h-11 max-[760px]:[&_input:not([type=number])]:w-full max-[760px]:[&_input:not([type=number])]:max-w-none max-[760px]:[&_select]:w-full max-[760px]:[&_select]:max-w-none"
@@ -233,7 +233,7 @@ function SettingsSection({
     <section
       id={sectionAnchorId(qualifiedId)}
       ref={(element) => setSectionRef(qualifiedId, element)}
-      className="scroll-mt-4 py-4 first:pt-4"
+      className="scroll-mt-4 py-4 first:pt-4 max-[760px]:py-3 max-[760px]:first:pt-3"
       aria-labelledby={`${sectionAnchorId(qualifiedId)}-heading`}
     >
       <div className="mb-2 flex items-center gap-2">
@@ -401,7 +401,7 @@ export function SettingsContent() {
       className="flex min-h-0 grow flex-col overflow-y-auto"
       data-testid="settings-content-scroll"
     >
-      <div className="mx-auto w-full max-w-160 px-6 max-[760px]:max-w-none max-[760px]:pr-4 max-[760px]:pb-8 max-[760px]:pl-15">
+      <div className="mx-auto w-full max-w-160 px-6 max-[760px]:max-w-none max-[760px]:px-4 max-[760px]:pb-8">
         {renderedSections.map((renderedSection) => (
           <SettingsSection
             key={qualifiedSectionId(renderedSection.scope, renderedSection.section.id)}

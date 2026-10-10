@@ -43,6 +43,7 @@ const sheet = (
     panel="outline"
     context={context(contextOverrides)}
     onDismiss={() => undefined}
+    onStepBack={() => undefined}
     onBack={() => undefined}
     {...overrides}
   />

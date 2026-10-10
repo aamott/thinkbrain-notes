@@ -9,8 +9,9 @@ const scaleDefault = (coarse: boolean) =>
     .find((setting) => setting.key === "scale")?.default;
 
 describe("uiModuleForFormFactor", () => {
-  it("raises the interface-size default on coarse pointers", () => {
-    expect(scaleDefault(true)).toBe(MOBILE_UI_SCALE);
+  it("raises the interface-size default to 110 on coarse pointers", () => {
+    expect(MOBILE_UI_SCALE).toBe(110);
+    expect(scaleDefault(true)).toBe(110);
   });
 
   it("keeps the desktop default on fine pointers", () => {

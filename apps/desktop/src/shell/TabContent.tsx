@@ -66,6 +66,13 @@ type TabContentProps = {
    * call it.
    */
   readonly onRestoreVersion?: (notePath: string, changeId: string) => Promise<void>;
+  /**
+   * Whether this surface is the visible route. PhoneShell keeps the tab body
+   * mounted while a files/panel route covers it; inactive tab surfaces use
+   * this to close their own overlays (which must not stay registered while
+   * invisible). Defaults to true; desktop always leaves it true.
+   */
+  readonly active?: boolean;
   /** What the new-tab page offers; each chrome wires its own navigation. */
   readonly newTab?: {
     readonly workspaceName: string | null;
@@ -96,6 +103,7 @@ export function TabContent({
   onReopenNote,
   unsavedNoteContents,
   onRestoreVersion,
+  active = true,
   newTab
 }: TabContentProps) {
   // Hooks must run before any early return, so both are read up front even
@@ -169,7 +177,7 @@ export function TabContent({
   }
 
   if (tab.kind === "settings") {
-    return <SettingsTab />;
+    return <SettingsTab active={active} />;
   }
 
   if (tab.kind === "new-tab") {

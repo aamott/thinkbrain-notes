@@ -626,8 +626,8 @@ describe("PhoneShell", () => {
 
   it("clears the drawer highlight after going back from a revealed panel", async () => {
     const { host, shell } = await renderWithShell();
-    // The drawer *replaces* the current entry — under the note's entry here —
-    // so Back still has a previous entry to land on.
+    // The drawer *pushes* a destination entry over the note's — Back revisits
+    // the note first, then Files.
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     await click(host, "Main menu");
     await act(async () => {
@@ -637,6 +637,9 @@ describe("PhoneShell", () => {
     });
     expect(host.querySelector('[aria-label="Search panel"]')).not.toBeNull();
     expect(shell().leftPanel).toBe("search");
+
+    await click(host, "Back");
+    expect(noteTitleVisible(host)).toBe(true);
 
     await click(host, "Back");
 

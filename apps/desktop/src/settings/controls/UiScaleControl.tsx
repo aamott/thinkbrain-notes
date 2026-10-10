@@ -30,7 +30,7 @@ export function UiScaleControl({ definition, value, onChange, disabled }: Contro
       value={Number.isNaN(current) ? "" : String(current)}
       disabled={disabled}
       onChange={(e) => onChange(Number(e.target.value))}
-      className={`w-28 ${inputClassName}`}
+      className={`w-28 max-[760px]:min-h-11 max-[760px]:w-full ${inputClassName}`}
     >
       {Number.isNaN(current) && (
         <option value="" disabled>
