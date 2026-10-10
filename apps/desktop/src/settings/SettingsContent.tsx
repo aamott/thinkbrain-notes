@@ -16,6 +16,7 @@ import {
   createElement,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState
 } from "react";
@@ -29,7 +30,7 @@ import type {
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { Unavailable } from "../shell/Unavailable";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsModules, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
 import { resolveEffectiveValue } from "./settingsHelpers";
@@ -309,20 +310,21 @@ export function SettingsContent() {
 
   // Scope projection matches the navigation: app sections precede workspace
   // sections, and workspace sections only exist while a workspace is open.
-  const appSections = flattenModuleSections(
-    appSettingsRegistry.getModulesByScope("app"),
-    "app"
+  // The modules come from a subscribed hook so a schema registered (or
+  // disposed) while settings is open updates the rendered sections live.
+  const appModules = useSettingsModules("app");
+  const workspaceModules = useSettingsModules("workspace");
+  const appSections = useMemo(
+    () => flattenModuleSections(appModules, "app"),
+    [appModules]
   );
-  const renderedSections =
-    workspaceValues === null
-      ? appSections
-      : [
-          ...appSections,
-          ...flattenModuleSections(
-            appSettingsRegistry.getModulesByScope("workspace"),
-            "workspace"
-          )
-        ];
+  const renderedSections = useMemo(
+    () =>
+      workspaceValues === null
+        ? appSections
+        : [...appSections, ...flattenModuleSections(workspaceModules, "workspace")],
+    [appSections, workspaceModules, workspaceValues]
+  );
   const sectionIdsKey = renderedSections
     .map(({ section, scope }) => qualifiedSectionId(scope, section.id))
     .join("|");

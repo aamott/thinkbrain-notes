@@ -1,6 +1,6 @@
 # Task: `listNotes` prefix filter through the stack
 
-**Status:** ⬜ pending · **Urgency:** low · **Difficulty:** med
+**Status:** ✅ done · **Urgency:** low · **Difficulty:** med
 
 > From `docs/reviews/2026-08-13/extensions/extensionWorkspace-listnotes-loads-all`
 > (finding deleted; this is the tracked work).

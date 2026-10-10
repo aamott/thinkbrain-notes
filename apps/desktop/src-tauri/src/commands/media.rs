@@ -13,6 +13,7 @@
 use crate::commands::workspace::{resolve_workspace_entry_path, resolve_workspace_root};
 use crate::error::{NativeError, failed};
 use std::fs;
+use std::io::Read;
 
 /// Largest file the player will pull into the webview over IPC.
 ///
@@ -41,9 +42,13 @@ pub fn read_media_file_bytes(
     // Refuses `..`, absolute paths, and symlinks that resolve outside `root`.
     let file_path = resolve_workspace_entry_path(&root, relative_path)?;
 
-    // Check the size before reading so an oversize file is refused cheaply
-    // rather than pulled into memory first.
-    let metadata = fs::metadata(&file_path).map_err(|error| {
+    let file = fs::File::open(&file_path)
+        .map_err(|error| failed("workspace.read_failed", "Failed to read the file.", error))?;
+
+    // Metadata is taken from the open handle so the size check and the read
+    // are bound to the same inode — a file swapped between two path lookups
+    // could otherwise pass the check as one file and be read as another.
+    let metadata = file.metadata().map_err(|error| {
         failed(
             "workspace.metadata_failed",
             "Failed to read workspace entry metadata.",
@@ -57,8 +62,21 @@ pub fn read_media_file_bytes(
         ));
     }
 
-    fs::read(&file_path)
-        .map_err(|error| failed("workspace.read_failed", "Failed to read the file.", error))
+    // The read itself is still capped: a file grown past the limit after the
+    // metadata check is refused rather than pulled into the webview whole —
+    // the same bound `read_extension_file` applies.
+    let mut bytes = Vec::new();
+    file.take(max_bytes + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| failed("workspace.read_failed", "Failed to read the file.", error))?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(NativeError::new(
+            "workspace.media_too_large",
+            "This file is too large to play here.",
+        ));
+    }
+
+    Ok(bytes)
 }
 
 #[cfg(test)]

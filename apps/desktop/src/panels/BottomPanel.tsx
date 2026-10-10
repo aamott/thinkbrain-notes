@@ -1,10 +1,7 @@
 import { cn } from "../lib/utils";
-import type { BottomPanel as BottomPanelId, BottomPanelProvider } from "../shell/shellTypes";
+import type { BottomPanel as BottomPanelId } from "../shell/shellTypes";
 import { Unavailable } from "../shell/Unavailable";
 
-/**
- * Props for the bottom dock panel.
- */
 type BottomPanelProps = {
   readonly active: BottomPanelId;
   readonly onChange: (panel: BottomPanelId) => void;
@@ -15,28 +12,20 @@ type BottomPanelProps = {
 const bottomPanelItems = ["terminal"] as const satisfies readonly BottomPanelId[];
 
 /**
- * Capability declaration for the terminal backing service.
- *
  * Native terminal execution is gated on Agent Client Protocol capability work,
  * so the panel renders an honest unavailable boundary rather than exposing
  * execution controls that aren't backed by anything yet.
  */
-const bottomPanelProviders: Record<BottomPanelId, BottomPanelProvider> = {
-  terminal: {
-    id: "terminal",
-    isAvailable: false,
-    unavailableMessage: "Terminal unavailable. Native terminal execution requires ACP capability work."
-  }
-};
+const TERMINAL_UNAVAILABLE =
+  "Terminal unavailable. Native terminal execution requires ACP capability work.";
 
 /**
  * Bottom dock surface extracted from DesktopShell.
  *
  * Renders a tab strip (terminal only today, kept for future extensibility), a
- * close button, and provider-bounded content for the selected surface.
+ * close button, and content for the selected surface.
  */
 export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
-  const provider = bottomPanelProviders[active];
   const tabId = `bottom-panel-tab-${active}`;
   const contentId = `bottom-panel-content-${active}`;
 
@@ -72,7 +61,7 @@ export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
       </div>
       <div id={contentId} className="h-[calc(100%-2rem)] overflow-auto p-[0.65rem_0.85rem] font-mono text-xs leading-1.6" role="tabpanel" aria-labelledby={tabId}>
         {/* Terminal is the only wired surface today; render its capability boundary directly. */}
-        <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={provider.unavailableMessage} />
+        <Unavailable className="items-start justify-start p-0 text-left" title="Terminal" description={TERMINAL_UNAVAILABLE} />
       </div>
     </section>
   );

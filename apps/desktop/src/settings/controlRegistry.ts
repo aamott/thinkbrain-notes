@@ -6,10 +6,13 @@
  * key that maps to a component registered here via `registerControl`.
  *
  * The registry is a module-level singleton. Standard controls are pre-
- * registered at import time. Extensions register custom controls at app
- * startup. If a custom control key is set but not registered, the registry
- * falls back to the type-based control and logs a warning (fail loudly but
- * don't crash the UI).
+ * registered at import time (see the registrations at the bottom of this
+ * file). Custom `control` keys are a first-party mechanism only:
+ * `registerControl` is not exposed through `DesktopExtensionContext`, so an
+ * extension schema cannot register one — a `control` key naming nothing
+ * registered hits the fallback in `getControlForDefinition`, which logs a
+ * warning and renders the type-based control (fail loudly but don't crash
+ * the UI).
  */
 
 import type { ComponentType } from "react";

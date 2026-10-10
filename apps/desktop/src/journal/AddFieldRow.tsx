@@ -26,8 +26,7 @@ export interface AddFieldRowProps {
 
 const MENU =
   "mt-1 w-60 overflow-hidden rounded-small border border-border bg-background shadow-lg";
-const OPTION =
-  "flex w-full items-baseline gap-2 px-2 py-1.5 pointer-coarse:min-h-11 pointer-coarse:min-w-11 text-left text-xs cursor-pointer hover:bg-secondary";
+const OPTION = `flex w-full items-baseline gap-2 px-2 py-1.5 ${TOUCH} text-left text-xs cursor-pointer hover:bg-secondary`;
 const HEAD =
   "bg-muted px-2 py-1 text-[0.62rem] uppercase tracking-[0.09em] text-muted-foreground";
 

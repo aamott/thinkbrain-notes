@@ -47,13 +47,14 @@ export function isSelectableRightPanel(id: string): id is RightPanel {
 /**
  * The left-side mirror of {@link isSelectableRightPanel}.
  *
- * `isBuiltInLeftPanel` answers a narrower question — it is a literal list of
- * the six first-party ids — so it rejects every extension-contributed left
- * panel. That is right for guarding a *built-in* union, and wrong for asking
- * "may this id be the open left panel", which `LeftPanel` has admitted
- * extension ids for since panels became contributable. Asking the registry
- * keeps the two in step, and drops a typo or a stale id from a deactivated
- * extension just as the right-side guard does.
+ * `isBuiltInLeftPanel` answers a narrower question — "is this one of the
+ * fixed first-party ids" — so it rejects every extension-contributed left
+ * panel. That is right for code that genuinely means *built-in*, and wrong
+ * for asking "may this id be the open left panel", which `LeftPanel` has
+ * admitted extension ids for since panels became contributable — and which
+ * `revealPanel`/`revealLeftPanel` ask here. Asking the registry keeps the two
+ * in step, and drops a typo or a stale id from a deactivated extension just
+ * as the right-side guard does.
  */
 export function isSelectableLeftPanel(id: string): id is LeftPanel {
   return getDesktopPanelOrUndefined(id)?.side === "left";
@@ -75,18 +76,6 @@ export type PanelSide = "left" | "right";
  * extensibility (diagnostics, output logs, etc.) without re-widening the type.
  */
 export type BottomPanel = "terminal";
-
-/**
- * Declares the data-provider boundary for a bottom-panel surface.
- *
- * Panels remain visually present before their backing services are available,
- * while this contract prevents the UI from implying a capability exists.
- */
-export interface BottomPanelProvider {
-  readonly id: BottomPanel;
-  readonly isAvailable: boolean;
-  readonly unavailableMessage: string;
-}
 
 /** Lifecycle + contents of a single open Markdown document view. */
 export type DocumentViewState = {

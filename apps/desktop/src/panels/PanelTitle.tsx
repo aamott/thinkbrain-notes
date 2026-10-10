@@ -11,14 +11,13 @@ const ACTION_BUTTON_CLASSES =
 /** Runs a panel action or menu item, reporting `actionId` on failure. */
 function runPanelAction(actionId: string, run?: () => void | Promise<void>): void {
   // A panel action is trusted code, but a throw here would otherwise escape
-  // through the click handler and unmount the shell.
+  // through the click handler and unmount the shell. Promise.resolve rather
+  // than instanceof: an extension written in plain JS may return any
+  // thenable, and an uncaught one becomes an unhandled rejection.
   try {
-    const result = run?.();
-    if (result instanceof Promise) {
-      void result.catch((error: unknown) => {
-        console.error(`[panels] Action "${actionId}" failed.`, error);
-      });
-    }
+    void Promise.resolve(run?.()).catch((error: unknown) => {
+      console.error(`[panels] Action "${actionId}" failed.`, error);
+    });
   } catch (error: unknown) {
     console.error(`[panels] Action "${actionId}" failed.`, error);
   }
@@ -77,7 +76,7 @@ export function PanelTitle({
           </button>
         )}
         {titleContent ?? (
-          <h2 className="m-0 truncate text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case pointer-coarse:font-semibold">
+          <h2 className="m-0 truncate text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case">
             {title}
           </h2>
         )}
@@ -130,9 +129,10 @@ function PanelMenuAction({ action }: { readonly action: PanelAction }) {
           anchorRef={anchorRef}
           onClose={() => setOpen(false)}
         >
-          {(action.menu ?? []).map((item) => (
+          {(action.menu ?? []).map((item, index) => (
             <PanelMenuEntry
-              key={item.label}
+              // Index in the key: extension-contributed menus may repeat a label.
+              key={`${index}-${item.label}`}
               item={item}
               onRun={(close) => {
                 if (close) setOpen(false);
@@ -157,9 +157,24 @@ function PanelMenuEntry({
   readonly item: PanelMenuItem;
   readonly onRun: (close: boolean) => void;
 }) {
-  const separator = item.separatorBefore && (
-    <MenuSeparator />
-  );
+  /**
+   * A checkbox item keeps the menu open after a toggle, but `item.checked` is
+   * static contribution data — without a local copy the still-open menu would
+   * keep announcing the pre-toggle state until the contribution re-resolved.
+   * The optimistic copy wins until a genuinely different `checked` arrives,
+   * at which point the prop takes over again.
+   */
+  const [optimistic, setOptimistic] = useState<boolean | undefined>(undefined);
+  const [seenChecked, setSeenChecked] = useState(item.checked);
+  if (seenChecked !== item.checked) {
+    // Render-phase adjustment: the contribution produced a new value, so the
+    // optimistic copy has done its job.
+    setSeenChecked(item.checked);
+    setOptimistic(undefined);
+  }
+  const checked = optimistic ?? item.checked;
+
+  const separator = item.separatorBefore && <MenuSeparator />;
   if (item.disabled) {
     return (
       <>
@@ -179,7 +194,14 @@ function PanelMenuEntry({
     return (
       <>
         {separator}
-        <MenuCheckbox label={item.label} checked={item.checked} onClick={() => onRun(false)} />
+        <MenuCheckbox
+          label={item.label}
+          checked={checked ?? false}
+          onClick={() => {
+            setOptimistic(!checked);
+            onRun(false);
+          }}
+        />
       </>
     );
   }

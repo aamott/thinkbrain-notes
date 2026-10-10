@@ -20,7 +20,6 @@ export function MountedPanel<Ctx extends LeftPanelContext | RightPanelContext>({
 }: {
   readonly contribution: {
     readonly factory: (ctx: Ctx) => ReactNode;
-    readonly availability?: (context: Ctx) => boolean;
   };
   readonly context: Ctx;
   readonly isActive: boolean;

@@ -7,15 +7,16 @@ import {
   type CalendarEntry,
   type CalendarView,
   type JournalDate,
-  type WeekStart
+  type WeekStart,
+  type EventSubscriber
 } from "@thinkbrain/core";
 import { useCallback, useEffect, useState } from "react";
 
+import type { AppEvents } from "../events/appEvents";
 import { CalendarTab } from "./CalendarTab";
-import type { JournalTroubleCode } from "./journalChrome";
+import { useJournalListRefresh, type JournalTroubleCode } from "./journalChrome";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
 import { JournalError, type JournalService } from "./journalService";
-import { appEvents } from "../events/appEvents";
 
 /**
  * Feeds the calendar from the journal folder.
@@ -26,6 +27,11 @@ import { appEvents } from "../events/appEvents";
 
 export interface CalendarTabContainerProps {
   readonly service: JournalService;
+  /**
+   * The extension's event surface (`context.events`), so its subscriptions
+   * are scoped to the activation rather than the app-wide bus.
+   */
+  readonly events: EventSubscriber<AppEvents>;
   readonly weekStartsOn?: WeekStart;
   /** Persisted per workspace (D56); absent falls back to the D64 default. */
   readonly initialView?: CalendarView;
@@ -38,6 +44,7 @@ export interface CalendarTabContainerProps {
 
 export function CalendarTabContainer({
   service,
+  events,
   weekStartsOn = 0,
   initialView = "month",
   onViewChange,
@@ -112,24 +119,8 @@ export function CalendarTabContainer({
   const reload = useCallback((): void => setReloadToken((token) => token + 1), []);
 
   // The calendar is a second view of a folder the user edits from elsewhere, so
-  // it has to hear about writes rather than trust its mount-time read. Every
-  // note goes through the workspace adapters, which announce it (D68).
-  // `note.saved` is deliberately absent: editing an entry's prose changes no
-  // dot, and a reload on every keystroke-triggered save would relist the folder
-  // while the user types.
-  useEffect(() => {
-    // Not debounced. React batches the reloads that land in one task, and the
-    // app has no path that writes many notes at once, so a timer would buy a
-    // saving nothing can currently produce — and none of it can be pinned by a
-    // test. Revisit alongside the first bulk-write feature, where the burst
-    // becomes real and observable.
-    const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
-      (event) => appEvents.on(event, reload)
-    );
-    return () => {
-      for (const subscription of subscriptions) void subscription.dispose();
-    };
-  }, [reload]);
+  // it has to hear about writes rather than trust its mount-time read (D68).
+  useJournalListRefresh(reload, events);
 
   const grid = calendarGrid({ view, date: focusDate, weekStartsOn });
   const aggregate = aggregateCalendarDays(entries, grid.range, {

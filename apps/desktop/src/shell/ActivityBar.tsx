@@ -18,13 +18,23 @@ type ActivityBarProps = {
   readonly onOpenSettings: () => void;
   /** Counts to show over panel icons, keyed by panel id. */
   readonly badges?: Readonly<Record<string, number>>;
+  /**
+   * Whether a panel may be opened right now, built by the shell from the
+   * same panel context the docks read. An unavailable panel stays on the
+   * rail but dimmed — left contributions render their own `Unavailable`
+   * state explaining why, so the icon stays clickable: `availability`
+   * answers "should this be offered", not "may it run". (Right panels have
+   * no self-rendered placeholder, so the title bar gates them instead.)
+   */
+  readonly isPanelAvailable: (panelId: string) => boolean;
 };
 
 export function ActivityBar({
   leftPanel,
   onSelectLeftPanel,
   onOpenSettings,
-  badges
+  badges,
+  isPanelAvailable
 }: ActivityBarProps) {
   const leftPanels = useLeftPanelContributions();
 
@@ -41,6 +51,7 @@ export function ActivityBar({
             symbol={action.icon}
             active={leftPanel === action.id}
             badge={badges?.[action.id]}
+            className={isPanelAvailable(action.id) ? undefined : "opacity-40"}
             onClick={() => onSelectLeftPanel(action.id)}
           />
         ))}

@@ -1,14 +1,15 @@
 import {
   createExtensionHost,
+  EXTENSION_ID_PATTERN,
   type Disposable,
+  type EventSubscriber,
   type ExtensionContext,
   type ExtensionDefinition,
   type ExtensionHost,
-  type ExtensionStatus,
-  type ExtensionStatusEntry,
   type SettingDefinition,
   type SettingSection,
-  type SettingsModule
+  type SettingsModule,
+  type SettingsRegistry
 } from "@thinkbrain/core";
 import {
   desktopCommandRegistry,
@@ -35,7 +36,7 @@ import { appEvents, type AppEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { createExtensionWorkspace, type DesktopExtensionWorkspace } from "./extensionWorkspace";
-import { getWorkspaceBridge } from "./workspaceBridge";
+import { getWorkspaceBridge, subscribeWorkspaceBridge } from "./workspaceBridge";
 import type { DesktopEditorHookContribution } from "../tabs/editorHookRegistry";
 import {
   appSettingsRegistry,
@@ -89,8 +90,10 @@ export interface DesktopExtensionSettings {
   /**
    * Writes and persists a setting (D81).
    *
-   * Rejects nothing: a failed write is logged and the value stays effective for
-   * the session. Awaiting is optional — the key is validated before returning.
+   * Persists only this key: unrelated staged edits are not flushed, and a
+   * staged value that would fail validation cannot strand this write. Rejects
+   * nothing: a failed write is logged and the value stays effective for the
+   * session. Awaiting is optional — the key is validated before returning.
    */
   set(key: string, value: unknown): Promise<void>;
   onDidChange(key: string, listener: DesktopSettingChangeListener): Disposable;
@@ -116,14 +119,14 @@ export interface DesktopExtensionTabContributions extends Registrar<DesktopExten
   open(kind: string, title: string): void;
 }
 
-/** App-event subscriptions scoped to one extension's activation. */
-export interface DesktopExtensionEvents {
-  /** Subscribes until disposed or the extension deactivates. */
-  on<Name extends keyof AppEvents & string>(
-    event: Name,
-    listener: (payload: AppEvents[Name]) => void
-  ): Disposable;
-}
+/**
+ * App-event subscriptions scoped to one extension's activation.
+ *
+ * The shape is `EventSubscriber` verbatim; the scoping lives in the host,
+ * which owns each returned disposable in the activation's subscription store,
+ * so deactivation removes the listener.
+ */
+export type DesktopExtensionEvents = EventSubscriber<AppEvents>;
 
 /** The desktop context layered over the platform-neutral core context. */
 export interface DesktopExtensionContext extends ExtensionContext {
@@ -161,10 +164,33 @@ export interface DesktopExtensionHost extends Omit<ExtensionHost, "register"> {
 }
 
 const DOTTED_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z][A-Za-z0-9_-]*)*$/;
-const RELATIVE_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/**
+ * Qualifies an extension-local contribution id into its registry-wide
+ * `extensionId.localId` form.
+ *
+ * The single constructor for the convention: a bootstrap stub and the real
+ * registration that replaces it must agree byte-for-byte, so both build the id
+ * here rather than concatenating inline.
+ */
+export function qualifyContributionId(extensionId: string, localId: string): string {
+  return `${extensionId}.${localId}`;
+}
+
+/**
+ * Splits a qualified contribution id back into its extension and local parts,
+ * or `null` when `fullId` is not in `extensionId.localId` form.
+ */
+export function splitContributionId(
+  fullId: string
+): { readonly extensionId: string; readonly localId: string } | null {
+  const dot = fullId.indexOf(".");
+  if (dot <= 0 || dot === fullId.length - 1) return null;
+  return { extensionId: fullId.slice(0, dot), localId: fullId.slice(dot + 1) };
+}
 
 function assertRelativeId(kind: string, id: string): void {
-  if (typeof id !== "string" || !RELATIVE_ID_PATTERN.test(id)) {
+  if (typeof id !== "string" || !EXTENSION_ID_PATTERN.test(id)) {
     throw new Error(
       `${kind} id "${id}" must be a lowercase kebab-case relative identifier.`
     );
@@ -173,7 +199,7 @@ function assertRelativeId(kind: string, id: string): void {
 
 function prefixId(extensionId: string, kind: string, id: string): string {
   assertRelativeId(kind, id);
-  return `${extensionId}.${id}`;
+  return qualifyContributionId(extensionId, id);
 }
 
 /** Resolves either panel form to the single contribution shape the registry stores. */
@@ -195,7 +221,15 @@ function toPanelContribution(
   return { ...panel, id };
 }
 
-function settingsModuleId(extensionId: string): string {
+/**
+ * The settings module namespace one extension's schema is registered under,
+ * `extension-${extensionId}`.
+ *
+ * Exported so a lookup of an extension's setting key — like
+ * `extension-journal-calendar.root` — does not have to hand-concatenate the
+ * prefix and risk drifting from it.
+ */
+export function extensionSettingsModuleId(extensionId: string): string {
   return `extension-${extensionId}`;
 }
 
@@ -205,11 +239,15 @@ function assertLocalKey(key: string): void {
   }
 }
 
-function fullSettingKey(extensionId: string, key: string): { fullKey: string; definition: SettingDefinition } {
+function fullSettingKey(
+  registry: SettingsRegistry,
+  extensionId: string,
+  key: string
+): { fullKey: string; definition: SettingDefinition } {
   assertLocalKey(key);
-  const moduleId = settingsModuleId(extensionId);
+  const moduleId = extensionSettingsModuleId(extensionId);
   const fullKey = `${moduleId}.${key}`;
-  const definition = appSettingsRegistry.getDefinition(fullKey);
+  const definition = registry.getDefinition(fullKey);
   if (!definition) {
     throw new Error(`Setting key "${key}" is not registered by extension "${extensionId}".`);
   }
@@ -264,6 +302,20 @@ export interface DesktopExtensionHostRegistries {
   readonly editorHooks: typeof markdownEditorHookRegistry;
   readonly editorHeaders: typeof desktopEditorHeaderRegistry;
   readonly tabs: typeof desktopTabRegistry;
+  /**
+   * The schema registry and value store behind `context.settings`.
+   *
+   * Inject the pair together: the store resolves scopes and serializes
+   * through the registry it was created with, so pointing the two at
+   * different registries would validate against one schema set and read
+   * another.
+   */
+  readonly settingsRegistry: typeof appSettingsRegistry;
+  readonly settingsStore: typeof useSettingsStore;
+  /** The event bus behind `context.events`. */
+  readonly events: typeof appEvents;
+  /** The notes API behind `context.workspace`. */
+  readonly workspace: DesktopExtensionWorkspace;
 }
 
 /**
@@ -275,6 +327,8 @@ export interface DesktopExtensionHostRegistries {
 const extensionWorkspace = createExtensionWorkspace({
   documents: workspaceDocumentApi,
   getBridge: getWorkspaceBridge,
+  subscribeRoot: (listener) =>
+    subscribeWorkspaceBridge((bridge) => listener(bridge?.rootPath ?? null)),
   entries: workspaceDesktopApi
 });
 
@@ -284,7 +338,7 @@ function createDesktopExtensionContext(
   isActive: () => boolean,
   registries: DesktopExtensionHostRegistries
 ): DesktopExtensionContext {
-  const moduleId = settingsModuleId(context.extensionId);
+  const moduleId = extensionSettingsModuleId(context.extensionId);
   /** Tab kinds this activation registered, so `open` cannot reach another's. */
   const ownKinds = new Set<string>();
   const assertActive = (): void => {
@@ -295,28 +349,35 @@ function createDesktopExtensionContext(
   const settings: DesktopExtensionSettings = {
     registerSchema: (schema) => {
       assertActive();
-      const registration = appSettingsRegistry.register(namespaceSchema(moduleId, schema));
+      const registration = registries.settingsRegistry.register(namespaceSchema(moduleId, schema));
       return own(context, registration);
     },
     get: <T>(key: string): T | undefined => {
       assertActive();
-      const { fullKey, definition } = fullSettingKey(context.extensionId, key);
-      const state = useSettingsStore.getState();
+      const { fullKey, definition } = fullSettingKey(registries.settingsRegistry, context.extensionId, key);
+      const state = registries.settingsStore.getState();
       return effectiveSettingValue(state, definition, fullKey) as T | undefined;
     },
     set: (key, value) => {
       // Validates synchronously and persists asynchronously (D81): a foreign key
       // is a programming error and must fail even for a caller that never
       // awaits, while the write itself has no Save bar to wait for.
+      //
+      // The scoped write path persists only this key — unlike the palette's
+      // `setSettingImmediately`, which flushes every staged change (acceptable
+      // there because the palette and the Settings tab are not driven at the
+      // same time). An extension can write on a timer or an event, so a
+      // co-flush could persist user edits prematurely or strand this key as
+      // phantom-dirty when an unrelated staged value fails validation.
       assertActive();
-      const { fullKey } = fullSettingKey(context.extensionId, key);
-      return useSettingsStore.getState().setSettingImmediately(fullKey, value);
+      const { fullKey } = fullSettingKey(registries.settingsRegistry, context.extensionId, key);
+      return registries.settingsStore.getState().setSingleSettingImmediately(fullKey, value);
     },
     onDidChange: (key, listener) => {
       assertActive();
-      const { fullKey, definition } = fullSettingKey(context.extensionId, key);
-      let previous = effectiveSettingValue(useSettingsStore.getState(), definition, fullKey);
-      const subscription = useSettingsStore.subscribe((state) => {
+      const { fullKey, definition } = fullSettingKey(registries.settingsRegistry, context.extensionId, key);
+      let previous = effectiveSettingValue(registries.settingsStore.getState(), definition, fullKey);
+      const subscription = registries.settingsStore.subscribe((state) => {
         const next = effectiveSettingValue(state, definition, fullKey);
         if (Object.is(next, previous)) return;
         const old = previous;
@@ -373,10 +434,19 @@ function createDesktopExtensionContext(
     events: {
       on: (event, listener) => {
         assertActive();
-        return own(context, appEvents.on(event, listener));
+        return own(context, registries.events.on(event, listener));
       }
     },
-    workspace: extensionWorkspace,
+    workspace: {
+      // The workspace object is shared across extensions, so the one
+      // subscription it offers is scoped here — same treatment `events.on`
+      // gets — rather than inside the surface itself.
+      ...registries.workspace,
+      onDidChangeRoot: (listener) => {
+        assertActive();
+        return own(context, registries.workspace.onDidChangeRoot(listener));
+      }
+    },
     settings
   };
 }
@@ -392,26 +462,49 @@ export function createDesktopExtensionHost(
     editorHooks: markdownEditorHookRegistry,
     editorHeaders: desktopEditorHeaderRegistry,
     tabs: desktopTabRegistry,
+    settingsRegistry: appSettingsRegistry,
+    settingsStore: useSettingsStore,
+    events: appEvents,
+    workspace: extensionWorkspace,
     ...registries
   };
 
   const register = (extension: DesktopExtensionDefinition): Disposable => {
     let active = false;
+    /**
+     * One desktop context per activation, shared by `activate` and
+     * `deactivate`: the core host hands both the same `ExtensionContext`, and
+     * a deactivate hook must see what this activation registered — including
+     * the tab kinds `open` is scoped to.
+     */
+    let scoped:
+      | { readonly core: ExtensionContext; readonly desktop: DesktopExtensionContext }
+      | undefined;
+    const contextFor = (core: ExtensionContext): DesktopExtensionContext => {
+      if (scoped?.core !== core) {
+        scoped = { core, desktop: createDesktopExtensionContext(core, () => active, resolved) };
+      }
+      return scoped.desktop;
+    };
     const coreDefinition: ExtensionDefinition = {
       ...extension,
       activate: async (context) => {
         active = true;
         try {
-          return await extension.activate(createDesktopExtensionContext(context, () => active, resolved));
+          return await extension.activate(contextFor(context));
         } catch (error: unknown) {
           active = false;
           throw error;
         }
       },
       deactivate: async (context) => {
+        // `active` is raised again for the hook: the core host calls
+        // deactivate to clean up a "failed" record too, and a cleanup hook
+        // that follows a failed activation must still have a live context.
+        active = true;
         try {
           if (extension.deactivate) {
-            await extension.deactivate(createDesktopExtensionContext(context, () => active, resolved));
+            await extension.deactivate(contextFor(context));
           }
         } finally {
           active = false;
@@ -425,8 +518,8 @@ export function createDesktopExtensionHost(
     register,
     activate: coreHost.activate,
     deactivate: coreHost.deactivate,
-    status: (id: string): ExtensionStatus | undefined => coreHost.status(id),
-    statuses: (): readonly ExtensionStatusEntry[] => coreHost.statuses(),
+    status: coreHost.status,
+    statuses: coreHost.statuses,
     dispose: coreHost.dispose
   };
 }

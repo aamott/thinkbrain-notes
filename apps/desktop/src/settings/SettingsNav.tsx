@@ -12,15 +12,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
-import type {
-  SettingDefinition,
-  SettingScope,
-  SettingSection,
-  SettingsModule
+import {
+  getModuleIdFromKey,
+  type SettingDefinition,
+  type SettingScope,
+  type SettingSection,
+  type SettingsModule
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { createDebounced } from "../lib/debounce";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingDefinitions, useSettingsModules, useSettingsStore } from "./settingsStore";
 import { fuzzySearch, type FuzzySearchField } from "./fuzzyMatch";
 import { requestSettingHighlight } from "./settingHighlight";
 import { findSectionLabelPath, qualifiedSectionId, sectionAnchorId } from "./sectionUtils";
@@ -204,7 +205,7 @@ function ScopeGroup({
  *   A string like "Editor > Display".
  */
 function buildSectionPath(definition: SettingDefinition): string {
-  const moduleId = definition.key.slice(0, definition.key.indexOf("."));
+  const moduleId = getModuleIdFromKey(definition.key);
   const module = appSettingsRegistry.getModule(moduleId);
   const moduleLabel = module?.label ?? moduleId;
   const sectionLabel = module
@@ -213,11 +214,12 @@ function buildSectionPath(definition: SettingDefinition): string {
   return `${moduleLabel} > ${sectionLabel}`;
 }
 
-/** Searches all registry definitions and returns them best-match first. */
-function filterDefinitions(query: string): readonly SettingDefinition[] {
-  return fuzzySearch(query, appSettingsRegistry.getAllDefinitions(), SEARCH_FIELDS).map(
-    ({ item }) => item
-  );
+/** Searches the given definitions and returns them best-match first. */
+function filterDefinitions(
+  query: string,
+  definitions: readonly SettingDefinition[]
+): readonly SettingDefinition[] {
+  return fuzzySearch(query, definitions, SEARCH_FIELDS).map(({ item }) => item);
 }
 
 /** Renders the flat search results list, scroll-reset on each new result set. */
@@ -297,12 +299,18 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
     [debouncedSetSearchQuery]
   );
 
-  const appModules = appSettingsRegistry.getModulesByScope("app");
-  const workspaceModules = appSettingsRegistry.getModulesByScope("workspace");
+  // Subscribed, not read once: extension schemas register on activation —
+  // possibly while this nav is open — and a disposed module must disappear
+  // rather than leave a stale tree pointing at dead definitions.
+  const appModules = useSettingsModules("app");
+  const workspaceModules = useSettingsModules("workspace");
   const isSearching = searchQuery.trim() !== "";
+  // Subscribed so a schema registered while the search is open is findable
+  // immediately rather than after the next unrelated re-render.
+  const allDefinitions = useSettingDefinitions();
   const results = useMemo(
-    () => (isSearching ? filterDefinitions(searchQuery) : []),
-    [isSearching, searchQuery]
+    () => (isSearching ? filterDefinitions(searchQuery, allDefinitions) : []),
+    [isSearching, searchQuery, allDefinitions]
   );
 
   /** Scrolls to a section without closing the responsive navigation. */

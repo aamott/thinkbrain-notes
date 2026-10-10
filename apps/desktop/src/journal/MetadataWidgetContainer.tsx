@@ -65,7 +65,7 @@ function inferField(key: string, raw: unknown): JournalFieldDefinition {
 function healed(
   metadata: JournalMetadataResult,
   definitions: readonly JournalFieldDefinition[]
-): Readonly<Record<string, JournalFieldValue>> {
+): Record<string, JournalFieldValue> {
   const values: Record<string, JournalFieldValue> = { ...metadata.values };
 
   for (const definition of definitions) {
@@ -106,7 +106,7 @@ export function MetadataWidgetContainer({
     const unconfigured = Object.entries(metadata.unconfigured).map(([key, raw]) =>
       inferField(key, raw)
     );
-    const values: Record<string, JournalFieldValue> = { ...healed(metadata, definitions) };
+    const values = healed(metadata, definitions);
     for (const field of unconfigured) {
       const raw = metadata.unconfigured[field.id];
       if (typeof raw === "string" || typeof raw === "number") values[field.id] = raw;

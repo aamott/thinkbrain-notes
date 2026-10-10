@@ -53,6 +53,22 @@ describe("createEventBus", () => {
     expect(onListenerError).toHaveBeenCalledWith("note.saved", failure);
   });
 
+  it("keeps delivering when the error reporter itself throws", () => {
+    // A reporter is host-supplied; a throwing one must not break the
+    // failure-isolation guarantee or propagate out of emit.
+    const bus = createEventBus<TestEvents>(() => {
+      throw new Error("reporter down");
+    });
+    const following = vi.fn();
+    bus.on("note.saved", () => {
+      throw new Error("broken listener");
+    });
+    bus.on("note.saved", following);
+
+    expect(() => bus.emit("note.saved", { relativePath: "a.md" })).not.toThrow();
+    expect(following).toHaveBeenCalledWith({ relativePath: "a.md" });
+  });
+
   it("does not deliver the current event to a listener subscribed during it", () => {
     const bus = createEventBus<TestEvents>();
     const late = vi.fn();

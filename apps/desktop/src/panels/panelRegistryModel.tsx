@@ -11,6 +11,7 @@
 import {
   createContributionRegistry,
   type ContributionRegistry,
+  type Disposable,
   type PanelContribution,
   type PanelFactory
 } from "@thinkbrain/core";
@@ -219,6 +220,14 @@ export type DesktopPanelContribution = PanelContribution<ReactNode, DesktopPanel
    * explorer, whose compact header merges title, selector, and actions.
    */
   readonly ownsChrome?: boolean;
+  /**
+   * Marks a lazy-activation stub: a placeholder registered under the real
+   * contribution's id before its extension runs, so the shell renders its
+   * "Starting extension…" surface instead of "not registered". Registering a
+   * non-placeholder contribution under a placeholder's id swaps it out rather
+   * than failing as a duplicate.
+   */
+  readonly placeholder?: boolean;
 };
 
 /** Base for side-narrowed contribution types (omits side-specific id/factory/availability/actions). */
@@ -412,8 +421,36 @@ export function createDesktopPanelRegistry(
   initialPanels: readonly DesktopPanelContribution[] = builtInDesktopPanels
 ): DesktopPanelRegistry {
   const coreRegistry = createContributionRegistry(initialPanels);
+  /**
+   * Live placeholder registrations by id. A lazy panel stub must keep its id
+   * for the whole activation window — disposing it first is what used to flash
+   * "not registered" over the placeholder — so the real contribution retires
+   * the stub inside its own `register` call. Disposing and registering in one
+   * synchronous turn read to subscribers as a single swap, never as a gap, and
+   * the core registry restores the stub's ordering slot for the real panel.
+   */
+  const placeholderHandles = new Map<string, Disposable>();
+  const register = (contribution: DesktopPanelContribution): Disposable => {
+    if (coreRegistry.get(contribution.id)?.placeholder === true) {
+      placeholderHandles.get(contribution.id)?.dispose();
+    }
+    const handle = coreRegistry.register(contribution);
+    if (contribution.placeholder !== true) return handle;
+    placeholderHandles.set(contribution.id, handle);
+    let disposed = false;
+    return {
+      dispose: (): void => {
+        if (disposed) return;
+        disposed = true;
+        if (placeholderHandles.get(contribution.id) === handle) {
+          placeholderHandles.delete(contribution.id);
+        }
+        handle.dispose();
+      }
+    };
+  };
   return {
-    register: coreRegistry.register,
+    register,
     get: coreRegistry.get,
     entries: coreRegistry.entries,
     subscribe: coreRegistry.subscribe,

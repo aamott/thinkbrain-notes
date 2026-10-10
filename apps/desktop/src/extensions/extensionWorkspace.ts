@@ -13,7 +13,15 @@
 import type { WorkspaceDesktopApi } from "../workspace/workspaceAdapter";
 import type { WorkspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import type { WorkspaceBridge } from "./workspaceBridge";
-import { WINDOWS_ABSOLUTE } from "@thinkbrain/core";
+import { WINDOWS_ABSOLUTE, type Disposable } from "@thinkbrain/core";
+
+/**
+ * Matches a Windows drive-relative path, e.g. `C:file` — not absolute (no
+ * separator after the colon, so `WINDOWS_ABSOLUTE` misses it), but on Windows
+ * it still parses as a drive `Prefix` component the native normalizer rejects
+ * as an escape.
+ */
+const WINDOWS_DRIVE_RELATIVE = /^[A-Za-z]:(?!\/)/;
 
 /** A note found by {@link DesktopExtensionWorkspace.listNotes}. */
 export interface ExtensionNote {
@@ -26,6 +34,13 @@ export interface ExtensionNote {
 export interface DesktopExtensionWorkspace {
   /** Current workspace root, or `null` when no workspace is open. */
   rootPath(): string | null;
+  /**
+   * Fires when the workspace root changes — open, switch, or close (the
+   * listener then sees `null`). The notification is synchronous with the
+   * change, so a listener calling {@link rootPath} already reads the new
+   * root; an effect-driven read could still see the stale one.
+   */
+  onDidChangeRoot(listener: (rootPath: string | null) => void): Disposable;
   /** Reads a note's Markdown contents. */
   readNote(relativePath: string): Promise<string>;
   /** Overwrites a note's Markdown contents. */
@@ -50,23 +65,47 @@ export interface DesktopExtensionWorkspace {
 export interface ExtensionWorkspaceOptions {
   readonly documents: WorkspaceDocumentApi;
   readonly getBridge: () => WorkspaceBridge | null;
+  /** The host's root-change source; the workspace surface only re-exposes it. */
+  readonly subscribeRoot: (listener: (rootPath: string | null) => void) => Disposable;
   readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries" | "renameWorkspaceEntry" | "deleteWorkspaceEntry">;
 }
 
-/** Rejects anything that is not a path inside the workspace. */
+/**
+ * Rejects anything that is not a path inside the workspace.
+ *
+ * Mirrors the native normalizer (`normalize_relative_path_parts`): separators
+ * are unified first, `.` segments and repeated separators collapse to nothing,
+ * a whitespace-only segment is rejected, `..` escapes, and a drive-letter
+ * prefix — absolute *or* drive-relative — is not a relative path.
+ */
 function assertRelativePath(relativePath: string): void {
   if (typeof relativePath !== "string" || relativePath.trim().length === 0) {
     throw new Error("A note path must be a non-empty workspace-relative path.");
   }
+  const normalized = relativePath.replace(/\\/g, "/");
   if (
-    relativePath.startsWith("/") ||
-    relativePath.startsWith("\\") ||
-    WINDOWS_ABSOLUTE.test(relativePath)
+    normalized.startsWith("/") ||
+    WINDOWS_ABSOLUTE.test(normalized) ||
+    WINDOWS_DRIVE_RELATIVE.test(normalized)
   ) {
     throw new Error(`Note path "${relativePath}" must be relative to the workspace.`);
   }
-  if (relativePath.split(/[\\/]/).includes("..")) {
-    throw new Error(`Note path "${relativePath}" must stay inside the workspace.`);
+  let hasSegment = false;
+  for (const segment of normalized.split("/")) {
+    // `Path::components` collapses repeated separators and skips `.`, so the
+    // native side accepts `a//b` and `./a`; only a segment that is all
+    // whitespace is an `EmptySegment` rejection there.
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      throw new Error(`Note path "${relativePath}" must stay inside the workspace.`);
+    }
+    if (segment.trim().length === 0) {
+      throw new Error(`Note path "${relativePath}" contains an empty segment.`);
+    }
+    hasSegment = true;
+  }
+  if (!hasSegment) {
+    throw new Error("A note path must be a non-empty workspace-relative path.");
   }
 }
 
@@ -87,7 +126,9 @@ export function createExtensionWorkspace(
   /** Validates a path and resolves the root it is relative to. */
   const resolve = (relativePath: string): string => {
     assertRelativePath(relativePath);
-    const root = getBridge()?.rootPath ?? null;
+    // `bridge()` first so "shell not mounted" stays distinguishable from "no
+    // workspace open" here, as it already is for `openNote` and `tabs.open`.
+    const root = bridge().rootPath;
     if (!root) {
       throw new Error("No workspace is open.");
     }
@@ -96,6 +137,8 @@ export function createExtensionWorkspace(
 
   return {
     rootPath: () => getBridge()?.rootPath ?? null,
+
+    onDidChangeRoot: options.subscribeRoot,
 
     readNote: async (relativePath) => {
       const rootPath = resolve(relativePath);
@@ -118,7 +161,9 @@ export function createExtensionWorkspace(
     },
 
     openNote: async (relativePath) => {
-      assertRelativePath(relativePath);
+      // `resolve` runs the same path validation and mounted-shell/open-workspace
+      // gates; the returned root is unused — the bridge takes the relative path.
+      resolve(relativePath);
       bridge().openNote(relativePath);
     },
 
@@ -134,7 +179,7 @@ export function createExtensionWorkspace(
     },
 
     listNotes: async (prefix) => {
-      const root = getBridge()?.rootPath ?? null;
+      const root = bridge().rootPath;
       if (!root) throw new Error("No workspace is open.");
 
       // A folder prefix, not a string prefix: asking for "journal" must not
@@ -145,7 +190,9 @@ export function createExtensionWorkspace(
         folder = prefix.endsWith("/") ? prefix : `${prefix}/`;
       }
 
-      const found = await entries.listWorkspaceEntries(root, false);
+      // The prefix is pushed down so a folder query scans just that subtree;
+      // the filter stays as a contract check on what came back.
+      const found = await entries.listWorkspaceEntries(root, false, folder || undefined);
       return found
         .filter(
           (entry) =>

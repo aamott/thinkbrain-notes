@@ -91,15 +91,6 @@ pub fn platform_capabilities() -> PlatformCapabilities {
     }
 }
 
-/// Lists direct child directories under the app-managed vault root.
-#[tauri::command]
-pub fn list_managed_workspaces(
-    app: tauri::AppHandle,
-) -> Result<Vec<WorkspaceDescriptor>, NativeError> {
-    let app_data = app_data_dir(&app)?;
-    list_managed_workspaces_in(&app_data)
-}
-
 /// Creates one empty app-managed vault and returns its canonical descriptor.
 #[tauri::command]
 pub fn create_managed_workspace(
@@ -414,7 +405,6 @@ mod tests {
             crate::commands::APP_COMMAND_PATHS
                 .contains(&"workspace::workspace_access_capabilities")
         );
-        assert!(crate::commands::APP_COMMAND_PATHS.contains(&"workspace::list_managed_workspaces"));
         assert!(
             crate::commands::APP_COMMAND_PATHS.contains(&"workspace::create_managed_workspace")
         );

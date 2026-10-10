@@ -4,8 +4,6 @@ import type { JournalChip, JournalFacet, JournalPredicate } from "./journalFacet
 import type { JournalView } from "./journalViewModel";
 import { PanelIcon } from "../shell/panelIcons";
 
-export type { JournalChip };
-
 /**
  * Journal panel header: actions, search, and the active-filter chip row (D71/D75).
  *

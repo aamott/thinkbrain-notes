@@ -1,5 +1,10 @@
+import { useEffect } from "react";
+
+import type { EventSubscriber } from "@thinkbrain/core";
+import type { AppEvents } from "../events/appEvents";
+
 /**
- * Chrome the journal's two surfaces share.
+ * Chrome and wiring the journal's two surfaces share.
  *
  * The popout and the calendar read the same folder and so can fail the same
  * three ways. The copy for those three lives here once: a folder that is
@@ -92,4 +97,37 @@ export function JournalTrouble({
     }
   };
   return <EmptyState {...COPY[status]} />;
+}
+
+/**
+ * Re-runs a listing read when the journal folder changes underneath (D68).
+ *
+ * Shared by the popout and the calendar so the two surfaces cannot drift on
+ * which writes matter: every note goes through the workspace adapters, which
+ * announce it. `note.saved` is deliberately absent — a prose edit changes no
+ * listing field, and relisting on every keystroke-triggered save would churn
+ * the folder while the user types.
+ *
+ * The bus comes in as a parameter — `context.events` for the extension, so
+ * the subscriptions die with its activation rather than outliving it.
+ *
+ * Not debounced. React batches the reloads that land in one task, and the app
+ * has no path that writes many notes at once, so a timer would buy a saving
+ * nothing can currently produce — and none of it can be pinned by a test.
+ * Revisit alongside the first bulk-write feature, where the burst becomes
+ * real and observable.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- shared hook, no JSX
+export function useJournalListRefresh(
+  reload: () => void,
+  events: EventSubscriber<AppEvents>
+): void {
+  useEffect(() => {
+    const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
+      (event) => events.on(event, reload)
+    );
+    return () => {
+      for (const subscription of subscriptions) void subscription.dispose();
+    };
+  }, [reload, events]);
 }

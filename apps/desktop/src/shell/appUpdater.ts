@@ -1,23 +1,21 @@
 import { isTauri } from "@tauri-apps/api/core";
 
+import { checkForAppUpdate } from "../native/commands";
 import type { AvailableUpdate } from "./useAppUpdate";
 
 /**
- * The Tauri half of the update check, kept away from {@link useAppUpdate} so the
- * hook and its tests never import a plugin that only exists inside the app.
+ * The shell's view of the update check, kept away from {@link useAppUpdate} so
+ * the hook and its tests never import a plugin that only exists inside the
+ * app. The Tauri IPC itself lives in `native/commands.ts` (`checkForAppUpdate`,
+ * `relaunchApp`) — all plugin calls route through `native/` per the app
+ * boundary rule; the `isTauri` probe here is the documented environment-check
+ * exception, kept so the hook can cheaply tell "no updater" from "no update".
  *
  * `null` where there is no updater to talk to — a browser dev run, or a mobile
- * build, which is gated out natively as well. The plugins are loaded on demand
- * so a build without them does not pay for them at startup.
+ * build, which is gated out natively as well.
  */
 export const checkForUpdate: (() => Promise<AvailableUpdate | null>) | null = isTauri()
-  ? async () => {
-      const { check } = await import("@tauri-apps/plugin-updater");
-      return await check();
-    }
+  ? checkForAppUpdate
   : null;
 
-export async function relaunchApp(): Promise<void> {
-  const { relaunch } = await import("@tauri-apps/plugin-process");
-  await relaunch();
-}
+export { relaunchApp } from "../native/commands";

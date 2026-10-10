@@ -1,10 +1,8 @@
 import { useState } from "react";
 
 import { type ControlProps } from "../settings/controlRegistry";
+import { LINK } from "./FieldDraftCard";
 import { parseFieldDefinitions } from "./journalSettings";
-
-const LINK =
-  "bg-transparent border-0 text-xs text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground";
 
 /**
  * JSON textarea fallback for the journal field definitions control (D82).
@@ -30,6 +28,7 @@ export function FieldDefinitionsJson({
   const unreadable = parsed.diagnostics.length > 0;
   const [jsonDraft, setJsonDraft] = useState(stored);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const error = jsonError ?? (unreadable ? parsed.diagnostics[0]?.message : null);
 
   return (
     <div className="flex flex-col gap-2">
@@ -51,9 +50,9 @@ export function FieldDefinitionsJson({
           onChange(next);
         }}
       />
-      {(jsonError ?? (unreadable ? parsed.diagnostics[0]?.message : null)) && (
+      {error && (
         <p role="alert" className="m-0 text-xs text-danger">
-          {jsonError ?? parsed.diagnostics[0]?.message}
+          {error}
         </p>
       )}
       {!unreadable && (

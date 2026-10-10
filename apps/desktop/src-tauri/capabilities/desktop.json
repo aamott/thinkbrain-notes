@@ -15,8 +15,6 @@
     "core:default",
     "dialog:default",
     "fs:default",
-    "fs:allow-write-text-file",
-    "fs:allow-read-text-file",
     "updater:default",
     "process:allow-restart"
   ]

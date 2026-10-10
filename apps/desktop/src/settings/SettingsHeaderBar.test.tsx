@@ -4,8 +4,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsHeaderBar } from "./SettingsHeaderBar";
-import { pickFilePath, saveFilePath } from "../native/dialogs";
-import { readTextFileNative, writeTextFileNative } from "../native/fs";
+import { pickAndReadTextFile, saveAndWriteTextFile } from "../native/fs";
 import { useSettingsStore } from "./settingsStore";
 import {
   createSettingsTestHarness,
@@ -22,13 +21,16 @@ import {
  * library dependency.
  */
 
-vi.mock("../native/dialogs", () => ({
-  saveFilePath: vi.fn<(title: string, defaultName: string) => Promise<string | null>>(),
-  pickFilePath: vi.fn<(title?: string) => Promise<string | null>>()
-}));
 vi.mock("../native/fs", () => ({
-  writeTextFileNative: vi.fn<(path: string, contents: string) => Promise<boolean>>(),
-  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+  saveAndWriteTextFile: vi.fn<
+    (title: string, defaultName: string, contents: string) => Promise<boolean>
+  >(),
+  pickAndReadTextFile: vi.fn<
+    (
+      title: string,
+      extensions?: readonly string[]
+    ) => Promise<{ path: string; contents: string } | null>
+  >()
 }));
 
 const harness = createSettingsTestHarness();
@@ -301,8 +303,9 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   };
 
   it("says so when the settings file cannot be written", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue("/tmp/settings.json");
-    vi.mocked(writeTextFileNative).mockResolvedValue(false);
+    vi.mocked(saveAndWriteTextFile).mockRejectedValue(
+      new Error("The chosen file could not be written.")
+    );
     const host = await harness.render(<SettingsHeaderBar />);
 
     await clickExport(host);
@@ -311,7 +314,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   });
 
   it("stays quiet when the user dismisses the save dialog", async () => {
-    vi.mocked(saveFilePath).mockResolvedValue(null);
+    vi.mocked(saveAndWriteTextFile).mockResolvedValue(false);
     const host = await harness.render(<SettingsHeaderBar />);
 
     await clickExport(host);
@@ -320,8 +323,9 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   });
 
   it("says so when the chosen settings file cannot be read", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue("/tmp/settings.json");
-    vi.mocked(readTextFileNative).mockResolvedValue(null);
+    vi.mocked(pickAndReadTextFile).mockRejectedValue(
+      new Error("The picked file could not be read.")
+    );
     const host = await harness.render(<SettingsHeaderBar />);
 
     await clickImport(host);
@@ -330,7 +334,7 @@ describe("SettingsHeaderBar export/import outcomes", () => {
   });
 
   it("stays quiet when the user dismisses the open dialog", async () => {
-    vi.mocked(pickFilePath).mockResolvedValue(null);
+    vi.mocked(pickAndReadTextFile).mockResolvedValue(null);
     const host = await harness.render(<SettingsHeaderBar />);
 
     await clickImport(host);

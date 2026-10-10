@@ -57,6 +57,18 @@ describe("createLocalDirectoryLoader", () => {
     expect(seen[0]?.sourceUrl).toBe("file:///ext/sample/extension.js");
   });
 
+  it("percent-encodes special characters in the source url path", async () => {
+    const seen: string[] = [];
+    const load = loader(validFiles, async (_code, sourceUrl) => {
+      seen.push(sourceUrl);
+      return { activate };
+    });
+
+    await load.load("/ext/my ext#1/100% legit");
+
+    expect(seen[0]).toBe("file:///ext/my%20ext%231/100%25%20legit/extension.js");
+  });
+
   it("honours a manifest main pointing at a bundled subdirectory", async () => {
     const files = {
       "extension.json": JSON.stringify({ ...MANIFEST, main: "dist/bundle.js" }),
@@ -156,6 +168,23 @@ describe("createLocalDirectoryLoader", () => {
 
     expect(result.extension).toBeNull();
     expect(result.diagnostics[0]?.code).toBe("entry_escapes_directory");
+    expect(reads).toEqual(["extension.json"]);
+  });
+
+  it("rejects a main containing a newline before reading it", async () => {
+    const reads: string[] = [];
+    const load = createLocalDirectoryLoader({
+      readFile: async (_directory, relativePath) => {
+        reads.push(relativePath);
+        return JSON.stringify({ ...MANIFEST, main: "ok\nBAD.js" });
+      },
+      importModule: async () => ({ activate })
+    });
+
+    const result = await load.load("/ext/sample");
+
+    expect(result.extension).toBeNull();
+    expect(result.diagnostics[0]?.code).toBe("entry_invalid_main");
     expect(reads).toEqual(["extension.json"]);
   });
 

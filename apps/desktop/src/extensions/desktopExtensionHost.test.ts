@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  createSettingsRegistry,
   ExtensionActivationError,
   InvalidExtensionIdError,
   type Disposable
@@ -7,6 +8,7 @@ import {
 
 import {
   appSettingsRegistry,
+  createSettingsStore,
   useSettingsStore
 } from "../settings/settingsStore";
 import { appEvents } from "../events/appEvents";
@@ -19,8 +21,41 @@ import { createDesktopEditorHeaderRegistry } from "../tabs/editorHeaderRegistry.
 import {
   createDesktopExtensionHost,
   type DesktopExtensionContext,
-  type DesktopExtensionDefinition
+  type DesktopExtensionDefinition,
+  type DesktopExtensionHost
 } from "./desktopExtensionHost";
+
+/**
+ * Every host a test creates is disposed afterwards, even when the test fails:
+ * hosts built with default registries write into the app-wide singletons, so
+ * an un-disposed host leaks its contributions into later tests.
+ */
+const trackedHosts: DesktopExtensionHost[] = [];
+
+const createTrackedHost = (
+  registries?: Parameters<typeof createDesktopExtensionHost>[0]
+): DesktopExtensionHost => {
+  const host = createDesktopExtensionHost(registries);
+  trackedHosts.push(host);
+  return host;
+};
+
+// Snapshot the settings-store fields tests mutate so they can be put back.
+const initialSettings = useSettingsStore.getState();
+
+afterEach(async () => {
+  // A fake bridge or staged settings value must not survive a failing test.
+  setWorkspaceBridge(null);
+  useSettingsStore.setState({
+    appValues: initialSettings.appValues,
+    workspaceValues: initialSettings.workspaceValues,
+    workspaceRootPath: initialSettings.workspaceRootPath,
+    stagedChanges: initialSettings.stagedChanges
+  });
+  while (trackedHosts.length > 0) {
+    await trackedHosts.pop()?.dispose();
+  }
+});
 
 const schema = {
   label: "Test extension",
@@ -58,7 +93,7 @@ function definition(
 
 describe("desktop extension host", () => {
   it("prefixes relative contribution IDs, inserts live, and rejects collisions", async () => {
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     let context: DesktopExtensionContext | undefined;
     host.register(definition("calendar", (activationContext) => {
       context = activationContext;
@@ -102,7 +137,7 @@ describe("desktop extension host", () => {
   });
 
   it("accepts canonical IDs and rejects dotted, uppercase, underscore, and malformed IDs", () => {
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     for (const id of ["foo.bar", "Foo", "foo_bar", "1foo", "foo-"]) {
       expect(() => host.register(definition(id, () => undefined)))
         .toThrow(InvalidExtensionIdError);
@@ -114,7 +149,7 @@ describe("desktop extension host", () => {
   });
 
   it("derives settings namespaces directly from canonical IDs", async () => {
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     host.register(definition("foo-bar", (context) => context.settings.registerSchema(schema)));
 
     await host.activate("foo-bar");
@@ -125,7 +160,7 @@ describe("desktop extension host", () => {
   });
 
   it("cleans registrations when activation fails", async () => {
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     host.register(definition("broken", (context) => {
       context.commands.register({
         id: "command",
@@ -148,7 +183,7 @@ describe("desktop extension host", () => {
       workspaceValues: null,
       stagedChanges: {}
     });
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     let context: DesktopExtensionContext | undefined;
     host.register(definition("test-extension", (activationContext) => {
       context = activationContext;
@@ -190,7 +225,7 @@ describe("desktop extension host", () => {
   it("adds returned activation disposables to the core subscription store", async () => {
     let disposed = 0;
     const returned: Disposable = { dispose: () => { disposed += 1; } };
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     host.register(definition("returned", () => returned));
 
     await host.activate("returned");
@@ -203,7 +238,7 @@ describe("desktop extension host", () => {
 describe("app events", () => {
   it("delivers app events to an active extension and stops after deactivate", async () => {
     const received: unknown[] = [];
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     host.register(definition("listener", (context) => {
       context.events.on("note.saved", (event) => received.push(event));
     }));
@@ -219,7 +254,7 @@ describe("app events", () => {
 
   it("rejects a subscription after the extension deactivates", async () => {
     let context: DesktopExtensionContext | undefined;
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     host.register(definition("late", (received) => {
       context = received;
     }));
@@ -233,7 +268,7 @@ describe("app events", () => {
 describe("workspace and tab contributions", () => {
   it("exposes the workspace notes API to an activated extension", async () => {
     let context: DesktopExtensionContext | undefined;
-    const host = createDesktopExtensionHost();
+    const host = createTrackedHost();
     host.register(definition("workspace-user", (received) => {
       context = received;
     }));
@@ -246,9 +281,52 @@ describe("workspace and tab contributions", () => {
     expect(context?.workspace.rootPath()).toBeNull();
   });
 
+  it("notifies workspace.onDidChangeRoot on open, switch, and close", async () => {
+    let context: DesktopExtensionContext | undefined;
+    const host = createTrackedHost();
+    host.register(definition("root-watcher", (received) => {
+      context = received;
+    }));
+    await host.activate("root-watcher");
+
+    const roots: (string | null)[] = [];
+    context?.workspace.onDidChangeRoot((root) => roots.push(root));
+
+    const bridge = (rootPath: string | null) => ({
+      rootPath,
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+    setWorkspaceBridge(bridge("/vault"));
+    // A republish with an unchanged root does not re-notify.
+    setWorkspaceBridge(bridge("/vault"));
+    setWorkspaceBridge(bridge("/other"));
+    setWorkspaceBridge(null);
+
+    expect(roots).toEqual(["/vault", "/other", null]);
+  });
+
+  it("stops notifying and rejects new subscriptions after deactivation", async () => {
+    let context: DesktopExtensionContext | undefined;
+    const host = createTrackedHost();
+    host.register(definition("root-watcher", (received) => {
+      context = received;
+    }));
+    await host.activate("root-watcher");
+
+    const roots: (string | null)[] = [];
+    context?.workspace.onDidChangeRoot((root) => roots.push(root));
+
+    await host.deactivate("root-watcher");
+    setWorkspaceBridge({ rootPath: "/vault", openNote: () => undefined, openTab: () => undefined });
+
+    expect(roots).toEqual([]);
+    expect(() => context?.workspace.onDidChangeRoot(() => undefined)).toThrow("no longer active");
+  });
+
   it("registers a contributed tab under a prefixed kind and disposes it", async () => {
     const tabs = createDesktopTabRegistry([]);
-    const host = createDesktopExtensionHost({ tabs });
+    const host = createTrackedHost({ tabs });
     host.register(definition("calendars", (context) => {
       context.tabs.register({
         kind: "calendar",
@@ -267,7 +345,7 @@ describe("workspace and tab contributions", () => {
 
   it("rejects a tab kind that is not a relative kebab-case id", async () => {
     const tabs = createDesktopTabRegistry([]);
-    const host = createDesktopExtensionHost({ tabs });
+    const host = createTrackedHost({ tabs });
     host.register(definition("calendars", (context) => {
       context.tabs.register({
         kind: "Calendar View",
@@ -291,7 +369,7 @@ describe("workspace and tab contributions", () => {
       openNote: () => undefined,
       openTab: (kind, title) => opened.push([kind, title])
     });
-    const host = createDesktopExtensionHost({ tabs });
+    const host = createTrackedHost({ tabs });
     host.register(definition("calendars", (context) => {
       context.tabs.register({
         kind: "calendar",
@@ -316,7 +394,7 @@ describe("workspace and tab contributions", () => {
       openNote: () => undefined,
       openTab: () => undefined
     });
-    const host = createDesktopExtensionHost({ tabs });
+    const host = createTrackedHost({ tabs });
     host.register(definition("calendars", (context) => {
       context.tabs.open("calendar", "August 2026");
     }));
@@ -335,7 +413,7 @@ describe("workspace and tab contributions", () => {
       openTab: () => undefined
     });
     let captured: DesktopExtensionContext | undefined;
-    const host = createDesktopExtensionHost({ tabs });
+    const host = createTrackedHost({ tabs });
     host.register(definition("calendars", (context) => {
       captured = context;
       context.tabs.register({
@@ -354,6 +432,58 @@ describe("workspace and tab contributions", () => {
   });
 });
 
+describe("deactivation context", () => {
+  it("runs deactivate with a live context even when activation failed", async () => {
+    const seen: string[] = [];
+    const host = createTrackedHost();
+    host.register(definition("broken",
+      () => {
+        throw new Error("boom");
+      },
+      (context) => {
+        // The core host calls deactivate to clean up a failed activation; the
+        // context must not report "no longer active" while the hook runs.
+        context.events.on("note.saved", () => undefined);
+        seen.push(context.extensionId);
+      }));
+
+    await expect(host.activate("broken")).rejects.toBeInstanceOf(ExtensionActivationError);
+    await host.deactivate("broken");
+
+    expect(seen).toEqual(["broken"]);
+    expect(host.status("broken")).toBe("inactive");
+  });
+
+  it("gives deactivate the same scoped context, so registered tab kinds resolve", async () => {
+    const tabs = createDesktopTabRegistry([]);
+    const opened: [string, string][] = [];
+    setWorkspaceBridge({
+      rootPath: "/vault",
+      openNote: () => undefined,
+      openTab: (kind, title) => opened.push([kind, title])
+    });
+    const host = createTrackedHost({ tabs });
+    host.register(definition("calendars",
+      (context) => {
+        context.tabs.register({
+          kind: "calendar",
+          label: "Calendar",
+          isAvailable: true,
+          factory: () => null
+        });
+      },
+      (context) => {
+        context.tabs.open("calendar", "closing");
+      }));
+
+    await host.activate("calendars");
+    await host.deactivate("calendars");
+
+    expect(opened).toEqual([["calendars.calendar", "closing"]]);
+    setWorkspaceBridge(null);
+  });
+});
+
 describe("editor header contributions", () => {
   const dateline = {
     id: "metadata-widget",
@@ -363,7 +493,7 @@ describe("editor header contributions", () => {
 
   it("registers an editor header under a prefixed id and disposes it", async () => {
     const editorHeaders = createDesktopEditorHeaderRegistry();
-    const host = createDesktopExtensionHost({ editorHeaders });
+    const host = createTrackedHost({ editorHeaders });
     host.register(definition("journal-calendar", (context) => {
       context.editorHeaders.register(dateline);
     }));
@@ -379,7 +509,7 @@ describe("editor header contributions", () => {
 
   it("rejects a header id that is not a relative kebab-case id", async () => {
     const editorHeaders = createDesktopEditorHeaderRegistry();
-    const host = createDesktopExtensionHost({ editorHeaders });
+    const host = createTrackedHost({ editorHeaders });
     host.register(definition("journal-calendar", (context) => {
       context.editorHeaders.register({ ...dateline, id: "Metadata Widget" });
     }));
@@ -390,7 +520,7 @@ describe("editor header contributions", () => {
 
   it("refuses to register once the extension is no longer active", async () => {
     const editorHeaders = createDesktopEditorHeaderRegistry();
-    const host = createDesktopExtensionHost({ editorHeaders });
+    const host = createTrackedHost({ editorHeaders });
     let captured: DesktopExtensionContext | undefined;
     host.register(definition("journal-calendar", (context) => {
       captured = context;
@@ -427,17 +557,34 @@ describe("workspace-scoped extension settings", () => {
     ]
   };
 
-  // The settings registry is app-wide, so each test has to hand its module back
-  // or the next activation collides on the same namespace.
-  let host: ReturnType<typeof createDesktopExtensionHost> | null = null;
+  // Each activation gets a fully isolated host: a fresh schema registry and
+  // store injected through DesktopExtensionHostRegistries, so nothing here
+  // mutates the app-wide singletons or has to hand modules back between tests.
+  let host: DesktopExtensionHost | null = null;
+  let settingsStore: ReturnType<typeof createSettingsStore> | null = null;
+
+  const isolatedGateway = {
+    readAppSettings: async () => null,
+    writeAppSettings: async (revise: (current: string | null) => string) =>
+      revise(null),
+    readWorkspaceSettings: async () => null,
+    writeWorkspaceSettings: async (
+      _rootPath: string,
+      revise: (current: string | null) => string
+    ) => revise(null)
+  };
 
   afterEach(async () => {
     await host?.dispose();
     host = null;
+    settingsStore = null;
   });
 
   const activate = async (): Promise<DesktopExtensionContext> => {
-    host = createDesktopExtensionHost();
+    const settingsRegistry = createSettingsRegistry();
+    const store = createSettingsStore(isolatedGateway, settingsRegistry);
+    settingsStore = store;
+    host = createTrackedHost({ settingsRegistry, settingsStore: store });
     let context: DesktopExtensionContext | undefined;
     host.register(definition("journal-calendar", (received) => {
       context = received;
@@ -452,7 +599,7 @@ describe("workspace-scoped extension settings", () => {
 
   it("reads the override for the workspace that is open", async () => {
     const context = await activate();
-    useSettingsStore.setState({
+    settingsStore?.setState({
       appValues: {},
       workspaceValues: { [KEY]: "diary" },
       workspaceRootPath: "/notes/work",
@@ -464,7 +611,7 @@ describe("workspace-scoped extension settings", () => {
 
   it("falls back to the default when no workspace is open", async () => {
     const context = await activate();
-    useSettingsStore.setState({
+    settingsStore?.setState({
       appValues: {},
       workspaceValues: null,
       workspaceRootPath: null,
@@ -477,7 +624,7 @@ describe("workspace-scoped extension settings", () => {
   it("notifies a subscriber when the active workspace changes", async () => {
     // An open journal panel has to follow the user into the next vault.
     const context = await activate();
-    useSettingsStore.setState({
+    settingsStore?.setState({
       appValues: {},
       workspaceValues: { [KEY]: "diary" },
       workspaceRootPath: "/notes/work",
@@ -486,7 +633,7 @@ describe("workspace-scoped extension settings", () => {
     const seen: unknown[] = [];
     context.settings.onDidChange("root", (value) => seen.push(value));
 
-    useSettingsStore.setState({
+    settingsStore?.setState({
       workspaceValues: { [KEY]: "personal" },
       workspaceRootPath: "/notes/home"
     });

@@ -97,6 +97,32 @@ describe("extension settings writes (D81)", () => {
     errors.mockRestore();
   });
 
+  // Unrelated staged edits belong to the user: an extension write must neither
+  // flush them to disk nor be stranded when one of them would fail validation.
+  it("persists only its own key, not unrelated staged changes", async () => {
+    const context = await activate();
+    useSettingsStore.getState().stageChange("appearance.theme", "dark");
+
+    await context.settings.set("enabled", true);
+
+    const write = invoked.mock.calls.find(([command]) => command === "write_app_settings");
+    const contents = JSON.parse((write?.[1] as { contents: string }).contents);
+    expect(contents["extension-persisting.enabled"]).toBe(true);
+    expect(contents["appearance.theme"]).not.toBe("dark");
+    expect(useSettingsStore.getState().stagedChanges["appearance.theme"]).toBe("dark");
+  });
+
+  it("persists even when an unrelated staged value would fail validation", async () => {
+    const context = await activate();
+    useSettingsStore.getState().stageChange("editor.fontSize", 999);
+
+    await context.settings.set("enabled", true);
+
+    const write = invoked.mock.calls.find(([command]) => command === "write_app_settings");
+    expect(write).toBeDefined();
+    expect(useSettingsStore.getState().stagedChanges["editor.fontSize"]).toBe(999);
+  });
+
   // Synchronously, not as a rejection: a foreign key is a programming error, and
   // an extension that never awaits the write should still fail loudly.
   it("still refuses writes to another module's keys", async () => {

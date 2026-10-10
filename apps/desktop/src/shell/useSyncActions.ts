@@ -5,6 +5,7 @@
 
 import { inferTabKind } from "@thinkbrain/core";
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { sectionAnchorId } from "../settings/sectionUtils";
 import { useSettingsStore } from "../settings/settingsStore";
 import { restoreVersion } from "../sync/syncService";
 import {
@@ -153,14 +154,32 @@ export function useSyncActions({
     openSettingsTab();
     // The settings tab may still be mounting when this dispatch lands, so the
     // scroll happens on the next frames rather than assuming the section is
-    // already in the document.
-    const scrollToSection = () =>
-      document
-        .getElementById(`settings-section-${sectionId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // already in the document. The anchor id goes through `sectionAnchorId` —
+    // the `settings-section-` prefix is `sectionUtils`' contract, not a string
+    // to rebuild here.
+    const scrollToSection = (finalAttempt: boolean) => {
+      const anchor = document.getElementById(sectionAnchorId(sectionId));
+      if (anchor) {
+        anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      // A miss is only worth reporting once the section list has rendered:
+      // mounted sections without this anchor means the section id drifted
+      // from the DOM contract — say so instead of optional-chaining a scroll
+      // to nowhere. Before the list mounts (or in a test that never renders
+      // it) a miss tells us nothing, so it stays quiet.
+      const sectionsMounted = document.querySelector(
+        `section[id^="${sectionAnchorId("")}"]`
+      );
+      if (finalAttempt && sectionsMounted) {
+        console.error(
+          `[useSyncActions] Settings section "${sectionId}" produced no rendered anchor.`
+        );
+      }
+    };
     requestAnimationFrame(() => {
-      scrollToSection();
-      requestAnimationFrame(scrollToSection);
+      scrollToSection(false);
+      requestAnimationFrame(() => scrollToSection(true));
     });
   }, [openSettingsTab]);
 

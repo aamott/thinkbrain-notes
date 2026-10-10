@@ -31,6 +31,12 @@ const EMPTY_PREDICATES: readonly JournalPredicate[] = [];
 
 export interface UseJournalEntriesQueryInput {
   readonly service: JournalService;
+  /**
+   * What the listing is of — workspace root plus journal folder. A
+   * kept-mounted panel never remounts, so a vault switch or a `root`
+   * setting change arrives as a new key and re-reads the folder.
+   */
+  readonly listKey: string;
   /** False until the platform index is ready for this workspace (D41). */
   readonly indexAvailable: boolean;
   /** Asks the index which entries match a content query (D41). */
@@ -79,6 +85,7 @@ export interface JournalEntriesQuery {
 
 export function useJournalEntriesQuery({
   service,
+  listKey,
   indexAvailable,
   searchEntries,
   loadFacets,
@@ -130,7 +137,7 @@ export function useJournalEntriesQuery({
     return () => {
       cancelled = true;
     };
-  }, [read, reloadToken]);
+  }, [read, reloadToken, listKey]);
 
   const filtersAvailable =
     indexAvailable && loadFacets !== undefined && matchEntries !== undefined;
@@ -211,7 +218,8 @@ export function useJournalEntriesQuery({
     };
   }, [query, searching, searchEntries]);
 
-  const reload = (): void => setReloadToken((token) => token + 1);
+  // Stable identity: the container's note-event subscriptions key on it.
+  const reload = useCallback((): void => setReloadToken((token) => token + 1), []);
   const retry = (): void => {
     setStatus("loading");
     reload();

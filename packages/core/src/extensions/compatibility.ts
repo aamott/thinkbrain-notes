@@ -76,7 +76,12 @@ function satisfies(version: SemanticVersion, range: string): boolean | null {
   if (!floor) return null;
 
   if (operator === "^") {
-    return version.major === floor.major && atLeast(version, floor);
+    if (version.major !== floor.major || !atLeast(version, floor)) return false;
+    // npm caret semantics on a 0.x floor pin the minor, and 0.0.x pins the
+    // patch too: every bump at that level is allowed to break.
+    if (floor.major === 0 && version.minor !== floor.minor) return false;
+    if (floor.major === 0 && floor.minor === 0 && version.patch !== floor.patch) return false;
+    return true;
   }
   if (operator === "~") {
     return version.major === floor.major && version.minor === floor.minor && atLeast(version, floor);

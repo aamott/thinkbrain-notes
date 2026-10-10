@@ -60,7 +60,12 @@ export function createEventBus<Events>(
         try {
           (listener as (value: typeof payload) => void)(payload);
         } catch (error: unknown) {
-          onListenerError(event, error);
+          try {
+            onListenerError(event, error);
+          } catch {
+            // A throwing reporter must not reintroduce the propagation the
+            // bus exists to prevent; delivery is best-effort, so drop it.
+          }
         }
       }
     }

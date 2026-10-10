@@ -32,6 +32,13 @@ export interface DesktopTabView extends TabRegistration {
    * ordinary document save only.
    */
   readonly saveable?: boolean;
+  /**
+   * Marks a lazy placeholder: a view registered under an extension-owned kind
+   * before that extension runs (e.g. a persisted tab restored ahead of lazy
+   * activation). Registering a real view under a placeholder's kind swaps it
+   * out instead of failing as a duplicate.
+   */
+  readonly placeholder?: boolean;
 }
 
 export interface DesktopTabRegistry {
@@ -121,8 +128,19 @@ export function createDesktopTabRegistry(
   // Extra desktop-only fields keyed by kind; core is the source of truth for
   // existence and ordering, so `get`/`entries` gate on core registrations.
   const views = new Map<TabKind, DesktopTabView>();
+  /**
+   * Live placeholder registrations by kind. A restored extension tab keeps a
+   * placeholder view until its extension activates and registers the real one;
+   * disposing the placeholder inside the real view's own `register` call makes
+   * the swap a single synchronous turn, so subscribers never observe the kind
+   * unregistered in between.
+   */
+  const placeholderHandles = new Map<TabKind, Disposable>();
 
   const register = (view: DesktopTabView): Disposable => {
+    if (views.get(view.kind)?.placeholder === true) {
+      placeholderHandles.get(view.kind)?.dispose();
+    }
     const registration: TabRegistration = {
       kind: view.kind,
       label: view.label,
@@ -141,16 +159,21 @@ export function createDesktopTabRegistry(
     }
     let disposed = false;
 
-    return {
+    const handle: Disposable = {
       dispose: (): void => {
         if (disposed) return;
         disposed = true;
+        if (placeholderHandles.get(view.kind) === handle) {
+          placeholderHandles.delete(view.kind);
+        }
         // Core fires subscribers here; entries() derives from core so the
         // removed view is already absent before we clean up `views`.
         coreHandle.dispose();
         if (views.get(view.kind) === view) views.delete(view.kind);
       }
     };
+    if (view.placeholder === true) placeholderHandles.set(view.kind, handle);
+    return handle;
   };
 
   initialViews.forEach(register);

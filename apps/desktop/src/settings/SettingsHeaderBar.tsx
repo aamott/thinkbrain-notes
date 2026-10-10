@@ -8,9 +8,10 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Download, MoreVertical, RotateCcw, Upload } from "lucide-react";
+import type { SettingsModule } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
-import { appSettingsRegistry, selectDirtyCount, selectIsDirty, useSettingsStore } from "./settingsStore";
+import { selectDirtyCount, selectIsDirty, useAllSettingsModules, useSettingsStore } from "./settingsStore";
 import {
   buildExportPayload,
   importSettings,
@@ -26,11 +27,15 @@ import { useTransientStatus } from "./useTransientStatus";
  *
  * Args:
  *   activeSection: The active section id, or `null` when no section is active.
+ *   modules: The registered settings modules to resolve the section against.
  *
  * Returns:
  *   A module/section path, or `["Settings"]` when resolution fails.
  */
-function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
+function buildBreadcrumbPath(
+  activeSection: string | null,
+  modules: readonly SettingsModule[]
+): readonly string[] {
   if (!activeSection) return ["Settings"];
 
   // activeSection is scope-qualified (e.g. "app:editor.display") so the
@@ -38,7 +43,7 @@ function buildBreadcrumbPath(activeSection: string | null): readonly string[] {
   // for the breadcrumb lookup, which only needs the section id.
   const { sectionId } = parseQualifiedSectionId(activeSection);
 
-  for (const module of appSettingsRegistry.getAllModules()) {
+  for (const module of modules) {
     const sectionPath = findSectionLabelPath(module.sections, sectionId);
     if (sectionPath) return [module.label, ...sectionPath];
   }
@@ -61,7 +66,10 @@ export function SettingsHeaderBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchorRef = useRef<HTMLButtonElement>(null);
   const status = useTransientStatus();
-  const breadcrumbPath = buildBreadcrumbPath(activeSection);
+  // Subscribed so a late-registered extension module can resolve its
+  // breadcrumb labels instead of falling back to "Settings".
+  const modules = useAllSettingsModules();
+  const breadcrumbPath = buildBreadcrumbPath(activeSection, modules);
 
   /** Persists all staged settings while preventing overlapping saves. */
   async function handleSave(): Promise<void> {

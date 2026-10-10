@@ -1,73 +1,72 @@
 /**
- * Native filesystem bridge adapters for Tauri file read/write operations.
+ * Native filesystem bridge for text files at user-picked paths.
  *
  * UI components must never invoke Tauri IPC directly (per the app boundary
- * rules). These helpers wrap the `@tauri-apps/plugin-fs` `writeTextFile` and
- * `readTextFile` calls so settings import/export can read and write files
- * without importing Tauri APIs themselves. Non-Tauri contexts (tests, web
- * preview) are guarded so the helpers resolve to `null` / empty instead of
- * crashing.
+ * rules). These helpers wrap the `pick_and_read_text_file` and
+ * `save_and_write_text_file` commands, which run the system open/save dialog
+ * on the Rust side and keep hold of the path it produces — the renderer never
+ * supplies a path, so there is no filesystem capability to misuse. That is
+ * what replaced the old `@tauri-apps/plugin-fs` wrappers: they needed the
+ * unscoped `fs:allow-*` grants, which let any renderer code (including
+ * same-realm extensions) reach arbitrary text files.
  *
- * The granted capabilities (`fs:allow-read-text-file` /
- * `fs:allow-write-text-file` in `capabilities/desktop.json`) carry no path
- * scope, so these may only ever receive paths the user just picked in a
- * system open/save dialog. Anything derived from workspace content,
- * extension input or any other untrusted source must go through the
- * workspace-scoped Rust commands, which do enforce path checks.
+ * Non-Tauri contexts (tests, web preview) resolve to `null` / `false`
+ * instead of crashing. A falsy return means the user dismissed the dialog;
+ * real failures arrive as `NativeCommandError` rejections.
  */
 
 import { isTauri } from "@tauri-apps/api/core";
-import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { invokeNativeCommand, type NativePickedTextFile } from "./commands";
 
 /**
- * Writes text contents to an absolute path via the Tauri FS plugin.
+ * Shows a native save dialog and writes `contents` to the chosen path.
  *
  * Args:
- *   path: Absolute file path to write.
- *   contents: String contents to write.
+ *   title: Dialog window title.
+ *   defaultName: Suggested file name shown in the dialog's name field.
+ *   contents: Text to write.
  *
  * Returns:
- *   `true` if the file was written, `false` if the runtime is not Tauri or
- *   the write failed. Write failures are logged loudly via `console.error` to
- *   match the read side's error-handling pattern and the documented boolean
- *   contract.
+ *   `true` if the file was written, `false` if the user dismissed the dialog
+ *   or the runtime is not Tauri. Write failures reject — they reach the
+ *   caller as `NativeCommandError`.
  */
-export async function writeTextFileNative(
-  path: string,
+export async function saveAndWriteTextFile(
+  title: string,
+  defaultName: string,
   contents: string
 ): Promise<boolean> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
   if (!isTauri()) return false;
 
-  try {
-    await writeTextFile(path, contents);
-    return true;
-  } catch (error) {
-    // Fail loudly: log the failure so it surfaces, and return false to match
-    // the read side's `null`-on-error pattern and the boolean contract.
-    console.error("[native/fs] Failed to write file:", error);
-    return false;
-  }
+  return await invokeNativeCommand("save_and_write_text_file", {
+    title,
+    defaultName,
+    contents
+  });
 }
 
 /**
- * Reads text contents from an absolute path via the Tauri FS plugin.
+ * Shows a native open dialog and returns the chosen file with its contents.
  *
  * Args:
- *   path: Absolute file path to read.
+ *   title: Dialog title (also used as the file-type filter label).
+ *   extensions: Optional list of extensions (no leading dot) to filter by.
  *
  * Returns:
- *   The file contents as a string, or `null` if the runtime is not Tauri or
- *   the file cannot be read.
+ *   The picked file's path and contents, or `null` if the user dismissed the
+ *   dialog or the runtime is not Tauri. Read failures reject — they reach the
+ *   caller as `NativeCommandError`.
  */
-export async function readTextFileNative(path: string): Promise<string | null> {
+export async function pickAndReadTextFile(
+  title: string,
+  extensions?: readonly string[]
+): Promise<NativePickedTextFile | null> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
   if (!isTauri()) return null;
 
-  try {
-    return await readTextFile(path);
-  } catch {
-    // File missing or unreadable — return null so callers can handle gracefully.
-    return null;
-  }
+  return await invokeNativeCommand("pick_and_read_text_file", {
+    title,
+    extensions: extensions ? [...extensions] : null
+  });
 }

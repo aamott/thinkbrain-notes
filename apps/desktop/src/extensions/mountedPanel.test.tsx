@@ -1,13 +1,23 @@
 // @vitest-environment happy-dom
-import { act } from "react";
+import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ExtensionManifest } from "@thinkbrain/core";
 
+import { createDesktopCommandRegistry } from "../commands/commandRegistry";
+import { createMobileNewNoteActionRegistry } from "../commands/mobileNewNoteActionRegistry";
 import {
   createDesktopPanelRegistry,
-  type DesktopPanelContext
+  type DesktopPanelContext,
+  type DesktopPanelRegistry
 } from "../panels/panelRegistryModel";
-import { createDesktopExtensionHost } from "./desktopExtensionHost";
+import { Popout } from "../panels/Popout";
+import { bootstrapExtensions } from "./bootstrap";
+import {
+  createDesktopExtensionHost,
+  type DesktopExtensionActivation,
+  type DesktopExtensionContext
+} from "./desktopExtensionHost";
 
 /**
  * A panel contributed with `mount` is the contract an extension loaded from
@@ -186,5 +196,131 @@ describe("panels contributed with a mount function", () => {
 
     expect((error as { cause?: Error }).cause?.message).toMatch(/factory or a mount/i);
     expect(panels.get("calendar.month")).toBeUndefined();
+  });
+});
+
+/**
+ * The popout over a lazily activating extension panel. The stub must hold the
+ * panel id for the whole activation window so the placeholder — "Starting
+ * extension…", or the failure message when activation rejects — stays mounted
+ * instead of flashing "Panel 'x.y' is not registered".
+ */
+describe("lazy panel placeholder in the popout", () => {
+  const lazyPanelManifest = (): ExtensionManifest => ({
+    id: "sample",
+    name: "Sample",
+    version: "1.0.0",
+    apiVersion: "^1.0.0",
+    engines: { platform: ["desktop"] },
+    activationEvents: ["onView:stats"],
+    capabilities: [],
+    contributes: {
+      commands: [],
+      panels: [{ id: "stats", label: "Stats", icon: "∑", side: "right" }]
+    }
+  });
+
+  // The wide registry context: `entriesBySide` hands the popout contributions
+  // typed over `DesktopPanelContext`, so the harness supplies the full shape.
+  const popoutContext: DesktopPanelContext = {
+    rootPath: "/vault",
+    documentContents: null,
+    documentPath: null,
+    onOpenNote: () => undefined,
+    onCompareVersion: () => undefined,
+    onRestoreVersion: async () => undefined,
+    explorerProps: {} as DesktopPanelContext["explorerProps"],
+    onOpenSearchResult: () => undefined,
+    onReviewConflict: () => undefined,
+    onOpenSyncSettings: () => undefined
+  };
+
+  const setupLazyPanel = (activate: DesktopExtensionActivation) => {
+    const commands = createDesktopCommandRegistry([]);
+    const panels = createDesktopPanelRegistry([]);
+    const actions = createMobileNewNoteActionRegistry();
+    const host = createDesktopExtensionHost({ commands, panels });
+    const boot = bootstrapExtensions({
+      host,
+      commands,
+      panels,
+      mobileNewNoteActions: actions,
+      extensions: [{ manifest: lazyPanelManifest(), activate }]
+    });
+    return { panels, boot };
+  };
+
+  /** Re-renders the popout whenever the registry changes, like the real hooks. */
+  function PopoutHarness({ panels }: { readonly panels: DesktopPanelRegistry }) {
+    const [, bump] = useState(0);
+    useEffect(() => panels.subscribe(() => bump((version) => version + 1)), [panels]);
+    return (
+      <Popout
+        side="right"
+        panel="sample.stats"
+        context={popoutContext}
+        contributions={panels.entriesBySide("right")}
+      />
+    );
+  }
+
+  const renderPopout = async (panels: DesktopPanelRegistry): Promise<HTMLDivElement> =>
+    renderPanel(<PopoutHarness panels={panels} />);
+
+  it("shows 'Starting extension…' through activation, never 'not registered'", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const activate = vi.fn(async (context: DesktopExtensionContext) => {
+      await gate;
+      context.panels.register({
+        id: "stats",
+        label: "Stats",
+        icon: "∑",
+        side: "right",
+        factory: () => <span>real stats panel</span>
+      });
+    });
+    const { panels, boot } = setupLazyPanel(activate);
+
+    const rendered = await renderPopout(panels);
+
+    // Mounting the placeholder kicked off activation; while it is pending the
+    // stub still owns the id, so the popout renders the placeholder copy.
+    expect(activate).toHaveBeenCalledTimes(1);
+    expect(rendered.textContent).toContain("Starting extension…");
+    expect(rendered.textContent).not.toContain("not registered");
+
+    release();
+    await act(async () => undefined);
+
+    expect(rendered.textContent).toContain("real stats panel");
+    expect(rendered.textContent).not.toContain("not registered");
+
+    await act(async () => {
+      await boot.dispose();
+    });
+  });
+
+  it("shows the designed failure message when activation rejects", async () => {
+    const activate = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const { panels, boot } = setupLazyPanel(activate);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const rendered = await renderPopout(panels);
+      await act(async () => undefined);
+
+      expect(rendered.textContent).toContain("This extension failed to start");
+      expect(rendered.textContent).not.toContain("not registered");
+    } finally {
+      spy.mockRestore();
+      await act(async () => {
+        await boot.dispose();
+      });
+    }
   });
 });

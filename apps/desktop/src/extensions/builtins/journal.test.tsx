@@ -17,7 +17,10 @@ import {
 import { builtInExtensions } from "./index";
 import { createDesktopExtensionHost } from "../desktopExtensionHost";
 import { createDesktopTabRegistry } from "../../tabs/tabRegistry";
-import { desktopCommandRegistry } from "../../commands/commandRegistry";
+import {
+  desktopCommandRegistry,
+  type DesktopCommandContext
+} from "../../commands/commandRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry.ts";
 import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
@@ -75,8 +78,9 @@ describe("journal built-in", () => {
     ]);
   });
 
-  it("activates lazily, on its view or any of its commands (D65)", () => {
+  it("activates at startup, with its view and commands as the retry path", () => {
     expect(journalManifest.activationEvents).toEqual([
+      "onStartup",
       "onView:journal",
       "onCommand:new-entry",
       "onCommand:today",
@@ -146,9 +150,9 @@ describe("journal built-in", () => {
     const tabs = await activate();
     useSettingsStore.getState().stageChange(VIEW_KEY, "week");
 
-    const host = await mount(tabs);
+    const dom = await mount(tabs);
 
-    expect(host.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("aria-label"))
+    expect(dom.querySelector('[role="radio"][aria-checked="true"]')?.getAttribute("aria-label"))
       .toBe("Week");
   });
 
@@ -156,12 +160,31 @@ describe("journal built-in", () => {
     const tabs = await activate();
     // Workspace-scoped (D80), so the write needs a workspace to land in.
     useSettingsStore.setState({ workspaceRootPath: "/vault", workspaceValues: {} });
-    const host = await mount(tabs);
+    const dom = await mount(tabs);
 
-    const week = host.querySelector<HTMLButtonElement>('button[aria-label="Week"]');
+    const week = dom.querySelector<HTMLButtonElement>('button[aria-label="Week"]');
     await act(async () => week?.click());
 
     expect(useSettingsStore.getState().getEffectiveValue(VIEW_KEY)).toBe("week");
+  });
+
+  it("reports the JournalError a palette command hits with no workspace open", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await activate();
+
+    const today = desktopCommandRegistry.get("journal-calendar.today");
+    const closePalette = vi.fn();
+    // openToday rejects with JournalError("no-workspace"); the handler must
+    // surface it, not leave an unhandled rejection pretending nothing happened.
+    today?.handler({ closePalette } as unknown as DesktopCommandContext);
+    await act(async () => Promise.resolve());
+
+    expect(closePalette).toHaveBeenCalledTimes(1);
+    expect(reported).toHaveBeenCalledWith(
+      expect.stringContaining("[journal]"),
+      expect.objectContaining({ name: "JournalError" })
+    );
+    reported.mockRestore();
   });
 
   it("hands everything back when it deactivates", async () => {
@@ -202,8 +225,8 @@ describe("the metadata widget and the settings behind it", () => {
    */
   it("picks up a field added while a note is open", async () => {
     await activate();
-    const host = await mountHeader();
-    expect(host.textContent).not.toContain("Mood");
+    const dom = await mountHeader();
+    expect(dom.textContent).not.toContain("Mood");
 
     await act(async () => {
       useSettingsStore.getState().stageChange(
@@ -214,9 +237,52 @@ describe("the metadata widget and the settings behind it", () => {
 
     // The affordance only exists once there is a field to fill in, and the
     // label itself appears when it is expanded.
-    const add = host.querySelector<HTMLButtonElement>("button");
+    const add = dom.querySelector<HTMLButtonElement>("button");
     expect(add?.textContent).toBe("Info Tracker");
     await act(async () => add?.click());
-    expect(host.textContent).toContain("Mood");
+    expect(dom.textContent).toContain("Mood");
+  });
+
+  /**
+   * `applies` runs inside `EditorHeaderSlot`'s `useMemo` during render, so a
+   * `root` setting `normalizeRoot` rejects (".." escapes the workspace, and a
+   * hand-edited settings file can carry it) must degrade to "not under the
+   * journal folder" — not crash every open editor tab through `TabBoundary`.
+   */
+  it("answers false from `applies` rather than throwing on an invalid root", async () => {
+    await activate();
+    useSettingsStore.getState().stageChange("extension-journal-calendar.root", "..");
+
+    const header = desktopEditorHeaderRegistry.get("journal-calendar.metadata-widget");
+    const context = {
+      rootPath: "/vault",
+      relativePath: "notes/anything.md",
+      contents: "No frontmatter here.\n"
+    };
+
+    expect(() => header?.applies?.(context)).not.toThrow();
+    expect(header?.applies?.(context)).toBe(false);
+  });
+
+  /**
+   * A bad root only invalidates the folder check — a note that carries one of
+   * the user's configured fields is a journal entry wherever it lives (D28).
+   */
+  it("still honors the configured-fields check while the root is invalid", async () => {
+    await activate();
+    useSettingsStore.getState().stageChange("extension-journal-calendar.root", "..");
+    useSettingsStore.getState().stageChange(
+      FIELDS_KEY,
+      JSON.stringify([{ id: "mood", label: "Mood", type: "text" }])
+    );
+
+    const header = desktopEditorHeaderRegistry.get("journal-calendar.metadata-widget");
+    const applies = header?.applies?.({
+      rootPath: "/vault",
+      relativePath: "notes/anything.md",
+      contents: "---\nmood: ok\n---\n\nBody.\n"
+    });
+
+    expect(applies).toBe(true);
   });
 });

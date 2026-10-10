@@ -130,7 +130,7 @@ pub fn read_extension_file(
 ) -> Result<String, NativeError> {
     let path = resolve_extension_file(&directory, &relative_path)?;
 
-    let mut file = fs::File::open(&path).map_err(|error| {
+    let file = fs::File::open(&path).map_err(|error| {
         failed(
             "extensions.file_unavailable",
             "Extension file could not be read.",
@@ -156,9 +156,28 @@ pub fn read_extension_file(
     }
 
     // Reading from the same file handle ensures the bytes come from the
-    // same inode that passed the size check.
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).map_err(|error| {
+    // same inode that passed the size check. The read itself is still capped:
+    // a file grown past the limit after the metadata check is refused rather
+    // than pulled into the webview whole.
+    let mut bytes = Vec::new();
+    file.take(MAX_EXTENSION_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| {
+            failed(
+                "extensions.file_unavailable",
+                "Extension file could not be read.",
+                error,
+            )
+        })?;
+
+    if bytes.len() as u64 > MAX_EXTENSION_FILE_BYTES {
+        return Err(NativeError::new(
+            "extensions.file_too_large",
+            "Extension file is larger than the 8 MB limit.",
+        ));
+    }
+
+    let contents = String::from_utf8(bytes).map_err(|error| {
         failed(
             "extensions.file_unavailable",
             "Extension file is not valid UTF-8 text or could not be read.",

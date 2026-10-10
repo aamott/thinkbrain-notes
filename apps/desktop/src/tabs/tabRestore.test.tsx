@@ -51,7 +51,12 @@ vi.mock("../workspace/workspaceWatcher", () => ({
 vi.mock("../events/noteChangeSubscription", () => ({
   subscribeToNoteChanges: () => () => {}
 }));
-vi.mock("../extensions/workspaceBridge", () => ({ setWorkspaceBridge: () => {} }));
+vi.mock("../extensions/workspaceBridge", () => ({
+  setWorkspaceBridge: () => {},
+  // Imported transitively through `desktopExtensionHost` (for the contribution
+  // id helpers); never called under these mocks.
+  getWorkspaceBridge: () => null
+}));
 
 const indexStore = {
   getState: () => ({
@@ -70,7 +75,13 @@ vi.mock("../settings/settingsStore", () => ({
       workspaceRootPath: null,
       loadSettings: () => Promise.resolve()
     })
-  })
+  }),
+  // Read transitively at `desktopExtensionHost` module load; never exercised
+  // under these tests.
+  appSettingsRegistry: {
+    register: () => ({ dispose: () => {} }),
+    getDefinition: () => undefined
+  }
 }));
 
 const { useWorkspaceLifecycle } = await import("../shell/useWorkspaceLifecycle");

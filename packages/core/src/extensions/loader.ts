@@ -18,16 +18,35 @@ export interface ExtensionModule<Activate, Deactivate> {
   readonly deactivate: Deactivate | undefined;
 }
 
-export interface EntryPathResult {
-  /** The directory-relative entry path, or `null` when unusable. */
-  readonly path: string | null;
-  readonly diagnostic: ManifestDiagnostic | null;
-}
+/**
+ * Exactly one of `path`/`diagnostic` is set: narrowing on `path` gives the
+ * caller a diagnostic without a non-null assertion.
+ */
+export type EntryPathResult =
+  | {
+      /** The directory-relative entry path. */
+      readonly path: string;
+      readonly diagnostic: null;
+    }
+  | {
+      readonly path: null;
+      /** Why the entry path was rejected. */
+      readonly diagnostic: ManifestDiagnostic;
+    };
 
-export interface ExtensionModuleResult<Activate, Deactivate> {
-  readonly module: ExtensionModule<Activate, Deactivate> | null;
-  readonly diagnostic: ManifestDiagnostic | null;
-}
+/**
+ * Exactly one of `module`/`diagnostic` is set: narrowing on `module` gives
+ * the caller a diagnostic without a non-null assertion.
+ */
+export type ExtensionModuleResult<Activate, Deactivate> =
+  | {
+      readonly module: ExtensionModule<Activate, Deactivate>;
+      readonly diagnostic: null;
+    }
+  | {
+      readonly module: null;
+      readonly diagnostic: ManifestDiagnostic;
+    };
 
 /** Entry modules are pre-bundled ESM; nothing else is imported at runtime. */
 const JAVASCRIPT_ENTRY = /\.m?js$/;
@@ -47,6 +66,17 @@ const rejectPath = (code: string, message: string): EntryPathResult => ({
 const isCallable = (value: unknown): boolean => typeof value === "function";
 
 /**
+ * Control characters would smuggle a newline into a `//# sourceURL=` comment
+ * or a malformed path into a native file bridge, so they are rejected rather
+ * than encoded around.
+ */
+const hasControlCharacters = (value: string): boolean =>
+  [...value].some((char) => {
+    const code = char.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  });
+
+/**
  * Resolves the manifest's `main` to a directory-relative entry path.
  *
  * @param main The manifest's `main` field, or `undefined` for the default.
@@ -57,6 +87,13 @@ export function resolveEntryPath(main: string | undefined): EntryPathResult {
 
   if (typeof main !== "string" || main.length === 0) {
     return rejectPath("entry_invalid_main", `"main" must be a non-empty string.`);
+  }
+
+  if (hasControlCharacters(main)) {
+    return rejectPath(
+      "entry_invalid_main",
+      `"main" must not contain control characters.`
+    );
   }
 
   if (main.startsWith("/") || main.startsWith("\\") || WINDOWS_ABSOLUTE.test(main)) {

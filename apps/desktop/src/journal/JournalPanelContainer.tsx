@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { EventSubscriber } from "@thinkbrain/core";
+import type { AppEvents } from "../events/appEvents";
 import { createDebounced } from "../lib/debounce";
 import { JournalPanel } from "./JournalPanel";
+import { useJournalListRefresh } from "./journalChrome";
 import {
   predicateChips,
   predicateId,
@@ -34,6 +37,17 @@ const PREVIEW_CONCURRENCY = 8;
 
 export interface JournalPanelContainerProps {
   readonly service: JournalService;
+  /**
+   * What the listing is of — workspace root plus journal folder. A
+   * kept-mounted panel has no remount to notice a vault switch or a `root`
+   * setting change, so both arrive through this key and re-read the folder.
+   */
+  readonly listKey?: string;
+  /**
+   * The extension's event surface (`context.events`), so its subscriptions
+   * are scoped to the activation rather than the app-wide bus.
+   */
+  readonly events: EventSubscriber<AppEvents>;
   /** False until the platform index is ready for this workspace (D41). */
   readonly indexAvailable?: boolean;
   /**
@@ -77,6 +91,8 @@ export interface JournalPanelContainerProps {
 
 export function JournalPanelContainer({
   service,
+  listKey = "",
+  events,
   indexAvailable = false,
   searchEntries,
   loadFacets,
@@ -103,6 +119,7 @@ export function JournalPanelContainer({
     matchingPaths
   } = useJournalEntriesQuery({
     service,
+    listKey,
     indexAvailable,
     searchEntries,
     loadFacets,
@@ -144,6 +161,24 @@ export function JournalPanelContainer({
     setPreviewState({ listing, previews: new Map() });
   }
   const previews = previewState.previews;
+
+  // The panel is kept mounted, so nothing remounts it into freshness: the
+  // listing follows the folder changes every surface announces (D68).
+  useJournalListRefresh(reload, events);
+
+  // A save can change the one thing the listing borrows from file contents:
+  // the preview. Drop just that path so the visible window refetches it.
+  useEffect(() => {
+    const subscription = events.on("note.saved", ({ relativePath }) => {
+      setPreviewState((current) => {
+        if (!current.previews.has(relativePath)) return current;
+        const previews = new Map(current.previews);
+        previews.delete(relativePath);
+        return { listing: current.listing, previews };
+      });
+    });
+    return () => void subscription.dispose();
+  }, [events]);
 
   /**
    * Reads the first line of the entries the panel says are on screen (D9).

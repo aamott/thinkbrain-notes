@@ -3,11 +3,11 @@ import {
   parseFrontmatter,
   type ExtensionManifest
 } from "@thinkbrain/core";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { JournalPanelContainer } from "../../journal/JournalPanelContainer";
 import { createJournalService } from "../../journal/journalService";
-import { journalSettingsSchema } from "../../journal/journalSettings";
+import { journalSettingsSchema, parseFieldDefinitions } from "../../journal/journalSettings";
 import { registerJournalControls } from "../../journal/JournalFieldDefinitionsControl";
 import { CalendarTabContainer } from "../../journal/CalendarTabContainer";
 import {
@@ -22,15 +22,16 @@ import { searchService } from "../../search/searchService";
 import type { JournalFacet, JournalPredicate } from "../../journal/journalFacets";
 import { useCollapsedGroups } from "../../journal/journalCollapse";
 import { MetadataWidgetContainer } from "../../journal/MetadataWidgetContainer";
-import { parseFieldDefinitions } from "../../journal/journalSettings";
 import type { DesktopExtensionContext } from "../desktopExtensionHost";
 
 /**
  * The journal, as a built-in extension.
  *
  * It uses the same extension API a third-party would (D68): the service reaches
- * the workspace through `context.workspace`, and the panel factory closes over
- * it. Nothing here reaches into the shell.
+ * the workspace through `context.workspace`, events through `context.events`,
+ * and the panel factory closes over both. The one reach-around left is search
+ * (`searchService`, `useSearchIndexStore`) — the context has no search surface
+ * yet, so index-aware filtering stays a built-in privilege for now.
  *
  * Ids are fixed by D47 and must not drift — they appear in settings keys and in
  * saved workspace state.
@@ -42,9 +43,12 @@ export const journalManifest: ExtensionManifest = {
   version: "1.0.0",
   apiVersion: "^1.0.0",
   engines: { platform: ["desktop", "mobile"] },
-  // Lazy (D65): the journal costs nothing until someone opens it or runs one
-  // of its commands.
+  // Warm (D65 revisited): the journal is a first-class surface, so it
+  // activates at startup and its kept-mounted panel warms its listing while
+  // hidden — every open is a reveal, never a load. The view/command events
+  // stay as a retry path should the startup activation fail.
   activationEvents: [
+    "onStartup",
     "onView:journal",
     "onCommand:new-entry",
     "onCommand:today",
@@ -84,15 +88,21 @@ export function activateJournal(context: DesktopExtensionContext): void {
   context.subscriptions.add(registerJournalControls());
 
   /**
-   * Read on every call rather than captured: the folder is workspace-scoped
-   * (D45), so it changes under a running panel when the vault changes.
+   * The configured root, read on every call rather than captured: the folder
+   * is workspace-scoped (D45), so it changes under a running panel when the
+   * vault changes. Raw — normalization is the caller's job, because a bad
+   * value must reach `requireRoot` in the service to become an
+   * `invalid-root` JournalError rather than a bare throw.
    */
-  const journalRoot = (): string =>
-    normalizeRoot(context.settings.get<string>("root") ?? DEFAULT_ROOT);
+  const configuredRoot = (): string =>
+    context.settings.get<string>("root") ?? DEFAULT_ROOT;
+
+  /** The configured root in canonical form. Throws on a value that escapes or is empty. */
+  const journalRoot = (): string => normalizeRoot(configuredRoot());
 
   const service = createJournalService({
     workspace: context.workspace,
-    root: journalRoot,
+    root: configuredRoot,
     now: () => new Date()
   });
 
@@ -109,13 +119,30 @@ export function activateJournal(context: DesktopExtensionContext): void {
   const definitions = () => cachedDefinitions;
 
   /**
+   * `journalRoot` for the render path. `belongsHere` runs as `applies` inside
+   * `EditorHeaderSlot`'s `useMemo`, so a `normalizeRoot` throw on an unusable
+   * `root` setting (blank, or escaping the workspace) would take every open
+   * editor tab down via `TabBoundary`. The service maps the same condition to
+   * an `invalid-root` JournalError; here the safe answer is "not under the
+   * journal folder" until the setting is fixed.
+   */
+  const safeJournalRoot = (): string | null => {
+    try {
+      return journalRoot();
+    } catch {
+      return null;
+    }
+  };
+
+  /**
    * D28: the widget belongs on a note in the journal folder, or on any note
    * that already carries one of the user's configured fields — those notes are
    * journal entries in every sense that matters, wherever they live.
    */
   const belongsHere = (relativePath: string | null, contents: string): boolean => {
     if (relativePath === null) return false;
-    if (relativePath.startsWith(`${journalRoot()}/`)) return true;
+    const root = safeJournalRoot();
+    if (root !== null && relativePath.startsWith(`${root}/`)) return true;
     const configured = definitions();
     if (configured.length === 0) return false;
     const metadata = parseFrontmatter(contents).metadata;
@@ -151,15 +178,14 @@ export function activateJournal(context: DesktopExtensionContext): void {
   }
 
   /**
-   * Re-reads the field definitions whenever they change.
-   *
-   * Nothing re-renders an open editor when a setting changes, so a field added
-   * in Settings stayed invisible on the note in front of you until you happened
-   * to type. Subscribing through the extension API keeps the widget honest
-   * about what is configured right now.
+   * The watched raw field definitions, parsed and validated once per settings
+   * change rather than on every re-render (which happens on every keystroke
+   * in an open editor).
    */
-  const useDefinitions = () =>
-    useWatchedSetting<string, string>("fieldDefinitions", (raw) => raw ?? "[]");
+  const useParsedDefinitions = () => {
+    const raw = useWatchedSetting<string, string>("fieldDefinitions", (v) => v ?? "[]");
+    return useMemo(() => parseFieldDefinitions(raw).definitions, [raw]);
+  };
 
   function MetadataHeader({
     relativePath,
@@ -170,13 +196,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     readonly contents: string;
     readonly applyEdit?: (next: string) => void;
   }) {
-    const raw = useDefinitions();
-    // Parse and validate field definitions once per settings change, not on
-    // every editor re-render (which happens on every keystroke).
-    const parsedDefinitions = useMemo(
-      () => parseFieldDefinitions(raw).definitions,
-      [raw]
-    );
+    const parsedDefinitions = useParsedDefinitions();
 
     return (
       <MetadataWidgetContainer
@@ -237,6 +257,10 @@ export function activateJournal(context: DesktopExtensionContext): void {
     icon: "notebook-pen",
     side: "left",
     showWorkspaceSelector: true,
+    // Kept mounted once registered: the popout only hides it, so reopening is
+    // a CSS toggle and the listing/state survive. Freshness comes from the
+    // container's note-event subscriptions, not remounts.
+    keepMounted: true,
     // No PanelActions: D71 puts New entry, Today and Open calendar in the
     // panel's own action row, leaving the chrome row to the overflow alone.
     factory: () => <JournalPanelRoot />
@@ -257,6 +281,21 @@ export function activateJournal(context: DesktopExtensionContext): void {
     // D53: what the user collapsed outlives the panel, per workspace.
     const [collapsed, setCollapsed] = useCollapsedGroups("journal");
 
+    // A kept-mounted panel has no remount to notice a workspace switch or a
+    // changed `root` setting, so both feed the listing's key. `onDidChangeRoot`
+    // fires inside the root change itself — the same source the service reads —
+    // where an effect reading `panelContext.rootPath` could still see the stale
+    // root.
+    const [bridgeRoot, setBridgeRoot] = useState(() => context.workspace.rootPath());
+    useEffect(() => {
+      const subscription = context.workspace.onDidChangeRoot(setBridgeRoot);
+      return () => void subscription.dispose();
+    }, []);
+    const rootSetting = useWatchedSetting<string, string>(
+      "root",
+      (raw) => raw ?? DEFAULT_ROOT
+    );
+
     const searchEntries = useCallback(
       (query: string): Promise<ReadonlySet<string>> =>
         searchJournalEntries(searchService.search, indexRoot, journalRoot(), query),
@@ -265,8 +304,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
 
     // The fields the user configured decide what there is to filter by; the
     // index decides which values those fields actually hold.
-    const configured = useDefinitions();
-    const parsed = useMemo(() => parseFieldDefinitions(configured).definitions, [configured]);
+    const parsed = useParsedDefinitions();
     const loadFacets = useCallback(
       (): Promise<readonly JournalFacet[]> =>
         journalFacetValues(queryMetadata, indexRoot, journalRoot(), parsed),
@@ -283,6 +321,11 @@ export function activateJournal(context: DesktopExtensionContext): void {
       // API has no route to yet; the states render without them until it does.
       <JournalPanelContainer
         service={service}
+        events={context.events}
+        // What the listing is of: this vault, this journal folder. A switch of
+        // either re-reads; the workspace part matters because `root` is
+        // workspace-scoped and can read the same on both sides of a switch.
+        listKey={`${bridgeRoot ?? ""}${rootSetting}`}
         onOpenCalendar={openCalendar}
         indexAvailable={indexStatus === "ready"}
         searchEntries={searchEntries}
@@ -312,6 +355,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     return (
       <CalendarTabContainer
         service={service}
+        events={context.events}
         weekStartsOn={weekStartsOn}
         initialView={initialView}
         // D79/D80: the view persists per workspace; the date deliberately does
@@ -330,13 +374,24 @@ export function activateJournal(context: DesktopExtensionContext): void {
     factory: () => <CalendarTabRoot />
   });
 
+  /**
+   * Fail loudly: the service rejects with a JournalError (no workspace,
+   * invalid root, unreadable folder) whose copy the journal panel already
+   * renders — a discarded promise would only surface as console noise.
+   * Revealing the panel to show that copy needs a left-panel reveal the
+   * command context cannot express yet (see the open-calendar route).
+   */
+  const reportFailure = (what: string) => (error: unknown) => {
+    console.error(`[journal] ${what} failed.`, error);
+  };
+
   context.commands.register({
     id: "new-entry",
     title: "New journal entry",
     keywords: ["journal", "diary", "entry"],
     availability: "available",
     handler: ({ closePalette }) => {
-      void service.createEntry();
+      service.createEntry().catch(reportFailure("New journal entry"));
       closePalette();
     }
   });
@@ -347,7 +402,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     keywords: ["journal", "today", "diary"],
     availability: "available",
     handler: ({ closePalette }) => {
-      void service.openToday();
+      service.openToday().catch(reportFailure("Open today's journal entry"));
       closePalette();
     }
   });

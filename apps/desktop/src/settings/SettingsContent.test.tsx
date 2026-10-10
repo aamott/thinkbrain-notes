@@ -28,8 +28,15 @@ vi.mock("../native/dialogs", () => ({
   pickFilePath: vi.fn<(title?: string) => Promise<string | null>>()
 }));
 vi.mock("../native/fs", () => ({
-  writeTextFileNative: vi.fn<(path: string, contents: string) => Promise<boolean>>(),
-  readTextFileNative: vi.fn<(path: string) => Promise<string | null>>()
+  saveAndWriteTextFile: vi.fn<
+    (title: string, defaultName: string, contents: string) => Promise<boolean>
+  >(),
+  pickAndReadTextFile: vi.fn<
+    (
+      title: string,
+      extensions?: readonly string[]
+    ) => Promise<{ path: string; contents: string } | null>
+  >()
 }));
 
 const harness = createSettingsTestHarness();
@@ -125,6 +132,58 @@ describe("SettingsContent single-page layout", () => {
     expect(ids.indexOf("settings-section-workspace:sync.destination")).toBeGreaterThan(
       ids.indexOf("settings-section-app:sync.history")
     );
+  });
+
+  it("renders a section whose schema registers after mount", async () => {
+    // Extension schemas register on activation, which can land while the
+    // settings tab is already open — the content must follow the registry.
+    const el = await harness.render(<SettingsContent />);
+    const anchor = "#settings-section-app\\:reactive-test\\.section";
+    expect(el.querySelector(anchor)).toBeNull();
+
+    await act(async () => {
+      temporaryRegistrations.push(
+        appSettingsRegistry.register({
+          id: "reactive-test",
+          label: "Reactive Test",
+          scope: "app",
+          sections: [
+            {
+              id: "reactive-test.section",
+              label: "Reactive Test",
+              settings: [
+                {
+                  key: "flag",
+                  type: "boolean",
+                  default: false,
+                  scope: "app",
+                  section: "reactive-test.section",
+                  label: "Reactive flag",
+                  description: "Registered after mount."
+                }
+              ]
+            }
+          ]
+        })
+      );
+    });
+
+    expect(el.querySelector(anchor)).not.toBeNull();
+    expect(el.querySelector('[data-setting-key="reactive-test.flag"]')).not.toBeNull();
+  });
+
+  it("removes a section when its module is disposed", async () => {
+    registerAdvancedTestModule();
+    const el = await harness.render(<SettingsContent />);
+    const anchor = "#settings-section-app\\:advanced-test\\.settings";
+    expect(el.querySelector(anchor)).not.toBeNull();
+
+    await act(async () => {
+      for (const registration of temporaryRegistrations) registration.dispose();
+      temporaryRegistrations = [];
+    });
+
+    expect(el.querySelector(anchor)).toBeNull();
   });
 
   it("updates activeSection from scroll position", async () => {

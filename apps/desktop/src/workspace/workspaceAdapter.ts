@@ -21,7 +21,11 @@ export interface WorkspaceDesktopApi {
   deleteManagedWorkspace(rootPath: string): Promise<null>;
   pickWorkspaceDirectory(): Promise<string | null>;
   openWorkspace(rootPath: string): Promise<NativeWorkspaceSnapshot>;
-  listWorkspaceEntries(rootPath: string, includeHidden: boolean): Promise<readonly NativeWorkspaceEntry[]>;
+  listWorkspaceEntries(
+    rootPath: string,
+    includeHidden: boolean,
+    pathPrefix?: string
+  ): Promise<readonly NativeWorkspaceEntry[]>;
   openWorkspaceWindow(rootPath: string): Promise<void>;
   windowWorkspaceRoot(): Promise<string | null>;
   /** Creates a workspace file (any extension) and missing parent folders. */
@@ -70,8 +74,8 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
     appEvents.emit("workspace.opened", { rootPath });
     return snapshot;
   },
-  listWorkspaceEntries(rootPath, includeHidden) {
-    return invokeNativeCommand("list_workspace_entries", { rootPath, includeHidden });
+  listWorkspaceEntries(rootPath, includeHidden, pathPrefix) {
+    return invokeNativeCommand("list_workspace_entries", { rootPath, includeHidden, pathPrefix });
   },
   openWorkspaceWindow(rootPath) {
     return invokeNativeCommand("open_workspace_window", { rootPath }).then(() => undefined);

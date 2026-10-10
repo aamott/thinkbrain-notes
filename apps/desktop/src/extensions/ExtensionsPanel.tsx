@@ -4,12 +4,21 @@ import { getErrorMessage } from "@thinkbrain/core";
 import { pickDirectoryPath } from "../native/dialogs";
 import { getExtensionBootstrap, type BootstrapEntry } from "./bootstrapRef";
 import { getLocalExtensions } from "./localExtensionsRef";
-import type { LoadOutcome, StartupFailure } from "./localExtensions";
+import type { LoadOutcome, LocalExtensions, StartupFailure } from "./localExtensions";
 
 const EMPTY: readonly BootstrapEntry[] = [];
 const NO_FAILURES: readonly StartupFailure[] = [];
 
-const noop = (): void => undefined;
+/**
+ * How often and how long a missing source is re-checked. The bootstrap and
+ * controller refs are module globals published during startup; a panel that
+ * mounts before that attaches to nothing, and without a re-check it would
+ * show `empty` forever — a `useSyncExternalStore` listener attached to no
+ * source gives React no reason to re-render. The budget is bounded so a
+ * source that never arrives costs a handful of timers, not a permanent poll.
+ */
+const LATE_SOURCE_CHECK_MS = 100;
+const LATE_SOURCE_CHECKS = 100;
 
 /** Anything in the extensions layer that publishes a slice by subscription. */
 interface SubscribedSliceSource {
@@ -25,8 +34,50 @@ function useSubscribedSlice<S extends SubscribedSliceSource, T>(
   read: (source: S) => T,
   empty: T
 ): T {
+  // Memoized on the (stable module-level) getter: a fresh subscribe identity
+  // every render would make useSyncExternalStore detach and re-attach on
+  // every render.
+  const subscribe = useCallback(
+    (listener: () => void): (() => void) => {
+      let detach: (() => void) | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let checks = 0;
+
+      const attach = (): void => {
+        const source = getSource();
+        if (!source) {
+          if (checks < LATE_SOURCE_CHECKS) {
+            checks += 1;
+            timer = setTimeout(attach, LATE_SOURCE_CHECK_MS);
+          }
+          return;
+        }
+        detach = source.subscribe(() => {
+          if (getSource() !== source) {
+            // The ref was republished under us — drop the stale subscription
+            // and follow the new source.
+            detach?.();
+            attach();
+            return;
+          }
+          listener();
+        });
+        // The source may already hold a slice worth showing; re-reading now
+        // beats waiting for its next notification.
+        listener();
+      };
+
+      attach();
+      return () => {
+        detach?.();
+        if (timer !== undefined) clearTimeout(timer);
+      };
+    },
+    [getSource]
+  );
+
   return useSyncExternalStore(
-    (listener: () => void): (() => void) => getSource()?.subscribe(listener) ?? noop,
+    subscribe,
     () => {
       const source = getSource();
       return source ? read(source) : empty;
@@ -49,6 +100,10 @@ const STATUS_LABELS: Record<BootstrapEntry["status"], string> = {
   failed: "Failed",
   incompatible: "Incompatible"
 };
+
+/** Shared look for the Retry/Remove/Reload text buttons. */
+const ACTION_BUTTON =
+  "cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50";
 
 /**
  * Lists installed extensions and their live status, and loads development
@@ -73,13 +128,9 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
   const [busy, setBusy] = useState(false);
 
   // Stored directories that failed to load at startup stay stored so the user
-  // can fix them; they are reported here alongside interactive load errors.
-  const startupErrors = startupFailures.flatMap((failure) =>
-    failure.diagnostics
-      .filter((diagnostic) => diagnostic.severity === "error")
-      .map((diagnostic) => `${failure.directory}: ${diagnostic.message}`)
-  );
-  const allErrors = [...startupErrors, ...errors];
+  // can fix and retry — or forget them, the only removal path for a directory
+  // that never produced an extension id. They render as their own list rather
+  // than plain error text so each carries its Retry/Remove actions.
 
   const report = useCallback((outcome: LoadOutcome): void => {
     setErrors(
@@ -103,6 +154,19 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
       }
     },
     [report]
+  );
+
+  // Same guard as `onAdd`, but loud: a missing controller with a clickable
+  // Reload/Remove is a wiring bug, so surface it as an error rather than
+  // silently no-op or throw a bare "cannot read properties of null".
+  const runLocal = useCallback(
+    (action: (local: LocalExtensions) => Promise<LoadOutcome | void>): Promise<void> =>
+      run(() => {
+        const local = getLocalExtensions();
+        if (!local) throw new Error("Local extension management is not available.");
+        return action(local);
+      }),
+    [run]
   );
 
   const onAdd = useCallback(async (): Promise<void> => {
@@ -141,11 +205,61 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
         </button>
       </div>
 
-      {allErrors.length > 0 && (
-        <ul className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
-          {allErrors.map((message) => (
-            <li key={message} className="text-[0.6875rem] text-danger">
-              {message}
+      {errors.length > 0 && (
+        // role="alert" on the wrapper so a failure appearing after an action is
+        // announced without overriding the list's role; index in the key because
+        // two diagnostics may share a message.
+        <div role="alert">
+          <ul className="m-0 list-none border-b border-border p-2" aria-label="Extension load errors">
+            {errors.map((message, index) => (
+              <li key={`${index}-${message}`} className="text-[0.6875rem] text-danger">
+                {message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {startupFailures.length > 0 && (
+        <ul className="m-0 list-none border-b border-border p-2" aria-label="Extensions that failed to load">
+          {startupFailures.map((failure) => (
+            <li key={failure.directory} className="rounded-small px-2 py-2">
+              <p className="m-0 truncate text-muted-foreground text-[0.6875rem]" title={failure.directory}>
+                {failure.directory}
+              </p>
+              {/* role="alert" matches the error list above: startup failures
+                  are still reported, they just carry actions now. */}
+              <ul role="alert" className="m-0 list-none p-0" aria-label="Load errors">
+                {failure.diagnostics
+                  .filter((diagnostic) => diagnostic.severity === "error")
+                  .map((diagnostic, index) => (
+                    <li key={`${index}-${diagnostic.message}`} className="text-[0.6875rem] text-danger">
+                      {diagnostic.message}
+                    </li>
+                  ))}
+              </ul>
+              <div className="mt-1 flex gap-2">
+                {/* Retry re-runs `add`, the same path a fresh pick takes: on
+                    success the failure clears and the directory stays stored. */}
+                <button
+                  type="button"
+                  aria-label={`Retry loading ${failure.directory}`}
+                  className={ACTION_BUTTON}
+                  onClick={() => void runLocal((local) => local.add(failure.directory))}
+                  disabled={busy}
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${failure.directory}`}
+                  className={ACTION_BUTTON}
+                  onClick={() => void runLocal((local) => local.forget(failure.directory))}
+                  disabled={busy}
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -178,16 +292,16 @@ export function ExtensionsPanel({ entries }: ExtensionsPanelProps) {
                   <div className="mt-1 flex gap-2">
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
-                      onClick={() => void run(() => getLocalExtensions()!.reload(entry.id))}
+                      className={ACTION_BUTTON}
+                      onClick={() => void runLocal((local) => local.reload(entry.id))}
                       disabled={busy}
                     >
                       Reload {entry.name}
                     </button>
                     <button
                       type="button"
-                      className="cursor-pointer border-0 bg-transparent p-0 text-[0.6875rem] text-accent underline disabled:opacity-50"
-                      onClick={() => void run(() => getLocalExtensions()!.remove(entry.id))}
+                      className={ACTION_BUTTON}
+                      onClick={() => void runLocal((local) => local.remove(entry.id))}
                       disabled={busy}
                     >
                       Remove {entry.name}

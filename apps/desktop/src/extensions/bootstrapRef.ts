@@ -52,6 +52,17 @@ export interface ExtensionBootstrap extends Disposable {
   /** Current status of every extension, for the Extensions panel. */
   entries(): readonly BootstrapEntry[];
   /**
+   * Activates one extension by id, no-oping when it is already active.
+   *
+   * Exists for surfaces that cannot go through a manifest stub — a persisted
+   * extension tab kind has no `contributes` declaration to hang a stub on, so
+   * session restore wakes the owning extension itself. Rejects when no such
+   * extension is registered (e.g. it was uninstalled). Optional so lightweight
+   * bootstrap doubles in tests stay valid; the real bootstrap always provides
+   * it, and callers treat a missing `activate` like a failed activation.
+   */
+  activate?(id: string): Promise<void>;
+  /**
    * Activates every compatible extension, ignoring failures.
    *
    * Contributions that are *declared* — commands, panels — get stubs at

@@ -88,6 +88,82 @@ describe("parseExtensionManifest", () => {
     expect(diagnostics.some((d) => d.code === "manifest_invalid_contribution_id")).toBe(true);
   });
 
+  it("rejects duplicate contribution ids within a kind", () => {
+    // A repeated id would throw halfway through stub registration, so it must
+    // fail loudly here, at parse time.
+    const { manifest, diagnostics } = parseExtensionManifest({
+      ...VALID,
+      contributes: {
+        commands: [
+          { id: "show", title: "Show" },
+          { id: "hide", title: "Hide" },
+          { id: "show", title: "Show again" }
+        ],
+        panels: [
+          { id: "stats", label: "Stats", icon: "∑", side: "left" },
+          { id: "stats", label: "Stats again", icon: "∑", side: "right" }
+        ]
+      }
+    });
+    expect(manifest).toBeNull();
+    expect(
+      diagnostics.filter((d) => d.code === "manifest_duplicate_contribution_id")
+    ).toHaveLength(2);
+  });
+
+  it("allows the same relative id for a command and a panel", () => {
+    const { manifest, diagnostics } = parseExtensionManifest({
+      ...VALID,
+      contributes: {
+        commands: [{ id: "capture", title: "Capture" }],
+        panels: [{ id: "capture", label: "Capture", icon: "C", side: "right" }]
+      }
+    });
+    expect(diagnostics).toEqual([]);
+    expect(manifest).not.toBeNull();
+  });
+
+  it("reports a present-but-malformed engines field instead of defaulting silently", () => {
+    for (const engines of ["desktop", 5, ["desktop"]]) {
+      const { manifest, diagnostics } = parseExtensionManifest({ ...VALID, engines });
+      expect(manifest).toBeNull();
+      expect(
+        diagnostics.some(
+          (d) => d.code === "manifest_invalid_field" && d.message.includes('"engines"')
+        )
+      ).toBe(true);
+    }
+  });
+
+  it("reports non-array contributes.commands and contributes.panels", () => {
+    const { manifest, diagnostics } = parseExtensionManifest({
+      ...VALID,
+      contributes: { commands: "show", panels: { id: "stats" } }
+    });
+    expect(manifest).toBeNull();
+    expect(
+      diagnostics.filter((d) => d.code === "manifest_invalid_field").map((d) => d.message)
+    ).toEqual([
+      '"contributes.commands" must be an array.',
+      '"contributes.panels" must be an array.'
+    ]);
+  });
+
+  it("warns about activation events the parser cannot trigger", () => {
+    // The manifest check must match `parseActivationEvent` exactly: a looser
+    // pattern would pass ids that are then silently dead at runtime.
+    for (const event of ["onCommand:show-", "onCommand:a--b", "onView:UPPER"]) {
+      const { manifest, diagnostics } = parseExtensionManifest({
+        ...VALID,
+        activationEvents: [event]
+      });
+      expect(manifest).not.toBeNull();
+      expect(diagnostics.some((d) => d.code === "manifest_unknown_activation_event")).toBe(
+        true
+      );
+    }
+  });
+
   it("rejects an unknown platform", () => {
     const { diagnostics } = parseExtensionManifest({
       ...VALID,

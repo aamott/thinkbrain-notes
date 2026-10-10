@@ -37,10 +37,37 @@ pub struct WorkspaceEntry {
 pub fn list_workspace_entries(
     root_path: String,
     include_hidden: bool,
+    path_prefix: Option<String>,
 ) -> Result<Vec<WorkspaceEntry>, NativeError> {
     let root = resolve_workspace_root(&root_path)?;
+    // A prefix scopes the walk to one subtree: callers like the journal ask
+    // for just their folder rather than a listing of the whole vault.
+    let start = match path_prefix.as_deref().map(str::trim) {
+        Some("") | None => root.clone(),
+        Some(prefix) => {
+            let normalized = normalize_relative_path(prefix)?;
+            // The same exclusions a full scan applies at every level: a
+            // hidden or ignored segment can never yield entries the tree
+            // would show, so a scoped walk under one is empty rather than a
+            // read the tree hides.
+            let excluded = normalized.split('/').any(|segment| {
+                (!include_hidden && is_hidden_name(segment)) || IGNORED_FOLDERS.contains(&segment)
+            });
+            if excluded {
+                return Ok(Vec::new());
+            }
+            let dir = resolve_workspace_entry_path(&root, prefix)?;
+            // A prefix naming a folder that does not exist yet is an empty
+            // listing, not a failure — the same answer a full scan gave when
+            // nothing under it matched.
+            if !dir.is_dir() {
+                return Ok(Vec::new());
+            }
+            dir
+        }
+    };
     let mut entries = Vec::new();
-    collect_workspace_entries(&root, &root, &mut entries, include_hidden)?;
+    collect_workspace_entries(&root, &start, &mut entries, include_hidden)?;
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
 
     Ok(entries)

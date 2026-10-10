@@ -86,6 +86,14 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
       ? rightPanel
       : null;
 
+  // One availability answer for every place a panel is offered — the title
+  // bar's icons and ⋯ menu, the rail's left icons — evaluated against the
+  // same context the popouts render with, so no surface can offer a panel
+  // whose selection would silently render nothing. The predicate lives here
+  // rather than in the chrome because the context does.
+  const isPanelAvailable = (panelId: string): boolean =>
+    desktopPanelRegistry.isAvailable(panelId, panelContext);
+
   // The new-tab page's entry points, wired to the desktop's own surfaces:
   // commands run through the palette's context, files through the palette's
   // quick-open. The phone chrome supplies the same three routed its own way.
@@ -173,6 +181,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           onNewTab={() => shell.openNewTab()}
           onToggleRightPanel={shell.toggleRightPanel}
           onOpenCommandPalette={shell.openPalette}
+          isPanelAvailable={isPanelAvailable}
         />
 
         {/* Its own grid row, which collapses to nothing while there is no update
@@ -189,6 +198,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
             onSelectLeftPanel={shell.selectLeftPanel}
             onOpenSettings={shell.openSettingsTab}
             badges={shell.conflictBadges}
+            isPanelAvailable={isPanelAvailable}
           />
 
           <div className={leftPanel ? "contents" : "hidden"} aria-hidden={leftPanel ? undefined : "true"}>

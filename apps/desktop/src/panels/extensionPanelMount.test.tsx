@@ -90,6 +90,68 @@ describe("ExtensionPanelMountPoint", () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("disposes a Disposable a mount returns instead of a cleanup function", async () => {
+    const dispose = vi.fn();
+    const onError = vi.fn();
+    // A disk-loaded extension is plain JS: the natural teardown to return is
+    // the same { dispose() } every other extension API hands back.
+    const mount: ExtensionPanelMount = () => ({ dispose });
+
+    await render(
+      <ExtensionPanelMountPoint
+        mount={mount}
+        rootPath={null}
+        documentContents={null}
+        onError={onError}
+      />
+    );
+    await act(async () => root?.unmount());
+    root = null;
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("runs every teardown when a mount returns a list of disposables", async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const mount: ExtensionPanelMount = () => [{ dispose: first }, { dispose: second }];
+
+    await render(<ExtensionPanelMountPoint mount={mount} rootPath={null} documentContents={null} />);
+    await act(async () => root?.unmount());
+    root = null;
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps running the remaining teardowns when one throws", async () => {
+    const second = vi.fn();
+    const onError = vi.fn();
+    const mount: ExtensionPanelMount = () => [
+      {
+        dispose: () => {
+          throw new Error("teardown boom");
+        }
+      },
+      { dispose: second }
+    ];
+
+    await render(
+      <ExtensionPanelMountPoint
+        mount={mount}
+        rootPath={null}
+        documentContents={null}
+        onError={onError}
+      />
+    );
+    await act(async () => root?.unmount());
+    root = null;
+
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "teardown boom" }));
+  });
+
   it("stops notifying a panel once it is unmounted", async () => {
     const listener = vi.fn();
     const mount: ExtensionPanelMount = (_element, context) => {
