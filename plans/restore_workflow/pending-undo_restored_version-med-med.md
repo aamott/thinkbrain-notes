@@ -1,8 +1,8 @@
 # Undo A Restore
 
-Depends on: `pending-post_restore_navigation-high-med.md`
-Depends on: `pending-render_restore_events-high-med.md`
-Depends on: `pending-refuse_stale_restore-high-hard.md`
+Depends on: `post_restore_navigation`
+Depends on: `render_restore_events`
+Depends on: `refuse_stale_restore`
 
 ## Goal
 

@@ -12,7 +12,7 @@
 # checkpoint, the footer, History and Restore. It proves nothing about whether
 # the *shape* is the one Syncthing really produces, because we chose the name
 # here. That question needs a real daemon, and it is the one open task in
-# `plans/auto-sync/pending-cloud_conflict_detection-high-med.md`.
+# `plans/auto-sync/wip-cloud_conflict_detection-high-med.md`.
 #
 # Usage: scripts/plant-conflict.sh <vault-directory>
 

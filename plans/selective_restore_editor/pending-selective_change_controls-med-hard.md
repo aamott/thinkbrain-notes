@@ -1,6 +1,6 @@
 # Selective Restore Controls
 
-Depends on: `pending-editable_restore_draft-med-hard.md`
+Depends on: `editable_restore_draft`
 
 ## Goal
 

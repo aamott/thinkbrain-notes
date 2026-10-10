@@ -1,7 +1,7 @@
 # Editable Restore Draft
 
-Depends on: `pending-fullscreen_restore_chrome-med-med.md`
-Depends on: `../restore_workflow/pending-refuse_stale_restore-high-hard.md`
+Depends on: `fullscreen_restore_chrome`
+Depends on: `restore_workflow/refuse_stale_restore`
 
 ## Goal
 

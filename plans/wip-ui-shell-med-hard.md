@@ -23,92 +23,50 @@ show an intentional unavailable state or integrate their owning epic.
 
 ## Architecture
 
-### Shell state and component boundaries
-
-Keep domain state in the existing `appStore` and add a focused layout/tab slice
-or store for presentation state: active left/right view, bottom panel,
-command palette, tabs, active tab, and panel widths. Persist user preferences
-through the existing settings/Tauri path to OS app-data. Do not persist open
-document contents or any layout data in the vault.
-
-Organize the shell into these boundaries:
-
-```text
-apps/desktop/src/
-  shell/       TitleBar, ActionBar, StatusBar, ResizeHandle, shell root
-  panels/      LeftPopout, RightPopout, BottomPanel
-  tabs/        tab types, registry, TabStrip, editor/preview/settings views
-  adapters/    Tauri/settings bridges used by shell and AI features
-  stores/      app/domain state plus layout and tab state
-```
-
-`packages/core/src/layout/` defines platform-neutral `TabKind`, `Tab`, layout
-preferences, and registry contracts. React components are registered only in
-`apps/desktop/src/tabs/`; the core registry never imports React or desktop
-implementations. Future extensions may add tab registrations through the
-extension contribution API, not by mutating the base registry.
-
-The first-party tab kinds are `editor`, `preview`, and `settings`; `graph` is a
-registered unavailable stub until the graph epic owns it. `browser` is also a
-registered unavailable stub—do not ship a raw iframe or give unreviewed remote
-content a Tauri webview. A browser implementation needs a separate security
-decision and capability/CSP design.
-
-### Panels and dependencies
-
-The left popout wires the existing `WorkspaceExplorer`, `SearchPanel`, and
-settings surfaces (`SettingsContent`/`ThemeSectionControls`); source control is a
-status-aware `git-integration` boundary,
-and tags/extensions remain unavailable until their epics are active. The right
-popout owns outline/properties presentation; backlinks consume index data only
-when the graph/indexing work exposes it. The assistant panel is an integration
-point for the `ai` epic, not a hand-built chat UI.
-
-### Tokens, styling, and dynamic dimensions
-
-Keep chrome surfaces in `packages/ui/src/styles/tokens.css`
-using the `--tn-*` prefix, with light and dark values for title bar, activity
-bar, sidebar, editor, panel, status bar, and active/inactive tabs. Keep only
-reset, app root, and third-party editor overrides global.
-The current production source already uses this utility-class approach.
-
-Panel widths are state in pixels, clamped in the resize controller and applied
-to the shell root with scoped CSSOM custom properties. `setProperty` updates
-only `--tn-shell-left-width` and `--tn-shell-right-width`.
-
-### Interaction and accessibility
-
-The command palette uses a command registry and real workspace file results;
-its keyboard contract is `Ctrl/Cmd+P`, arrows, Enter, and Escape. Closing the
-active tab chooses its nearest neighbor and prompts before discarding a dirty
-editor. Resize handles use pointer capture/window-level cleanup, keyboard
-resizing, minimum/maximum widths, and double-click reset. Theme changes update
-the persisted app setting and `data-thinkbrain-theme`.
+- Domain state stays in `appStore`; a focused layout/tab store holds
+  presentation state (active views, bottom panel, palette, tabs, widths).
+  Preferences persist via the settings/Tauri path to OS app-data — never in
+  the vault.
+- Boundaries: `shell/` (TitleBar, ActionBar, StatusBar, ResizeHandle),
+  `panels/` (LeftPopout, RightPopout, BottomPanel), `tabs/` (registry,
+  TabStrip, views), `native/` bridges, and stores under `apps/desktop/src/`.
+- `packages/core/src/layout/` owns platform-neutral `TabKind`, `Tab`, layout
+  preferences, and registry contracts; React components register only in
+  `apps/desktop/src/tabs/`. Extensions add tab kinds via the contribution API,
+  not by mutating the base registry.
+- First-party tab kinds: `editor`, `preview`, `settings`; `graph` and
+  `browser` are registered unavailable stubs — `browser` needs a separate
+  security/capability/CSP decision before any webview ships.
+- Chrome surfaces use `--tn-*` tokens in `packages/ui/src/styles/tokens.css`
+  (light + dark). Panel widths are pixel state applied via scoped CSSOM
+  custom properties (`--tn-shell-left-width`, `--tn-shell-right-width`).
+- Command palette: command registry + real workspace file results;
+  `Ctrl/Cmd+P`, arrows, Enter, Escape. Closing a tab picks its nearest
+  neighbor and prompts before discarding a dirty editor. Resize handles use
+  pointer capture, keyboard resizing, min/max widths, double-click reset.
+  Theme changes update the persisted setting + `data-thinkbrain-theme`.
+- Right popout owns outline/properties; backlinks consume index data when
+  graph/indexing exposes it. The assistant panel is an integration point for
+  the `ai` epic, not a hand-built chat UI.
 
 ## Status
 
 Shipped stories are summarized in `plans/ui-shell/done-summary.md`.
 
-- ✅ fresh-shell startup and browser-harness wiring
-- ✅ persisted Explorer visibility and workspace restoration
-- ✅ fresh shell rebuild
-- 🟨 shell token consolidation — production JSX uses shared `--tn-*` tokens
-  (`plans/theme-foundation/done-summary.md`); expanding the token set
-  to spacing/typography/radius/shadow scales remains in
-  `theme-foundation/token_system_consolidation`
-- ✅ desktop shell composition (panel separation) — rebuilt after the earlier
-  rollback
+- ✅ fresh-shell startup, browser harness, Explorer visibility, workspace
+  restoration, fresh shell rebuild, desktop shell composition
 - ✅ tab model, registry, and tab strip
-- ✅ left popout integration
-- ✅ inspector/right popout integration
-- ✅ command palette and workspace file navigation
-- ✅ resizable layout and OS app-data persistence
-- ✅ theme control in the new shell
-- ✅ bottom panel framework and status integration
-- ✅ generic file viewer tabs (code editor, image/audio/video viewers)
-- ✅ semi-preview markdown editor (live preview with inline source on focus);
-  implementation lives in `apps/desktop/src/tabs/livePreview/`; its design docs
-  were reviewed and deleted per the plan-review policy in `AGENTS.md`.
-- ✅ modular settings system (declarative, auto-populating settings tab)
-- ❌ prior movable-action/slot and layout-editing stories were superseded and
-  removed.
+- ✅ left popout, inspector/right popout, command palette + workspace file
+  navigation, resizable layout with OS app-data persistence, theme control,
+  bottom panel framework
+- ✅ `generic_file_viewers` — code editor + image/audio/video viewer tabs
+- ✅ semi-preview markdown editor — `apps/desktop/src/tabs/livePreview/`
+- ✅ `modular_settings_system` — declarative, auto-populating settings tab
+- 🟨 shell token consolidation — production JSX uses shared `--tn-*` tokens;
+  expanding the token set remains in
+  `theme-foundation/token_system_consolidation`
+- ⬜ `contextual_action_items` — filter right-panel contributions by context
+- ⬜ `panel_chrome_row_rule` — one chrome row per panel
+- ⬜ `file_viewer_architecture_brainstorm` — viewer architecture exploration
+- ❌ `workspace_selector_portal_simplify` — superseded by
+  `lift_workspace_switching` (see done-summary `## Cancelled`)

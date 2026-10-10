@@ -22,5 +22,5 @@ with keyword hits.
 - `apps/desktop/src/search/SearchPanel.tsx` — search panel to extend
 - `apps/desktop/src/search/searchPanelModel.ts` — current placeholder search state model
 - `plans/indexing-search/` — indexing-search epic and remaining frontend wiring
-- A future typed frontend bridge remains planned for native search/index commands; no indexer hook file is assigned yet.
+- `apps/desktop/src/native/commands.ts` + `apps/desktop/src/search/searchService.ts` — existing typed bridge and indexing service to extend.
 - `plans/semantic-search/` — Scope (semantic search UI)

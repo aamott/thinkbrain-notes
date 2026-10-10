@@ -21,5 +21,5 @@ query path that hybrid search builds on.
 
 - `plans/indexing-search/` — indexing-search epic and FTS5 query foundation
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native search backend and `SearchHit`
-- A future typed frontend bridge remains planned for native search commands; no bridge file is assigned yet.
+- `apps/desktop/src/native/commands.ts` + `apps/desktop/src/search/searchService.ts` — existing typed bridge and indexing service to extend.
 - `plans/semantic-search/` — Scope (semantic similarity query and ranking)

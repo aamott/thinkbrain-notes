@@ -24,5 +24,5 @@ existing index policy.
 
 - `plans/indexing-search/` — indexing-search epic and cache policy
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native per-workspace SQLite cache and index commands
-- A future typed frontend bridge remains planned for native index commands; no bridge file is assigned yet.
+- `apps/desktop/src/native/commands.ts` + `apps/desktop/src/search/searchService.ts` — existing typed bridge and indexing service to extend.
 - `plans/semantic-search/` — Architecture Decisions (ephemeral cache)

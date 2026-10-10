@@ -1,7 +1,7 @@
 # Save A Selective Restore
 
-Depends on: `pending-selective_change_controls-med-hard.md`
-Depends on: `../restore_workflow/pending-record_restore_provenance-high-hard.md`
+Depends on: `selective_change_controls`
+Depends on: `restore_workflow/record_restore_provenance`
 
 ## Goal
 

@@ -2,63 +2,55 @@
 
 ## Status
 
-⬜ Focused child story. Extension data storage is not implemented; secrets remain exclusively owned by the separate native secret-storage story.
+⬜ Focused child story. Extension data storage is not implemented; secrets
+remain exclusively owned by `extension_secret_storage`.
 
 ## Goal
 
-Provide an extension-scoped, app-data storage adapter for approved JSON/blob values with traversal protection, quotas, atomic writes, and lifecycle-aware cleanup. It never writes to the workspace and never stores credentials.
+Extension-scoped, app-data storage adapter for approved JSON/blob values with
+traversal protection, quotas, atomic writes, and lifecycle-aware cleanup.
+Never writes to the workspace, never stores credentials.
 
-## Discovery questions and STOP gate
+## Discovery questions (STOP gate)
 
-- Which value types, quotas, retention, migration, and uninstall cleanup policy are approved?
-- Is storage one JSON namespace, files/blobs, or both, and what atomicity guarantees are required?
-- Which desktop/mobile app-data locations and unavailable behavior are supported?
+Which value types, quotas, retention, migration, and uninstall cleanup policy
+are approved? Is storage one JSON namespace, files/blobs, or both, and what
+atomicity is required? Which desktop/mobile app-data locations and
+unavailable behavior are supported?
 
-**STOP gate:** Do not commit a storage schema, cleanup UX, or implement native file operations until owners answer these questions and approve the app-data/retention policy. Do not use this story for secrets.
+Do not commit a storage schema, cleanup UX, or native file operations until
+owners approve the app-data/retention policy.
 
 ## Dependencies
 
-- Canonical extension ID, lifecycle/bootstrap, compatibility, and native app-data conventions.
-- Settings story for separation of non-secret settings.
-- Secret storage remains owned by `extension_secret_storage`.
+- Canonical extension id, lifecycle/bootstrap, compatibility, native app-data
+  conventions.
+- `extension_settings` for the non-secret settings boundary;
+  `extension_secret_storage` owns secrets.
 
 ## Likely files
 
-- `packages/core/src/extensions/storage.ts` and tests for platform-neutral contracts.
-- `apps/desktop/src/extensions/` storage facade/tests.
-- `apps/desktop/src/native/` and `src-tauri/src/commands/` only if an approved app-data adapter is needed.
-
-## Small task sequence
-
-1. Record value/quota/path/retention and uninstall decisions.
-2. Define scoped typed storage interfaces and reject traversal/cross-extension paths.
-3. Implement fake and approved native adapters with atomic bounded writes.
-4. Integrate disposable cleanup and test corrupt/unavailable/quota cases.
+- `packages/core/src/extensions/storage.ts` + tests (platform-neutral contracts).
+- `apps/desktop/src/extensions/` storage facade/tests; `native/` and
+  `src-tauri/` only if an approved adapter is needed.
 
 ## Acceptance criteria
 
-- [ ] Data is rooted in OS app-data under the canonical extension namespace, never the workspace.
-- [ ] Traversal, cross-extension access, oversized/corrupt values, and unsupported platforms fail with typed diagnostics.
-- [ ] Writes are atomic/bounded and cleanup follows the approved uninstall policy without touching secrets or other extensions.
-- [ ] No bulk secret/list-all credential API is introduced.
+- [ ] Data rooted in OS app-data under the canonical extension namespace,
+      never the workspace.
+- [ ] Traversal, cross-extension access, oversized/corrupt values, and
+      unsupported platforms fail with typed diagnostics.
+- [ ] Writes atomic/bounded; cleanup follows the approved uninstall policy
+      without touching secrets or other extensions.
+- [ ] No bulk secret/list-all credential API.
 
-## Automated validation
+## Validation
 
-Run focused core/desktop storage tests, fake/native error tests, `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
-
-## Manual desktop/mobile checks
-
-Desktop: write/read/delete fixture data, inspect app-data versus workspace, exceed quota, and simulate interruption. Mobile: verify approved app-data behavior, suspension/restart recovery, storage limits, and explicit unavailable state.
+Focused core/desktop storage tests incl. corrupt/unavailable/quota cases,
+`pnpm lint`, `pnpm typecheck`, `pnpm build`; manual desktop/mobile
+write/read/delete, quota, and interruption checks.
 
 ## Non-goals
 
-No secret storage, settings UI, installer, marketplace, sandbox, workspace cache, Git/AI/journal behavior, or cross-extension messaging.
-
-## Handoff expectations
-
-Deliver storage contract, path/quota/retention decision, fake/native tests, cleanup report, migration notes, and unresolved platform questions. Keep implementation paths labeled likely.
-
-## References
-
-- `extensions/extension_secret_storage`
-- `extensions/extension_settings`
+No secret storage, settings UI, installer, marketplace, sandbox, workspace
+cache, Git/AI/journal behavior, or cross-extension messaging.

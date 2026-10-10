@@ -25,3 +25,9 @@ reset.
 
 Known follow-ups recorded in the story before deletion: full arrow-key nav and
 per-module export were noted as polish/follow-up, not shipped.
+
+## Cancelled
+
+- `workspace_selector_portal_simplify` — superseded by
+  `workspace-manager/lift_workspace_switching`, which lifted the controller to
+  shell level and deleted the portal machinery.

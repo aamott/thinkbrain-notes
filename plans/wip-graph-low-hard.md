@@ -1,9 +1,7 @@
 # Graph
 
-> Future epic (low urgency, stub). Backlinks and graph view built on top of the
-> wiki-link index. The backlinks panel is elevated to medium urgency; the rest
-> remains low. Read `plans/app-vision.md` and `plans/note-model/` before
-> starting any story here.
+> Backlinks and graph view built on top of the wiki-link index. Read
+> `plans/app-vision.md` and `plans/note-model/` before starting any story here.
 
 ## Goal
 
@@ -49,18 +47,12 @@ Non-goals (out of scope for this epic):
 
 ## Dependencies
 
-- `note-model` (done) — wiki-link parsing exists: `WikiLink` type
-  (`packages/core/src/note-model.ts`), `extractWikiLinks`
+- `note-model` — wiki-link parsing shipped: `WikiLink` type, `extractWikiLinks`
   (`packages/core/src/markdown.ts`), aliases in `NoteMetadata`.
-- `indexing-search` (MVP core done) — the wiki-link index that backlinks and
-  graph edges are derived from. Structured frontmatter records/facet queries
-  and the external-edit file watcher have both shipped (`plans/indexing-search/done-summary.md`,
-  `plans/indexing-search/`); the one remaining follow-up is managed SQLite
-  connection pooling (`indexing-search/connection_pooling`). None of
-  these block this epic.
+- `indexing-search` — the wiki-link index backlinks/edges derive from; its
+  only open follow-up (`connection_pooling`) does not block this epic.
 
-No other epic blocks this one. `semantic-search` and `ai` are independent
-future epics; this epic uses only explicit wiki-link edges.
+No other epic blocks this one; the graph uses only explicit wiki-link edges.
 
 ## Validation
 
@@ -73,16 +65,12 @@ future epics; this epic uses only explicit wiki-link edges.
 
 ## Status
 
-Five stories shipped; see `plans/graph/done-summary.md` for what shipped and where.
+Shipped stories are summarized in `plans/graph/done-summary.md`.
 
-- ✅ Link target resolution (aliases + path normalization)
-- ✅ Wiki-link index for backlinks — reverse index (target → linking notes)
-- ✅ Wiki-link autocomplete — `[[` triggers a note picker
-- ✅ Clickable wiki-link navigation — click `[[Target]]` to open the note
-- ✅ Backlinks panel — shared desktop/mobile inspector with source context, live index updates, canonical note navigation, and phone history
-- ⬜ Automatic link update on rename — rewrite `[[old]]` → `[[new]]` across the vault — see
-  `automatic_link_update_on_rename`
-- ⬜ Graph view — visual network of notes and wiki-link edges — see
-  `graph_view`
-- ⬜ Local graph around active note — see `local_graph`
-- ⬜ Graph filters (tag / path / status) — see `graph_filters`
+- ✅ `link_target_resolution`, `wiki_link_index`, `wiki_link_autocomplete`,
+  `clickable_wiki_link_navigation`, `backlinks_panel`
+- ⬜ `automatic_link_update_on_rename` — rewrite `[[old]]` → `[[new]]` across
+  the vault
+- ⬜ `graph_view` — visual network of notes and wiki-link edges
+- ⬜ `local_graph` — neighborhood around the active note
+- ⬜ `graph_filters` — by tag, path, and status

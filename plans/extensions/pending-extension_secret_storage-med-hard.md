@@ -2,84 +2,71 @@
 
 ## Status
 
-⬜ Not implemented. No extension-scoped OS credential adapter exists. The encrypted app-data fallback is intentionally undecided and must not be implemented here.
+⬜ Not implemented. No extension-scoped OS credential adapter exists. The
+encrypted app-data fallback is intentionally undecided and must not be
+implemented here.
 
 ## Goal
 
-Provide a typed Rust/native boundary for one extension and credential key at a time, using the platform credential store and never JSON settings, workspace files, logs, renderer-wide state, or bulk cross-extension reads.
+Typed Rust/native boundary for one extension + credential key at a time,
+using the platform credential store — never JSON settings, workspace files,
+logs, renderer-wide state, or bulk cross-extension reads.
 
-## Direction set by the mobile epic (2026-08-27)
+## Direction set by the mobile epic
 
-The store question this article left open has a drafted answer, because mobile
-forced it: **keyring v4 (`keyring-core`) plus per-platform store crates**, with
-`android-native-keyring-store` on Android. See
-`docs/superpowers/specs/2026-08-27-android-git-access-design.md` and
-`keyring_v4_migration`.
+The backend question has a drafted answer: **keyring v4 (`keyring-core`) plus
+per-platform store crates**, with `android-native-keyring-store` on Android —
+see `docs/superpowers/specs/2026-08-27-android-git-access-design.md` and
+`keyring_v4_migration`. One default store per platform at startup gives this
+story an `Entry`-shaped boundary covering desktop and Android. What remains
+is extension-scoped naming, isolation, and the API surface — not the backend
+choice, and still not an encrypted fallback.
 
-That migration registers one default store per platform at startup, giving this
-story an `Entry`-shaped boundary that already covers desktop and Android. What
-remains here is extension-scoped naming, isolation and the API surface — not
-the choice of backend, and still not an encrypted fallback.
+## Discovery questions (stop-and-ask gate)
 
-## Discovery questions
+Approved crate + minimum OS versions (macOS Keychain, Windows Credential
+Manager, Linux Secret Service)? Service/account naming and migration that
+preserve extension isolation? Mobile Keychain/Keystore adapters in beta, and
+acceptable unavailable behavior? Operations beyond get/set/delete?
+Consent/error copy when the store is unavailable or locked?
 
-- Which credential-store crate and minimum OS versions are approved for macOS Keychain, Windows Credential Manager, and Linux Secret Service/equivalent?
-- What service/account naming and migration preserve extension isolation?
-- Are mobile Keychain/Keystore adapters in beta, and what unavailable behavior is acceptable?
-- Which operations beyond get/set/delete are needed?
-- What consent/error copy is required when the store is unavailable or locked?
-
-**Stop-and-ask gate:** Do not choose a crate, fallback, mobile implementation, naming scheme, or user-facing failure behavior until security/platform owners answer these questions. An unavailable OS store is an explicit error; never invent plaintext or improvised encryption.
+An unavailable OS store is an explicit error — never invent plaintext or
+improvised encryption.
 
 ## Prerequisites
 
-- Canonical extension id/parser and native gateway conventions, once the AI epic
-  gets its planning pass (`plans/ai/`).
-- Scoped settings/API boundary and ACP/provider consumer requirements.
-- Tauri capability conventions in `apps/desktop/src-tauri/capabilities/`.
+- Canonical extension id/parser; native gateway conventions once `plans/ai/`
+  gets its planning pass; scoped settings/API boundary; ACP/provider consumer
+  requirements; Tauri capability conventions in `src-tauri/capabilities/`.
 
-## Exact likely file areas
+## Likely files
 
-- Rust `apps/desktop/src-tauri/src/commands/secrets.rs` (or approved module), typed errors in `src/error.rs`, registration in `src/lib.rs`, and Rust fakes/tests.
-- `apps/desktop/src/native/commands.ts` and narrow `src/native/secrets.ts` adapter/tests.
-- `apps/desktop/src-tauri/Cargo.toml` dependency/target conditionals only after approval.
-
-## Implementation tasks
-
-1. Record security/platform decisions and define a service/account namespace including canonical extension id and credential key.
-2. Implement typed Rust get/set/delete with strict id/key validation, no list-all/bulk operations, redacted errors/logging, and fake adapter injection.
-3. Implement approved platform adapters and target-specific unavailable errors; test isolation/error mapping/no-value logging.
-4. Add TS adapter and integration proof that ACP/provider callers use it rather than settings JSON; keep values out of general state/events.
-5. Document uninstall deletion and rotation semantics without implementing UI/provider behavior.
+- Rust `apps/desktop/src-tauri/src/commands/secrets.rs` (or approved module),
+  typed errors in `src/error.rs`, registration in `src/lib.rs`, fakes/tests;
+  `Cargo.toml` target conditionals only after approval.
+- `apps/desktop/src/native/commands.ts` + narrow `src/native/secrets.ts`
+  adapter/tests.
 
 ## Acceptance criteria
 
-- [ ] Desktop adapters use approved OS stores and fail loudly when unavailable.
-- [ ] Operations are scoped to one canonical extension id/key; no list/read-other API exists.
-- [ ] Secret values do not enter JSON, workspace, logs, general UI state, or broad events.
-- [ ] Rust/TS errors are typed/tested; mobile behavior is explicit.
+- [ ] Desktop adapters use approved OS stores and fail loudly when
+      unavailable.
+- [ ] Scoped to one canonical extension id/key; no list/read-other API.
+- [ ] Secret values never enter JSON, workspace, logs, UI state, or events.
+- [ ] Rust/TS errors typed/tested; mobile behavior explicit.
 - [ ] No encrypted fallback ships without a separate approved decision.
 
-## Automated validation
+## Validation
 
-- `pnpm test:rust` with fakes/target adapter tests.
-- Desktop adapter/integration tests and redaction assertions.
-- `pnpm lint`, `pnpm typecheck`, `pnpm build`.
-
-## Manual desktop/mobile checks
-
-- Desktop: store/retrieve/delete a fixture credential, inspect no leakage, test unavailable-store error.
-- Mobile: verify approved Keychain/Keystore behavior or clear unsupported error; no plaintext fallback.
+`pnpm test:rust` with fakes/adapter tests; desktop adapter/integration tests
+with redaction assertions; `pnpm lint`, `pnpm typecheck`, `pnpm build`;
+manual store/retrieve/delete + unavailable-store checks.
 
 ## Non-goals
 
-No encrypted fallback, credentials UI, provider/ACP behavior, marketplace, installer, signing, or sandbox.
-
-## Handoff artifacts
-
-- Security decision record, Rust/TS adapter/fake tests, platform matrix, namespace/deletion contract, and consumer migration notes.
+No encrypted fallback, credentials UI, provider/ACP behavior, marketplace,
+installer, signing, or sandbox.
 
 ## References
 
-- `plans/ai/`
-- `extensions/extension_settings`
+- `plans/ai/`, `extensions/extension_settings`

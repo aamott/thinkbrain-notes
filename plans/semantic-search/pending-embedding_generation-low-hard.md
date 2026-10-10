@@ -23,6 +23,6 @@ refactor later.
 
 - `plans/indexing-search/` — indexing-search epic and indexed document shape
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native index backend and `DocumentRecord`
-- A future typed frontend bridge remains planned for native search/index commands; no bridge file is assigned yet.
+- `apps/desktop/src/native/commands.ts` + `apps/desktop/src/search/searchService.ts` — existing typed bridge and indexing service to extend.
 - `plans/semantic-search/` — Architecture Decisions (provider abstraction)
 - `plans/app-vision.md` — AI Native principle (local first, cloud optional)

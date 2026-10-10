@@ -2,7 +2,7 @@
  * Quarantined settings → notification adapter.
  *
  * The fourth producer wired into the notification store, and the one that
- * closes `data-safety/settings_survive_a_downgrade`: an unparseable settings
+ * closes `plans/done-data_safety-med-hard.md` (`settings_survive_a_downgrade`): an unparseable settings
  * document has been set aside rather than overwritten since that story, but the
  * app only said so on stderr. From inside the app the user's theme, workspace
  * and tabs simply reverted to defaults with no explanation — which is the same

@@ -1,6 +1,6 @@
 # Refuse A Stale Restore
 
-Depends on: `pending-record_restore_provenance-high-hard.md`
+Depends on: `record_restore_provenance`
 
 ## Goal
 

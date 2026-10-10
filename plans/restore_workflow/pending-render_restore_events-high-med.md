@@ -1,6 +1,6 @@
 # Render Restore Events
 
-Depends on: `pending-record_restore_provenance-high-hard.md`
+Depends on: `record_restore_provenance`
 
 ## Goal
 

@@ -1,7 +1,7 @@
 # Journal source audit (med/med)
 
 Scope: `apps/desktop/src/journal/` + `apps/desktop/src/extensions/builtins/journal.tsx`.
-Task: `plans/other_tasks/pending-audit_journal_source-med-med.md`. Audit only — no behavior changes.
+Task: `audit_journal_source` (done — see `plans/other_tasks/done-summary.md`). Audit only — no behavior changes.
 
 ## Summary
 

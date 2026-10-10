@@ -31,7 +31,7 @@ Depends on link target resolution (shipped; see `plans/graph/done-summary.md`).
 - `packages/core/src/markdown.ts` — `extractWikiLinks`
 - `plans/indexing-search/` — indexing-search epic and index lifecycle
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native index backend
-- A future typed frontend bridge remains planned for native index access; no bridge
-  file is assigned yet.
+- `apps/desktop/src/native/commands.ts` — existing typed bridge for native
+  index access
 - `plans/graph/` — this epic
 - `plans/graph/done-summary.md` — link target resolution, prerequisite (shipped)

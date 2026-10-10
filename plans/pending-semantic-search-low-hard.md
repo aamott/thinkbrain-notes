@@ -33,57 +33,27 @@ Non-goals (deferred or out of scope):
 
 ## Architecture Decisions
 
-### Embeddings are an ephemeral cache, like FTS5
-
-Vector embeddings are disposable and rebuildable from the Markdown files on
-disk, exactly like the existing FTS5 index. They live in the OS application-data
-directory, never inside the workspace. If the embedding cache is deleted, the
-app rebuilds it from the source files.
-
-### Local-first embedding providers
-
-Local embedding models must be fully supported so the feature works offline and
-preserves privacy. Remote providers (e.g. OpenAI embeddings) are optional and
-gated behind explicit user opt-in. This mirrors the app's AI-native principle:
-local models are first-class, cloud is optional.
-
-### Hybrid ranking, not replacement
-
-Semantic search augments rather than replaces FTS5 keyword search. The existing
-`search_index` command and `SearchPanel` remain the keyword path. A hybrid
-ranking step merges FTS5 hits (exact-match strength) with semantic hits
-(meaning similarity) into one ranked list. Exact keyword matches should not be
-buried by semantic noise.
-
-### Provider abstraction depends on the `ai` epic
-
-If the `ai` epic lands a provider abstraction first, embedding generation
-should reuse it. If `ai` is not ready, this epic may ship a minimal
-embedding-provider interface of its own and refactor into the shared `ai`
-abstraction later. This dependency is noted, not blocking — a minimal local-only
-path can proceed independently.
-
-### Indexing stays non-blocking
-
-Re-embedding a workspace must not block the editor, matching the existing
-indexing constraint. Batched, abortable background work with progress reporting,
-keyed on the workspace root path, following the non-blocking indexing architecture
-in the `indexing-search` epic.
+- **Embeddings are an ephemeral cache, like FTS5.** Disposable and rebuildable
+  from the Markdown files on disk; they live in OS app-data, never in the
+  workspace.
+- **Local-first embedding providers.** Local models must work fully offline;
+  remote providers (e.g. OpenAI embeddings) are optional and gated behind
+  explicit user opt-in — local first, cloud optional.
+- **Hybrid ranking, not replacement.** `search_index` and `SearchPanel` remain
+  the keyword path; a hybrid step merges FTS5 hits with semantic hits into one
+  ranked list so exact matches aren't buried by semantic noise.
+- **Provider abstraction depends on the `ai` epic.** Reuse `ai`'s abstraction
+  if it lands first; otherwise ship a minimal embedding-provider interface
+  here and refactor later. Noted, not blocking.
+- **Indexing stays non-blocking.** Re-embedding is batched, abortable
+  background work with progress reporting keyed on the workspace root, per the
+  `indexing-search` architecture.
 
 ## Dependencies
 
-- `indexing-search` (done) — FTS5 keyword search, the per-workspace SQLite
-  cache in OS app-data, and the existing search UI surface are the foundation
-  this epic extends.
-  - `plans/indexing-search/` — indexing/search architecture and
-    remaining frontend wiring
-  - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native FTS5 backend:
-    document indexing, index search, clearing, removal, and cache management
-  - `apps/desktop/src/search/SearchPanel.tsx` and
-    `apps/desktop/src/search/searchPanelModel.ts` — current frontend search
-    surface and placeholder state model
-  - A future typed frontend bridge remains planned for the native search commands;
-    no bridge file is assigned yet.
+- `indexing-search` — FTS5 keyword search (`search.rs`,
+  `searchService.ts`/`commands.ts` bridge, `SearchPanel.tsx`), the
+  per-workspace SQLite cache, and the search UI surface this epic extends.
 - `ai` (stub, not started) — optional provider abstraction for remote
   embeddings. A minimal local-only path can proceed without it.
 
@@ -98,9 +68,9 @@ in the `indexing-search` epic.
 
 ## Status
 
-- ⬜ Embedding generation — local and/or remote provider support
-- ⬜ Vector storage — embeddings cache colocated with the SQLite index
-- ⬜ Semantic similarity query and ranking
-- ⬜ Hybrid search — merge FTS5 keyword hits with semantic hits
-- ⬜ Semantic search UI — mode/toggle within the existing search panel
-- ⬜ Incremental re-embedding — keep embeddings fresh on edit/rename/delete
+- ⬜ `embedding_generation` — local and/or remote provider support
+- ⬜ `vector_storage` — embeddings cache colocated with the SQLite index
+- ⬜ `semantic_query_ranking` — similarity query and ranking
+- ⬜ `hybrid_search` — merge FTS5 keyword hits with semantic hits
+- ⬜ `semantic_search_ui` — mode/toggle within the existing search panel
+- ⬜ `incremental_reembedding` — keep embeddings fresh on edit/rename/delete
