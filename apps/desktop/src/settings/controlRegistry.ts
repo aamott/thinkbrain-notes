@@ -23,6 +23,7 @@ import { TextControl } from "./controls/TextControl";
 import { NumberControl } from "./controls/NumberControl";
 import { SelectControl } from "./controls/SelectControl";
 import { PathControl } from "./controls/PathControl";
+import { UiScaleControl } from "./controls/UiScaleControl";
 import { GitLinkControl } from "./controls/GitLinkControl";
 import { HistoryPolicyControl } from "./controls/HistoryPolicyControl";
 
@@ -140,3 +141,4 @@ export function getControlForDefinition(
 // keys a definition can name are registered here.
 registerControl("sync-git-link", GitLinkControl);
 registerControl("sync-history-policy", HistoryPolicyControl);
+registerControl("ui-scale", UiScaleControl);
