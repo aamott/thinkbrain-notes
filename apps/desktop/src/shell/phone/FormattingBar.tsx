@@ -15,17 +15,21 @@ import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import type { MarkdownFormatAction } from "../../tabs/markdownFormat";
 
+// Sized on the icons, not the button's `[&>svg]` — a `size-*` on the button
+// alongside a `[&>svg]:size-*` reads as a duplicate to the Tailwind lint.
+const ICON = "size-[1.05rem] stroke-current";
+
 const ACTIONS: readonly { action: MarkdownFormatAction; label: string; icon: ReactNode }[] = [
-  { action: "bold", label: "Bold", icon: <Bold /> },
-  { action: "italic", label: "Italic", icon: <Italic /> },
-  { action: "strikethrough", label: "Strikethrough", icon: <Strikethrough /> },
-  { action: "code", label: "Code", icon: <Code /> },
-  { action: "heading", label: "Heading", icon: <Heading /> },
-  { action: "bullet-list", label: "Bullet list", icon: <List /> },
-  { action: "numbered-list", label: "Numbered list", icon: <ListOrdered /> },
-  { action: "task-list", label: "Task list", icon: <ListChecks /> },
-  { action: "quote", label: "Quote", icon: <Quote /> },
-  { action: "link", label: "Link", icon: <Link /> }
+  { action: "bold", label: "Bold", icon: <Bold className={ICON} /> },
+  { action: "italic", label: "Italic", icon: <Italic className={ICON} /> },
+  { action: "strikethrough", label: "Strikethrough", icon: <Strikethrough className={ICON} /> },
+  { action: "code", label: "Code", icon: <Code className={ICON} /> },
+  { action: "heading", label: "Heading", icon: <Heading className={ICON} /> },
+  { action: "bullet-list", label: "Bullet list", icon: <List className={ICON} /> },
+  { action: "numbered-list", label: "Numbered list", icon: <ListOrdered className={ICON} /> },
+  { action: "task-list", label: "Task list", icon: <ListChecks className={ICON} /> },
+  { action: "quote", label: "Quote", icon: <Quote className={ICON} /> },
+  { action: "link", label: "Link", icon: <Link className={ICON} /> }
 ];
 
 /**
@@ -61,7 +65,7 @@ export function FormattingBar({
           aria-label={label}
           title={label}
           // 40px clears the touch minimum without turning the bar into a band.
-          className="flex size-10 flex-none cursor-pointer items-center justify-center rounded-full tn-focus-ring hover:bg-accent [&>svg]:size-[1.05rem] [&>svg]:stroke-current"
+          className="flex size-10 flex-none cursor-pointer items-center justify-center rounded-full tn-focus-ring hover:bg-accent"
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onFormat(action)}
