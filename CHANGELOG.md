@@ -3,6 +3,30 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.4.0 — 2026-10-10
+
+First stable release — and the first update an installed copy has ever been
+offered. Consolidates the 0.4.0-1 and 0.4.0-2 prereleases.
+
+- **Workspace management** — one switcher above the shells opens the chooser,
+  create, import and manage dialogs from the title bar, panel headers, phone
+  drawer and welcome page; opening an already-open workspace raises its
+  window; external vaults get a "Show in file manager" action; managed-vault
+  delete detaches its sync engine and watcher first so nothing resurrects.
+- **Editor safety** — deletes starting in a journal entry's body stop at the
+  frontmatter boundary instead of corrupting it.
+- **Phone editing** — only the note scrolls when the soft keyboard opens; a
+  formatting bar above the keyboard toggles bold, italic, strikethrough,
+  code, heading, lists, tasks, quote and link; menus and the command palette
+  now join the shared overlay stack, so Escape and Android Back dismiss the
+  right thing.
+- **Explorer sort** — order by recently modified, name, creation date or
+  type, remembered per workspace and refreshed as files change.
+- **Interface size dropdown** — preset percents replace the type-in box that
+  resized the UI mid-edit; touch devices default to 125%.
+- **Extensions** — lifecycle, validation and hardening fixes; the journal
+  warms at startup and failed startup extensions show a real error surface.
+
 ## 0.4.0-2 — 2026-10-10
 
 Prerelease with workspace-manager completion, formatting fixes, and a
