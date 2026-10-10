@@ -62,15 +62,15 @@ describe("keeping the explorer tree level with the folder", () => {
   });
 
   /**
-   * A save changes bytes, not the shape of the tree, and the tree shows only
-   * names. Listing the whole folder for each one would put a native call behind
-   * every autosave for nothing.
+   * A save changes bytes, not the shape of the tree — but "Recently modified"
+   * ordering reads `updated_at`, which the save just moved. The debounce keeps
+   * an autosave burst to one listing.
    */
-  it("leaves the tree alone when a note is only edited", () => {
+  it("re-lists the folder when a note is saved", () => {
     saved("notes/edited.md");
     settle();
 
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   /**
