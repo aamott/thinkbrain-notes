@@ -3,6 +3,32 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.4.0-2 — 2026-10-10
+
+Prerelease with workspace-manager completion, formatting fixes, and a
+friendlier interface-size control.
+
+- **Workspace switching everywhere** — the switcher (choose, create, import,
+  manage) now lives above the shells and opens from the title bar, panel
+  headers, the phone drawer and the welcome page, instead of being borrowed
+  from the file explorer.
+- **One window per workspace** — opening a workspace that already has a
+  window raises it instead of spawning a duplicate; the manager shows which
+  roots are open elsewhere and offers Focus.
+- **Managed-vault delete is race-free** — deleting a managed vault now
+  detaches its sync engine and file watcher first, so deleted metadata can't
+  resurrect; menus and the command palette join the shared overlay stack, so
+  Escape and Android Back dismiss the right thing in the right order.
+- **Show in file manager** — external workspaces get a row action that opens
+  the OS file manager at the vault.
+- **Formatting bar toggles** — tapping bold or italic a second time removes
+  the markers instead of stacking another pair.
+- **Explorer sort stays fresh** — saving a note refreshes the tree, so
+  "Recently modified" reorders without restarting the app.
+- **Interface size is a dropdown** — preset percents (75–200%) replace the
+  type-in box that resized the UI under your cursor; touch devices default
+  to 125%.
+
 ## 0.4.0-1 — 2026-10-09
 
 Prerelease with editor safety, phone editing, and explorer sorting.
