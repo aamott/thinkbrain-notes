@@ -38,8 +38,10 @@ import { usePhoneOpeners } from "./usePhoneOpeners";
 import { usePhoneRouteSync } from "./usePhoneRouteSync";
 import { useRecentNote } from "./useRecentNote";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../../workspace/gitLinkImportCopy";
-import { useWorkspaceOnboardingStore } from "../../workspace/workspaceOnboardingStore";
-import { WorkspaceSelectorProvider } from "../../workspace/WorkspaceSelectorPortal";
+import { useWorkspaceSwitching } from "../../workspace/useWorkspaceSwitching";
+import { WorkspaceSwitchingContext } from "../../workspace/workspaceSwitchingContext";
+import { WorkspaceSwitchingDialogs } from "../../workspace/WorkspaceSwitching";
+import { workspaceDesktopApi } from "../../workspace/workspaceAdapter";
 import type { NewTabAction } from "../../tabs/NewTabView";
 
 /**
@@ -156,12 +158,14 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [navigation]
   );
 
-  // Explorer-owned selector actions (Create vault, Git import, …) render their
-  // dialogs inside the Files branch, so the drawer's entry is replaced with
-  // Files first — otherwise the dialog mounts under the drawer/hidden note.
-  const showFilesForWorkspaceAction = useCallback(() => {
-    navigation.replace({ kind: "files" });
-  }, [navigation]);
+  // The shell-level switching controller shared by the drawer selector, the
+  // explorer's empty state and the landing tab — its dialogs mount at shell
+  // level, so nothing has to surface Files for them to be visible.
+  const switching = useWorkspaceSwitching({
+    api: workspaceDesktopApi,
+    openWorkspaceInWindow: shell.openWorkspaceInWindow,
+    onWorkspaceLaunched: shell.explorerProps.onWorkspaceLaunched
+  });
 
   // Command effects rerouted to this chrome's surfaces. The shared
   // `runCommand` would otherwise write dock state nothing here renders —
@@ -205,11 +209,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   }, [navigation]);
   useCommandSurface(commandSurface);
 
-  // With no workspace open, the landing tab's job is direction: the same
-  // create/open entry points the explorer's empty state shows, published by
-  // the explorer's switching controller.
-  const onboarding = useWorkspaceOnboardingStore((s) => s.actions);
-
   const runCommand = useCallback(
     (commandId: string) => {
       // "new-note" means create, the same as in the palette and the popup's
@@ -228,29 +227,23 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     [paletteCommands, runPaletteCommand, navigation, createNewNote, overlay]
   );
 
-  // The new-tab page's entry points, routed through phone navigation the same
-  // way the bubbles and drawer reach those surfaces.
+  // The new-tab page's entry points, run through the same shell-level
+  // switching controller the drawer selector uses.
   const newTab = useMemo(() => {
     if (shell.workspaceName === null) {
-      const viaFiles = (run: () => void) => () => {
-        showFilesForWorkspaceAction();
-        run();
-      };
       const actions: NewTabAction[] = [];
-      if (onboarding?.capabilities?.canCreateManagedWorkspace) {
-        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.createManagedVault) });
+      if (switching.accessCapabilities?.canCreateManagedWorkspace) {
+        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: () => switching.setCreateManagedWorkspaceOpen(true) });
       }
-      if (onboarding?.capabilities?.canOpenFolder) {
-        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.openFolder) });
+      if (switching.accessCapabilities?.canOpenFolder) {
+        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => void switching.openWorkspace() });
       }
-      if (onboarding) {
-        actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.importFromGit) });
-        for (const workspace of onboarding.workspaces) {
-          if (workspace.missing) continue;
-          actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(workspace.rootPath) });
-        }
-        actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: viaFiles(onboarding.manageWorkspaces) });
+      actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: switching.openGitLinkImport });
+      for (const workspace of switching.knownWorkspaces) {
+        if (workspace.missing) continue;
+        actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => void switching.launchWorkspace(workspace.rootPath) });
       }
+      actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: switching.openManageWorkspaces });
       return { workspaceName: shell.workspaceName, actions };
     }
     return {
@@ -261,7 +254,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
         { id: "search", label: "Search", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "panel", panel: "search" }) }
       ]
     };
-  }, [shell.workspaceName, createNewNote, navigation, onboarding, showFilesForWorkspaceAction]);
+  }, [shell.workspaceName, createNewNote, navigation, switching]);
 
   // The panel LeftPopout renders: the route's panel, or explorer underneath
   // every tab route so Files is the base surface, not a blank space.
@@ -406,7 +399,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     // and `hidden` leaves it programmatically scrollable — Android/WebView
     // focus-scroll can shift the whole shell and strand it (header off-screen,
     // black gap below). `clip` clips identically but cannot scroll.
-    <WorkspaceSelectorProvider>
+    <WorkspaceSwitchingContext.Provider value={switching}>
       <main
         data-phone-shell
         className="relative flex h-full min-w-0 flex-col overflow-clip bg-background text-foreground [--tn-shell-popout-left:0px] [--tn-phone-bubble-clearance:calc(4.5rem+env(safe-area-inset-bottom))]"
@@ -589,13 +582,18 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
           badges={shell.conflictBadges}
           onDismiss={navigation.dismissOverlay}
           onSelectPanel={selectDrawerPanel}
-          onWorkspaceAction={showFilesForWorkspaceAction}
+          onWorkspaceAction={navigation.dismissOverlay}
+          currentWorkspacePath={shell.restoredWorkspacePath ?? undefined}
           onOpenSettings={() => {
             shell.openSettingsTab();
             navigation.replace({ kind: "tab", tabId: "settings" });
           }}
         />
+
+        {/* One dialog set for every switching surface — drawer, explorer
+            empty state, landing tab — at shell level above every route. */}
+        <WorkspaceSwitchingDialogs currentPath={shell.restoredWorkspacePath ?? undefined} />
       </main>
-    </WorkspaceSelectorProvider>
+    </WorkspaceSwitchingContext.Provider>
   );
 }

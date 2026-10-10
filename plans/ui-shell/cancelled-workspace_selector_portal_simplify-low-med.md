@@ -1,6 +1,6 @@
 # Story: Simplify the workspace-selector portal machinery
 
-**Status:** ⬜ pending · **Urgency:** low · **Difficulty:** med
+**Status:** ✖ cancelled — superseded by `workspace-manager/lift_workspace_switching`, which lifted the controller to shell level and deleted the portal machinery. · **Urgency:** low · **Difficulty:** med
 
 > From `docs/reviews/2026-10-03/workspace-selector-portal-machinery` (finding
 > deleted; this is the tracked decision).

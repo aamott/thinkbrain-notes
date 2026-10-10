@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 
 import { Unavailable } from "../shell/Unavailable";
-import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
+import { WorkspaceSwitchingSelector } from "../workspace/WorkspaceSwitching";
 import { PanelBoundary } from "./PanelBoundary";
 import { PanelTitle } from "./PanelTitle";
 import { MountedPanel } from "./panelRegistry";
@@ -89,7 +89,7 @@ export function Popout<Ctx extends LeftPanelContext | RightPanelContext>({
 
   // `ownsChrome` panels render their own single header row (the explorer
   // merges title, selector, and actions), so the popout mounts neither
-  // PanelTitle nor a selector outlet for them.
+  // PanelTitle nor a second selector for them.
   const ownsChrome = contribution.ownsChrome === true;
   // One chrome row per popout: when the setting places the selector in panel
   // headers, the trigger mounts inside the title slot — never its own row.
@@ -170,7 +170,9 @@ function PanelChrome<Ctx extends LeftPanelContext | RightPanelContext>({
   return (
     <PanelTitle
       title={contribution.label}
-      titleContent={selectorInTitle ? <WorkspaceSelectorOutlet variant="panel" /> : undefined}
+      titleContent={selectorInTitle ? (
+        <WorkspaceSwitchingSelector variant="panel" currentPath={context.rootPath ?? undefined} />
+      ) : undefined}
       actions={actions}
       onBack={onBack}
     />

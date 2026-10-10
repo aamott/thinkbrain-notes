@@ -3,7 +3,7 @@ import { CountBadge, Drawer } from "@thinkbrain/ui";
 import { useLeftPanelContributions } from "../../panels/panelRegistryModel";
 import { PanelIcon } from "../panelIcons";
 import type { LeftPanel } from "../shellTypes";
-import { WorkspaceSelectorOutlet } from "../../workspace/WorkspaceSelectorPortal";
+import { WorkspaceSwitchingSelector } from "../../workspace/WorkspaceSwitching";
 
 // 48px already clears the touch minimum, so no `pointer-coarse:` bump is
 // needed — the same reasoning the floating bubbles record for their 48px size.
@@ -29,7 +29,8 @@ export function PhoneDrawer({
   onDismiss,
   onSelectPanel,
   onOpenSettings,
-  onWorkspaceAction
+  onWorkspaceAction,
+  currentWorkspacePath
 }: {
   readonly open: boolean;
   readonly activePanel: LeftPanel | null;
@@ -37,8 +38,9 @@ export function PhoneDrawer({
   readonly onDismiss: () => void;
   readonly onSelectPanel: (panel: LeftPanel) => void;
   readonly onOpenSettings: () => void;
-  /** Runs before any workspace-selector action so its UI lands on Files, not under the drawer. */
+  /** Dismisses the drawer before a workspace-selector action runs. */
   readonly onWorkspaceAction: () => void;
+  readonly currentWorkspacePath?: string;
 }) {
   const panels = useLeftPanelContributions();
 
@@ -50,7 +52,7 @@ export function PhoneDrawer({
       side="right"
     >
       <h2 className="px-4 pt-3 pb-2 text-sm font-bold">Menu</h2>
-      <WorkspaceSelectorOutlet variant="drawer" onAction={onWorkspaceAction} />
+      <WorkspaceSwitchingSelector variant="drawer" currentPath={currentWorkspacePath} onAction={onWorkspaceAction} />
 
       <div className="flex flex-1 flex-col gap-0.5 p-2">
         {panels.map((panel) => {

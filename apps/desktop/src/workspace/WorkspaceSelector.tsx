@@ -5,7 +5,7 @@ import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuSeparator } from "../shell/Menu";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { isWorkspaceGitLinked } from "./workspaceSettings";
-import type { WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
+import type { WorkspaceSelectorVariant } from "./workspaceSwitchingContext";
 
 const selectorRootClasses: Record<WorkspaceSelectorVariant, string> = {
   drawer: "relative border-b border-border px-3 pb-3",

@@ -9,9 +9,8 @@ import type { ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceTreeItem, CreateNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
 import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
-import { useWorkspaceSelectorOutlet } from "./WorkspaceSelectorPortalModel";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
-import { WorkspaceSwitching, WorkspaceSwitchingSelector } from "./WorkspaceSwitching";
+import { ManagedStorageNotice, WorkspaceSwitchingSelector } from "./WorkspaceSwitching";
 import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
 import { HEADER_ACTION_CLASSES, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR, type WorkspaceTreeDrag } from "./useWorkspaceTreeDrag";
@@ -70,10 +69,9 @@ export function WorkspaceExplorerView({
   // as an outside click first and it shuts and reopens in one gesture.
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   // With the selector placed in panel headers, the explorer draws it inline —
-  // except while another opted panel's title slot is hosting it (the explorer
-  // stays mounted but hidden when e.g. Search is active).
-  const outlet = useWorkspaceSelectorOutlet();
-  const showInlineSelector = workspaceSelectorInPanel && outlet?.variant !== "panel";
+  // its kept-mounted copies simply hide with the panel itself when a sibling
+  // is active, since every placement shares one controller.
+  const showInlineSelector = workspaceSelectorInPanel;
   // The row a context menu was opened on keeps a selection outline for as
   // long as the menu is up — otherwise there is no visible link between the
   // two once the pointer moves off the row.
@@ -167,7 +165,7 @@ export function WorkspaceExplorerView({
       <header className="group/explorer-header flex min-h-9 items-center justify-between gap-2 border-b border-border px-3 pointer-coarse:min-h-12 pointer-coarse:px-4">
         <div className="flex min-w-0 flex-1 items-center">
           {showInlineSelector ? (
-            <WorkspaceSwitchingSelector switching={switching} currentPath={workspaceRootPath} variant="panel" />
+            <WorkspaceSwitchingSelector currentPath={workspaceRootPath} variant="panel" />
           ) : (
             <h2
               className="m-0 truncate text-[0.68rem] tracking-[0.08em] uppercase font-semibold pointer-coarse:text-sm pointer-coarse:tracking-normal pointer-coarse:normal-case"
@@ -349,7 +347,9 @@ export function WorkspaceExplorerView({
           onCreateAnyway={() => void actions.confirmExtensionCreate()}
         />
       )}
-      <WorkspaceSwitching switching={switching} currentPath={workspaceRootPath} busy={busy} error={actionError} />
+      {/* The switching dialogs live at shell level; only this in-panel
+          status stays inside the explorer. */}
+      <ManagedStorageNotice />
     </section>
   );
 }

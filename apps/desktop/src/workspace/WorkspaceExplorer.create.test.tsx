@@ -9,7 +9,13 @@ import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/co
 import { desktopCommandRegistry, type DesktopCommandContext } from "../commands/commandRegistry";
 import { WorkspaceExplorer } from "./WorkspaceExplorer";
 import { InlineNameInput } from "./WorkspaceTree";
+import { WorkspaceSwitchingHarness } from "./workspaceSwitching.testHarness";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
+
+/** The switching controller lives at shell level; bare explorer mounts borrow one. */
+const inShell = (api: WorkspaceDesktopApi, node: React.ReactNode) => (
+  <WorkspaceSwitchingHarness api={api}>{() => node}</WorkspaceSwitchingHarness>
+);
 
 vi.mock("./workspaceSettings", () => ({
   DEFAULT_WORKSPACE_SETTINGS: { showHidden: false },
@@ -85,7 +91,7 @@ async function renderExplorer(fixture: ExplorerFixture, props: Record<string, un
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(
+    root?.render(inShell(fixture.api,
       <WorkspaceExplorer
         api={fixture.api}
         initialWorkspacePath="/vault"
@@ -93,7 +99,7 @@ async function renderExplorer(fixture: ExplorerFixture, props: Record<string, un
         onFileSelected={fixture.onFileSelected}
         {...props}
       />
-    );
+    ));
   });
   // Wait out the workspace open so phase === "ready" before each test body.
   await act(async () => undefined);
@@ -146,7 +152,7 @@ async function openNewNote(fixture: ExplorerFixture) {
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(
+    root?.render(inShell(fixture.api,
       <WorkspaceExplorer
         api={fixture.api}
         initialWorkspacePath="/vault"
@@ -154,7 +160,7 @@ async function openNewNote(fixture: ExplorerFixture) {
         onFileSelected={fixture.onFileSelected}
         newNoteFocusRequest={1}
       />
-    );
+    ));
   });
   await act(async () => undefined);
   return container;
@@ -288,7 +294,7 @@ describe("WorkspaceExplorer New note extension flow", () => {
     await typeInto(inputOf("New file name")!, "stale.txt");
 
     await act(async () => {
-      root?.render(
+      root?.render(inShell(fixture.api,
         <WorkspaceExplorer
           api={fixture.api}
           initialWorkspacePath="/vault"
@@ -296,7 +302,7 @@ describe("WorkspaceExplorer New note extension flow", () => {
           onMarkdownFileCreated={fixture.onMarkdownFileCreated}
           onFileSelected={fixture.onFileSelected}
         />
-      );
+      ));
     });
     await act(async () => undefined);
 
@@ -543,14 +549,14 @@ describe("Create a different file type? confirmation", () => {
     };
     fixture.api = { ...fixture.api, openWorkspace: async () => other };
     await act(async () => {
-      root?.render(
+      root?.render(inShell(fixture.api,
         <WorkspaceExplorer
           api={fixture.api}
           initialWorkspacePath="/other"
           onMarkdownFileCreated={fixture.onMarkdownFileCreated}
           onFileSelected={fixture.onFileSelected}
         />
-      );
+      ));
     });
     await act(async () => undefined);
 
@@ -625,7 +631,7 @@ describe("desktop canonical New note command integration", () => {
         openSettings: vi.fn(),
         closePalette
       };
-      return (
+      return inShell(fixture.api,
         <WorkspaceExplorer
           api={fixture.api}
           initialWorkspacePath="/vault"

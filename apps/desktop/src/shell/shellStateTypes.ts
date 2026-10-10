@@ -65,6 +65,12 @@ export interface ShellState {
   readonly restoredWorkspacePath: string | null;
   readonly workspaceFiles: readonly NativeMarkdownFileEntry[];
   readonly stateRestored: boolean;
+  /**
+   * Opens a workspace in this window by pointing `restoredWorkspacePath` —
+   * and so the explorer's `initialWorkspacePath` — at the new root; the
+   * explorer's own load path does the rest.
+   */
+  readonly openWorkspaceInWindow: (rootPath: string) => void;
   /** The explorer's whole prop bag, assembled once so both chromes agree. */
   readonly explorerProps: WorkspaceExplorerProps;
   /**

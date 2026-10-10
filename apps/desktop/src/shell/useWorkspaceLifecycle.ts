@@ -184,6 +184,18 @@ export function useWorkspaceLifecycle({
     persistDesktopState({ lastWorkspacePath: rootPath });
   }, []);
 
+  /**
+   * Opens a workspace in this window.
+   *
+   * `restoredWorkspacePath` feeds the explorer's `initialWorkspacePath` (via
+   * `useShellState`'s explorerProps), so setting it runs the explorer's own
+   * load path — settings restore, snapshot, entry list — exactly as a first
+   * launch would; `handleWorkspaceOpened` then confirms it back here.
+   */
+  const openWorkspaceInWindow = useCallback((rootPath: string) => {
+    setRestoredWorkspacePath(rootPath);
+  }, []);
+
   const handleWorkspaceUnavailable = useCallback(() => {
     setRestoredWorkspacePath(null);
     setWorkspaceName(null);
@@ -269,6 +281,7 @@ export function useWorkspaceLifecycle({
     leftWidth,
     leftWidthRef,
     newNoteFocusRequest,
+    openWorkspaceInWindow,
     persistDesktopState,
     resetPanelWidth,
     requestNewNoteFocus,

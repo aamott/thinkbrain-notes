@@ -72,14 +72,16 @@ describe("the landing tab with no workspace", () => {
     expect(landingButton(host, "Search workspace")).toBeUndefined();
   });
 
-  it("surfaces the explorer before running an explorer-owned action", async () => {
+  it("opens the shell-level git-link dialog without surfacing the explorer", async () => {
     const host = await mount();
-    // Hide the dock first so the test proves the action reveals it.
+    // Hide the dock: shell-level dialogs no longer need the explorer visible.
     await act(async () => shell().setLeftPanel(null));
     await act(async () => shell().openNewTab());
 
-    await act(async () => landingButton(host, "Open folder")?.click());
+    await act(async () => landingButton(host, "Bring in from Git link")?.click());
+    await act(async () => undefined);
 
-    expect(shell().leftPanel).toBe("explorer");
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(shell().leftPanel).toBeNull();
   });
 });

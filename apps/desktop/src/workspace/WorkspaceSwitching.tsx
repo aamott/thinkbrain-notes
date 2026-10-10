@@ -3,26 +3,27 @@ import { ModalDialog } from "../shell/ModalDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
 import { WorkspaceManagerDialog } from "./WorkspaceManagerDialog";
 import { WorkspaceSelector } from "./WorkspaceSelector";
-import { WorkspaceSelectorPortal } from "./WorkspaceSelectorPortal";
-import type { WorkspaceSelectorVariant } from "./WorkspaceSelectorPortalModel";
-import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
+import {
+  useWorkspaceSwitchingContext,
+  type WorkspaceSelectorVariant
+} from "./workspaceSwitchingContext";
 
 /**
- * The selector bound to the explorer's switching controller. Same controller
- * props wherever the selector lands — inline, title bar, or drawer — so
- * switching and its dialogs behave identically per placement.
+ * The selector bound to the shell's shared switching controller. Every
+ * placement — title bar, panel header, phone drawer — renders its own
+ * instance against the same controller, so switching and its dialogs behave
+ * identically everywhere.
  */
 export function WorkspaceSwitchingSelector({
-  switching,
   currentPath,
   variant,
   onAction
 }: {
-  readonly switching: WorkspaceSwitchingController;
   readonly currentPath?: string;
   readonly variant: WorkspaceSelectorVariant;
   readonly onAction?: () => void;
 }) {
+  const switching = useWorkspaceSwitchingContext();
   return (
     <WorkspaceSelector
       variant={variant}
@@ -41,35 +42,22 @@ export function WorkspaceSwitchingSelector({
 }
 
 /**
- * Workspace onboarding surfaces: the uninstall notice after a managed vault is
- * created, the portaled selector, and the create/import dialogs.
+ * The dialogs the switching surfaces open, mounted once at shell level so
+ * they are visible whichever placement — or onboarding action — opened them.
  */
-export function WorkspaceSwitching({
-  switching,
-  currentPath,
-  busy,
-  error
+export function WorkspaceSwitchingDialogs({
+  currentPath
 }: {
-  readonly switching: WorkspaceSwitchingController;
   readonly currentPath?: string;
-  readonly busy: boolean;
-  readonly error: string | null;
 }) {
+  const switching = useWorkspaceSwitchingContext();
   const { accessCapabilities } = switching;
   return (
     <>
-      {switching.managedStorageNoticeOpen && (
-        <ManagedStorageNotice onDismiss={() => switching.setManagedStorageNoticeOpen(false)} />
-      )}
-      <WorkspaceSelectorPortal>
-        {(variant, onAction) => (
-          <WorkspaceSwitchingSelector switching={switching} currentPath={currentPath} variant={variant} onAction={onAction} />
-        )}
-      </WorkspaceSelectorPortal>
       {switching.createManagedWorkspaceOpen && (
         <CreateManagedWorkspaceDialog
-          busy={busy}
-          error={error}
+          busy={switching.creatingManagedWorkspace}
+          error={switching.createManagedWorkspaceError}
           onCancel={() => switching.setCreateManagedWorkspaceOpen(false)}
           onCreate={switching.createManagedWorkspace}
         />
@@ -103,11 +91,19 @@ export function WorkspaceSwitching({
   );
 }
 
-function ManagedStorageNotice({ onDismiss }: { readonly onDismiss: () => void }) {
+/**
+ * The uninstall notice shown after a managed vault is created. In-panel
+ * status rather than a modal, so it stays inline in the explorer — the one
+ * place the user can act on it (export, Git-link) — while the dialogs live
+ * at shell level.
+ */
+export function ManagedStorageNotice() {
+  const switching = useWorkspaceSwitchingContext();
+  if (!switching.managedStorageNoticeOpen) return null;
   return (
     <div className="m-2 rounded-small border border-warning/50 bg-warning/10 p-2 text-[0.6875rem] leading-relaxed text-sidebar-foreground" role="status">
       <p className="m-0">Android removes managed vaults when the app is uninstalled. Keep another copy using Git or an explicit backup/export when available.</p>
-      <button type="button" className="mt-1.5 min-h-11 rounded-small border border-border px-3 text-[0.6875rem]" onClick={onDismiss}>Got it</button>
+      <button type="button" className="mt-1.5 min-h-11 rounded-small border border-border px-3 text-[0.6875rem]" onClick={() => switching.setManagedStorageNoticeOpen(false)}>Got it</button>
     </div>
   );
 }
