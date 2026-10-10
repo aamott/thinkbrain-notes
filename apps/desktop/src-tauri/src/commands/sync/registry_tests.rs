@@ -55,6 +55,32 @@ fn a_destroyed_window_yields_every_engine_it_held() {
     );
 }
 
+#[test]
+fn releasing_a_root_drops_its_engine_regardless_of_window_interest() {
+    let mut state = Registry::default();
+    state.adopt("vault", "window-1", engine_for("registry-root-release"));
+    state.hold("vault", "window-2");
+
+    assert!(state.release_root("vault").is_some());
+    assert!(!state.interest.is_watched("vault"));
+    assert!(!state.engines.contains_key("vault"));
+}
+
+#[test]
+fn a_destroyed_window_cannot_adopt_an_engine_after_bootstrap() {
+    let mut state = Registry::default();
+    state.release_window("gone-window");
+
+    state.adopt(
+        "vault",
+        "gone-window",
+        engine_for("registry-late-bootstrap"),
+    );
+
+    assert!(!state.interest.is_watched("vault"));
+    assert!(!state.engines.contains_key("vault"));
+}
+
 /// Bootstrapping happens outside the lock, so two windows opening one vault
 /// can both arrive holding an engine. The first is the one that may already
 /// have changes noted against it.

@@ -342,3 +342,21 @@ fn closing_a_window_releases_every_watcher_it_was_holding() {
     assert!(interest.is_watched("/vault"));
     assert!(!interest.is_watched("/notes"));
 }
+
+#[test]
+fn releasing_a_root_drops_every_label_and_dead_windows_cannot_reacquire() {
+    let mut interest = WatchInterest::default();
+    interest.acquire("/vault", "main");
+    interest.acquire("/vault", "second");
+    interest.acquire("/notes", "second");
+
+    let mut labels = interest.release_root("/vault");
+    labels.sort();
+    assert_eq!(labels, ["main", "second"]);
+    assert!(!interest.is_watched("/vault"));
+    assert!(interest.is_watched("/notes"));
+
+    interest.release_window("second");
+    assert!(!interest.acquire("/late", "second"));
+    assert!(!interest.is_watched("/late"));
+}

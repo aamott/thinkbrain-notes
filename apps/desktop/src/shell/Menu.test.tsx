@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
-import { act, useRef } from "react";
+import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { dismissTopOverlay } from "@thinkbrain/ui";
 
 import { Menu, MenuButton, type MenuCloseReason } from "./Menu";
+import { ModalDialog } from "./ModalDialog";
 
 /**
  * The one menu surface, tested once.
@@ -35,7 +37,7 @@ const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
 
 const items = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>("[role='menuitem']")];
 
-const press = async (key: string, target: EventTarget = window) => {
+const press = async (key: string, target: EventTarget = document) => {
   await act(async () => {
     target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   });
@@ -106,6 +108,39 @@ describe("how a menu closes", () => {
     await act(async () => (document.activeElement as HTMLElement)?.blur());
     await press("Escape");
 
+    expect(onClose).toHaveBeenCalledWith("escape");
+  });
+
+  it("joins the overlay stack above an already-open dialog", async () => {
+    function Host() {
+      const [menuOpen, setMenuOpen] = useState(false);
+      return (
+        <ModalDialog title="Manager" onDismiss={() => undefined}>
+          <button type="button" onClick={() => setMenuOpen(true)}>Open menu</button>
+          {menuOpen && (
+            <Menu label="Dialog menu" className="absolute" onClose={() => setMenuOpen(false)}>
+              <MenuButton label="One" onClick={() => undefined} />
+            </Menu>
+          )}
+        </ModalDialog>
+      );
+    }
+
+    await render(<Host />);
+    await act(async () => document.querySelector<HTMLButtonElement>("[role='dialog'] button")?.click());
+    expect(document.querySelector("[role='menu']")).not.toBeNull();
+
+    await press("Escape", document);
+
+    expect(document.querySelector("[role='menu']")).toBeNull();
+    expect(document.querySelector("[role='dialog']")?.textContent).toContain("Manager");
+  });
+
+  it("is dismissed by the Android-back overlay bridge", async () => {
+    const onClose = vi.fn();
+    await render(threeItems(onClose));
+
+    expect(dismissTopOverlay()).toBe(true);
     expect(onClose).toHaveBeenCalledWith("escape");
   });
 

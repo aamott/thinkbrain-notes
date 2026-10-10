@@ -4,7 +4,7 @@
 //! a single child only; it never receives authority to construct an app-data
 //! path or escape the dedicated `vaults` directory.
 
-use crate::error::{NativeError, failed};
+use crate::error::{NativeError, failed, lock_or_recover};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -161,6 +161,14 @@ pub(crate) fn delete_managed_workspace_in(
 
     // The pooled connection must go first: it holds the index file open.
     crate::commands::search::release_search_connection(&canonical);
+    crate::commands::watcher::release_root(&canonical);
+
+    // An in-flight bootstrap holds this lane through adoption. Wait it out,
+    // then release again before deleting while the lane blocks another attach.
+    let lane = crate::commands::sync::registry::lane(&canonical);
+    let _lane_guard = lock_or_recover(&lane);
+    // Do not flush: that would write into the metadata removed just below.
+    drop(crate::commands::sync::registry::release_root(&canonical));
 
     // The vault is deleted before its metadata, deliberately: if a later
     // removal fails we would rather leave orphaned history than a workspace

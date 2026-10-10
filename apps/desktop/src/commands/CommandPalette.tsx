@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import { useDismissable } from "@thinkbrain/ui";
 import { cn } from "@/lib/utils";
 import {
   type PaletteItem,
@@ -26,6 +28,7 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState(initialCommandPaletteState);
   const [notice, setNotice] = useState<string | null>(null);
+  const { containerRef } = useDismissable({ open: true, onDismiss: () => onClose() });
 
   const results = useMemo(
     () => getCommandPaletteResults(state, commands, files),
@@ -65,15 +68,9 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
     }
   };
 
-  const trapFocus = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== "Tab") return;
-    event.preventDefault();
-    inputRef.current?.focus();
-  };
-
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-10 flex items-start justify-center pt-[15vh] bg-overlay" role="presentation" onMouseDown={() => onClose()}>
-      <section className="w-[min(38rem,calc(100vw-2rem))] overflow-hidden rounded-medium border border-border bg-popover shadow-soft" role="dialog" aria-modal="true" aria-label="Command palette" onKeyDown={trapFocus} onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={containerRef} className="w-[min(38rem,calc(100vw-2rem))] overflow-hidden rounded-medium border border-border bg-popover shadow-soft" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}>
         <input ref={inputRef} className="w-full border-0 border-b border-border bg-transparent px-4 py-[0.85rem] text-[0.9rem] text-inherit outline-none focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring" value={state.query} onChange={(event) => { setState(setCommandPaletteQuery(event.target.value)); setNotice(null); }} onKeyDown={handleKeyDown} placeholder="Type a command or file name…" aria-label="Search commands" role="combobox" aria-expanded aria-controls="command-palette-results" aria-activedescendant={items[activeIndex]?.id} />
         {notice && <p className="m-0 border-b border-border bg-[color-mix(in_srgb,var(--tn-color-destructive)_8%,transparent)] px-[0.65rem] py-[0.45rem] text-[0.6875rem] text-danger" role="status">{notice}</p>}
         <div id="command-palette-results" className="max-h-[min(22rem,55vh)] overflow-auto p-[0.35rem]" role="listbox" aria-label="Palette results">
@@ -91,7 +88,8 @@ export function CommandPalette({ commands, files, onClose, onCommand, onOpenFile
           {!items.length && <p className="m-0 px-[0.65rem] py-[0.45rem] text-[0.6875rem] text-muted-foreground" role="status">No commands or Markdown files match “{state.query}”.</p>}
         </div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
 

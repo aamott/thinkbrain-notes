@@ -156,7 +156,7 @@ describe("SettingsTab", () => {
     await harness.click(el.querySelector('button[aria-label="Open settings navigation"]')!);
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
     expect(el.querySelector("#settings-navigation")?.getAttribute("data-open")).toBe("false");
