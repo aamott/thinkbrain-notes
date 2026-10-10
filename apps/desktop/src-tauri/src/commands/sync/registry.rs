@@ -74,9 +74,11 @@ impl Registry {
     /// engine. Keeping the first means keeping the one that may already have
     /// changes noted against it; the second is dropped having recorded nothing.
     fn adopt(&mut self, key: &str, label: &str, engine: Arc<Engine>) {
+        if !self.interest.acquire(key, label) {
+            return;
+        }
         self.failures.remove(key);
         self.engines.entry(key.to_string()).or_insert(engine);
-        self.interest.acquire(key, label);
     }
 
     /// Releases one window's interest, yielding the engine nobody wants now.
@@ -85,6 +87,12 @@ impl Registry {
             .release(key, label)
             .then(|| self.engines.remove(key))
             .flatten()
+    }
+
+    /// Releases every window's interest in `key`, yielding its engine.
+    fn release_root(&mut self, key: &str) -> Option<Arc<Engine>> {
+        self.interest.release_root(key);
+        self.engines.remove(key)
     }
 
     /// Releases everything `label` held, yielding the engines left over with
@@ -245,12 +253,19 @@ pub fn detach(key: &str, label: &str) {
     }
 }
 
+/// Releases every window's interest in `key` and removes its engine.
+pub fn release_root(key: &str) -> Option<Arc<Engine>> {
+    let mut guard = registry();
+    guard.as_mut()?.release_root(key)
+}
+
 /// Releases everything a window held, for windows the OS destroys.
 pub fn release_window(label: &str) {
     let engines = {
         let mut guard = registry();
-        let Some(state) = guard.as_mut() else { return };
-        state.release_window(label)
+        guard
+            .get_or_insert_with(Registry::default)
+            .release_window(label)
     };
     for (key, engine) in engines {
         flush(&key, &engine);

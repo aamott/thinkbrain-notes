@@ -119,6 +119,22 @@ describe("useDismissable", () => {
     opener.remove();
   });
 
+  it("does not override focus deliberately moved by a dismiss callback", async () => {
+    const opener = document.createElement("button");
+    const destination = document.createElement("button");
+    document.body.append(opener, destination);
+    opener.focus();
+
+    await render(<Panel open onDismiss={() => undefined} />);
+    destination.focus();
+    await act(async () => root?.unmount());
+    root = null;
+
+    expect(document.activeElement).toBe(destination);
+    opener.remove();
+    destination.remove();
+  });
+
   it("dismisses the top-most overlay when several are open", async () => {
     const dismissLower = vi.fn();
     const dismissTop = vi.fn();

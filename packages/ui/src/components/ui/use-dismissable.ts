@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 const FOCUSABLE_SELECTOR =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  'button:not(:disabled):not([tabindex="-1"]), [href]:not([tabindex="-1"]), input:not(:disabled):not([tabindex="-1"]), select:not(:disabled):not([tabindex="-1"]), textarea:not(:disabled):not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
 
 type OverlayEntry = {
   readonly dismiss: () => void;
@@ -54,6 +54,13 @@ function pushOverlay(entry: OverlayEntry): () => void {
 
 function focusables(container: HTMLElement): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)];
+}
+
+function restoreFocus(restore: HTMLElement | null, container: HTMLElement | null): void {
+  const active = document.activeElement;
+  if (restore && (active === document.body || (active instanceof Node && container?.contains(active)))) {
+    restore.focus();
+  }
 }
 
 /**
@@ -124,7 +131,7 @@ export function useDismissable({
     if (!open) {
       const restore = restoreFocusRef.current;
       restoreFocusRef.current = null;
-      restore?.focus();
+      restoreFocus(restore, containerRef.current);
       return;
     }
     restoreFocusRef.current =
@@ -143,7 +150,7 @@ export function useDismissable({
     () => () => {
       const restore = restoreFocusRef.current;
       restoreFocusRef.current = null;
-      restore?.focus();
+      restoreFocus(restore, containerRef.current);
     },
     []
   );
