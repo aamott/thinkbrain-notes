@@ -1,14 +1,12 @@
 //! Chooses the credential store this build talks to, once, at startup.
 //!
-//! keyring v4 split the API (`keyring-core`) from the backends, and moved store
-//! selection from a compile-time feature to an explicit registration. That is
-//! why this module exists at all: under v3 the choice was made by feature
-//! unification in `Cargo.toml` and there was nothing to call.
+//! `keyring-core` splits the API from the backends, so the store is an
+//! explicit registration rather than a compile-time feature choice. That is
+//! why this module exists: each target gets exactly one backend, picked here.
 //!
-//! The payoff is that `sync/credentials.rs` has one code path instead of a
-//! `supported!` / `unsupported!` pair, and "does this platform have a
-//! credential store" becomes a fact we can ask at runtime rather than a `cfg!`
-//! we assert at compile time.
+//! The payoff is that `sync/credentials.rs` has one code path, and "does this
+//! platform have a credential store" becomes a fact we can ask at runtime
+//! rather than a `cfg!` we assert at compile time.
 //!
 //! A platform with no store registered is not an error here. Entry creation
 //! then fails with `NoDefaultStore`, which the sync layer reports as
@@ -21,9 +19,9 @@
 /// is why this is not lazy.
 ///
 /// This does connect to the OS store — on Linux that is a D-Bus connection to
-/// the Secret Service — so it is real work on the startup path, where keyring
-/// v3 paid the same cost lazily at first use. Measured at ~52ms on Linux, with
-/// the first read after it under 1ms. That is small enough to prefer a
+/// the Secret Service — so it is real work on the startup path. Measured at
+/// ~52ms on Linux, with the first read after it under 1ms. That is small
+/// enough to prefer a
 /// straightforward eager registration over a lazy wrapper that would have to
 /// re-implement `CredentialStore` just to defer a connection. If a platform
 /// ever turns out to be slow here, the fix is a lazy delegating store, not
@@ -56,12 +54,9 @@ pub fn is_available() -> bool {
 
 #[cfg(target_os = "linux")]
 fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::CredentialStore>>> {
-    // The Secret Service, because that is where v3 durably kept these secrets.
-    // v3's `linux-native-sync-persistent` wrote to keyutils *and* the Secret
-    // Service, using the former only as a cache for headless processes; the
-    // Secret Service is the half that survives a reboot, so it is the half
-    // that carries existing sign-ins forward. Confirmed by reading a v3-written
-    // credential back through this store.
+    // The Secret Service — the Linux store that survives a reboot. Keyutils is
+    // only a cache for headless sessions and is not carried, so a session with
+    // no D-Bus reports no credential store.
     Some(
         dbus_secret_service_keyring_store::Store::new()
             .map(|store| store as std::sync::Arc<keyring_core::CredentialStore>),

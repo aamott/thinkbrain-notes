@@ -27,6 +27,9 @@ leaves genuine overlaps as ` (from another device)` copies — never data loss.
 - `import_sign_in_parity` — sign-in reachable from the import dialog.
 - `workspace_selector_git_badge` — git-linked indicator (Choice A,
   `FolderGit2`) in the workspace selector.
+- `keyring_v4_migration` — `keyring-core` v4 with one per-platform store
+  registered at startup; existing sign-ins carry forward, and Android gains a
+  real credential store. Desktop UI save/read/forget verified.
 
 ## Conflict & merge
 

@@ -28,6 +28,9 @@ unchanged. Verified on a Pixel 7a emulator and on hardware 2026-08-27.
 - `frozen_sync_blocks_the_next_one` — a frozen claim expires after ten minutes
   via wall-clock start + generation; the per-workspace lane serializes
   takeover.
+- `android_anonymous_clone` — imports keep a fetched vault when the optional
+  post-import push can't land; public anonymous and private Git verified on
+  emulator and physical hardware.
 
 ## Editor & shell
 
@@ -42,7 +45,5 @@ unchanged. Verified on a Pixel 7a emulator and on hardware 2026-08-27.
 
 ## Open follow-ups
 
-Anonymous public clone on physical hardware and the desktop UI credential pass
-remain (`mobile/android_anonymous_clone`, `auto-sync/keyring_v4_migration`);
 SAF linked folders are deferred research (`mobile/android_saf_linked_folders`);
 iOS is deferred entirely (`mobile/ios_scaffold`).
