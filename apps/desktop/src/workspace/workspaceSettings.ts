@@ -1,5 +1,6 @@
 import { isRecord } from "@thinkbrain/core";
 
+import { DEFAULT_EXPLORER_SORT, isExplorerSortOrder, type ExplorerSortOrder } from "./explorerSort";
 import {
   readWorkspaceSettingsDocument,
   updateWorkspaceSettingsDocument
@@ -16,9 +17,14 @@ import {
 export interface WorkspaceSettings {
   /** Whether dot-prefixed entries (`.git`, `.obsidian`, …) appear in the explorer. */
   readonly showHidden: boolean;
+  /** How the explorer orders its tree. */
+  readonly explorerSort: ExplorerSortOrder;
 }
 
-export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = { showHidden: false };
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettings = {
+  showHidden: false,
+  explorerSort: DEFAULT_EXPLORER_SORT
+};
 
 /**
  * Parses a raw workspace-settings JSON document, falling back to defaults for
@@ -29,7 +35,10 @@ export function parseWorkspaceSettings(raw: string | null | undefined): Workspac
   if (!raw) return DEFAULT_WORKSPACE_SETTINGS;
   try {
     const value = JSON.parse(raw) as Partial<WorkspaceSettings> & { showHidden?: unknown };
-    return { showHidden: typeof value.showHidden === "boolean" ? value.showHidden : false };
+    return {
+      showHidden: typeof value.showHidden === "boolean" ? value.showHidden : false,
+      explorerSort: isExplorerSortOrder(value.explorerSort) ? value.explorerSort : DEFAULT_EXPLORER_SORT
+    };
   } catch {
     return DEFAULT_WORKSPACE_SETTINGS;
   }
@@ -86,7 +95,7 @@ export async function isWorkspaceGitLinked(rootPath: string): Promise<boolean> {
  * A document that will not parse is treated as absent: there is nothing to
  * preserve, and refusing to write would strand the preference instead.
  */
-export async function writeWorkspaceSettings(rootPath: string, settings: WorkspaceSettings): Promise<void> {
+export async function writeWorkspaceSettings(rootPath: string, settings: Partial<WorkspaceSettings>): Promise<void> {
   await updateWorkspaceSettingsDocument(rootPath, (raw) => {
     let base: Record<string, unknown> = {};
     if (typeof raw === "string" && raw.trim() !== "") {

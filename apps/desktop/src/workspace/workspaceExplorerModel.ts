@@ -1,4 +1,5 @@
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
+import { sortWorkspaceTree, type ExplorerSortOrder } from "./explorerSort";
 
 export type ExplorerPhase = "empty" | "opening" | "ready" | "error";
 
@@ -52,9 +53,10 @@ export interface WorkspaceTreeNode {
   readonly children: readonly WorkspaceTreeNode[];
 }
 
-/** Builds a stable folder-first tree from native workspace entries. */
+/** Builds a stable folder-first tree from native workspace entries, ordered by `order`. */
 export function buildWorkspaceTree(
-  entries: readonly NativeWorkspaceEntry[]
+  entries: readonly NativeWorkspaceEntry[],
+  order: ExplorerSortOrder = "name-asc"
 ): readonly WorkspaceTreeNode[] {
   const nodes = new Map<string, { entry: NativeWorkspaceEntry; children: WorkspaceTreeNode[] }>();
 
@@ -72,18 +74,7 @@ export function buildWorkspaceTree(
     }
   }
 
-  const sortNodes = (items: WorkspaceTreeNode[]): void => {
-    items.sort((left, right) => {
-      if (left.entry.kind !== right.entry.kind) {
-        return left.entry.kind === "directory" ? -1 : 1;
-      }
-      return left.entry.name.localeCompare(right.entry.name, undefined, { sensitivity: "base" });
-    });
-    items.forEach((item) => sortNodes(item.children as WorkspaceTreeNode[]));
-  };
-
-  sortNodes(roots);
-  return roots;
+  return sortWorkspaceTree(roots, order);
 }
 
 export function workspaceErrorMessage(error: unknown): string {

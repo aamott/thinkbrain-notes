@@ -4,6 +4,8 @@ import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
+import { ExplorerSortMenu } from "./ExplorerSortMenu";
+import type { ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceTreeItem, CreateNameInput } from "./WorkspaceTree";
 import { DeleteConfirmDialog, WorkspaceContextMenu } from "./WorkspaceExplorerMenus";
 import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
@@ -11,7 +13,7 @@ import { useWorkspaceSelectorOutlet } from "./WorkspaceSelectorPortalModel";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { WorkspaceSwitching, WorkspaceSwitchingSelector } from "./WorkspaceSwitching";
 import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
-import { type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { HEADER_ACTION_CLASSES, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR, type WorkspaceTreeDrag } from "./useWorkspaceTreeDrag";
 import { useWorkspaceFileDrag } from "./useWorkspaceFileDrag";
 
@@ -30,6 +32,7 @@ interface WorkspaceExplorerViewProps {
   readonly actionError: string | null;
   readonly busy: boolean;
   readonly showHidden: boolean;
+  readonly explorerSort: ExplorerSortOrder;
   readonly moreMenuOpen: boolean;
   readonly expandedFolders: ReadonlySet<string>;
   readonly activePath: string | null;
@@ -54,6 +57,7 @@ export function WorkspaceExplorerView({
   actionError,
   busy,
   showHidden,
+  explorerSort,
   moreMenuOpen,
   expandedFolders,
   activePath,
@@ -199,6 +203,13 @@ export function WorkspaceExplorerView({
               <FolderPlus aria-hidden="true" />
             </button>
           </div>
+          {/* Always visible, unlike the hover-reveal create icons: ordering
+              is a standing preference, not an occasional action. */}
+          <ExplorerSortMenu
+            sort={explorerSort}
+            disabled={state.phase !== "ready"}
+            onSelect={(order) => void actions.setExplorerSort(order)}
+          />
           <div className="relative">
             <button
               ref={moreButtonRef}
@@ -345,20 +356,12 @@ export function WorkspaceExplorerView({
 
 // ---- Helpers and small presentational components ----
 
-// Shared chrome-row action button: 26px on fine pointers, grows to a
-// touch-friendly 36px on coarse ones.
+// Shared chrome-row action button: roomy on fine pointers, touch-friendly on
+// coarse ones. The icon-button variant lives in ExplorerSortMenu.tsx.
 const EMPTY_ACTION_CLASSES = cn(
   "min-h-9 rounded-small border border-border bg-surface px-3 text-[0.6875rem] text-sidebar-foreground cursor-pointer font-inherit",
   "hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1",
   "pointer-coarse:min-h-11"
-);
-
-const HEADER_ACTION_CLASSES = cn(
-  "flex flex-none items-center justify-center size-[1.6rem] border-0 rounded-small text-muted-foreground bg-transparent cursor-pointer font-inherit",
-  "focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 [&>svg]:stroke-current [&>svg]:size-[0.95rem]",
-  "hover:bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]",
-  "disabled:cursor-default disabled:opacity-50",
-  "pointer-coarse:size-9"
 );
 
 function EmptyState({ switching }: { readonly switching: WorkspaceSwitchingController }) {

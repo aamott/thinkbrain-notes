@@ -533,6 +533,17 @@ fn list_workspace_entries_scopes_to_a_path_prefix() {
         "prefixed listing stays inside the subtree: {paths:?}"
     );
 
+    // Birth time rides along with mtime for the explorer's sort orders. All
+    // supported platforms expose a file creation time, so this is Some here —
+    // the Option is for filesystems that cannot report one.
+    let note = entries
+        .iter()
+        .find(|entry| entry.relative_path == "journal/2026-01-01.md")
+        .expect("journal note is listed");
+    assert!(note.created_at.is_some(), "created_at should be populated");
+    let serialized = serde_json::to_string(&entries).expect("entries serialize");
+    assert!(serialized.contains("\"created_at\""));
+
     fs::remove_dir_all(root).expect("temp list-prefix directory is cleaned up");
 }
 
@@ -666,6 +677,7 @@ fn collect_moved_files_fails_loudly_at_the_workspace_limit() {
             is_markdown: true,
             byte_size: 0,
             updated_at: None,
+            created_at: None,
         };
         MAX_WORKSPACE_ENTRIES
     ];

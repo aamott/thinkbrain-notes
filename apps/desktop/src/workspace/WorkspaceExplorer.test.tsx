@@ -4,12 +4,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities, NativeWorkspaceSnapshot } from "../native/commands";
+import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { WorkspaceExplorer, WorkspaceSelector } from "./WorkspaceExplorer";
 import { WorkspaceSelectorOutlet, WorkspaceSelectorProvider } from "./WorkspaceSelectorPortal";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
-import { readWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
+import { readWorkspaceSettings, writeWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
 
 vi.mock("./workspaceSettings", () => ({
   DEFAULT_WORKSPACE_SETTINGS: { showHidden: false },
@@ -203,6 +203,51 @@ describe("WorkspaceExplorer presentation", () => {
     expect(explorer?.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("false");
   });
 
+  it("reorders the tree from the sort menu and persists the choice", async () => {
+    const snapshot: NativeWorkspaceSnapshot = {
+      workspace: { root_path: "/notes/current", name: "current" },
+      files: []
+    };
+    const file = (path: string): NativeWorkspaceEntry => ({
+      relative_path: path,
+      name: path,
+      parent_path: "",
+      kind: "file",
+      is_markdown: true,
+      byte_size: 1,
+      updated_at: null
+    });
+    const api = {
+      ...workspaceDesktopApi,
+      openWorkspace: vi.fn(async () => snapshot),
+      listWorkspaceEntries: vi.fn(async () => [file("a.md"), file("b.md")])
+    };
+    await renderExplorer(api, "/notes/current");
+    await act(async () => undefined);
+
+    const names = () =>
+      Array.from(container?.querySelectorAll("[data-workspace-tree-row]") ?? []).map(
+        (row) => row.getAttribute("data-workspace-tree-row")
+      );
+    expect(names()).toEqual(["a.md", "b.md"]);
+
+    const sortButton = container?.querySelector<HTMLButtonElement>('button[aria-label="Sort files"]');
+    if (!sortButton) throw new Error("Sort files button missing");
+    await click(sortButton);
+
+    const options = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
+    const descending = options.find((item) => item.textContent?.includes("Name (Z–A)"));
+    if (!descending) throw new Error("Name (Z–A) option missing");
+    // The current order arrives pre-ticked so the menu reads as a radio set.
+    expect(options.some((item) => item.getAttribute("aria-checked") === "true")).toBe(true);
+    await click(descending);
+
+    expect(names()).toEqual(["b.md", "a.md"]);
+    expect(writeWorkspaceSettings).toHaveBeenCalledWith("/notes/current", {
+      explorerSort: "name-desc"
+    });
+  });
+
   it("uses a menu-shaped workspace selector that opens a new workspace without changing its source", async () => {
     const { onAction, onAdd, onSelect } = await renderSelector();
     const trigger = container?.querySelector<HTMLButtonElement>("button");
@@ -340,7 +385,7 @@ describe("WorkspaceExplorer presentation", () => {
     expect(container?.textContent).toContain("Reading workspace entries");
 
     await act(async () => {
-      resolveSettings({ showHidden: false });
+      resolveSettings({ showHidden: false, explorerSort: "modified-desc" });
       await Promise.resolve();
     });
 

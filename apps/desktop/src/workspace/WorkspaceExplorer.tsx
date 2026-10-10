@@ -9,6 +9,7 @@ import {
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import { subscribeExplorerToNoteChanges } from "./workspaceExplorerRefresh";
 import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings, writeWorkspaceSettings } from "./workspaceSettings";
+import { DEFAULT_EXPLORER_SORT, type ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
 export { WorkspaceSelector } from "./WorkspaceSelector";
 import { useWorkspaceSwitching } from "./useWorkspaceSwitching";
@@ -79,9 +80,11 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   // tree. Persisted per-workspace via `readWorkspaceSettings`/`writeWorkspaceSettings`
   // and restored when a workspace opens.
   const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
+  // The tree's ordering, restored per-workspace alongside `showHidden`.
+  const [explorerSort, setExplorerSort] = useState<ExplorerSortOrder>(DEFAULT_EXPLORER_SORT);
   // Open state for the header "..." (more actions) dropdown popover.
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const tree = useMemo(() => buildWorkspaceTree(state.entries), [state.entries]);
+  const tree = useMemo(() => buildWorkspaceTree(state.entries, explorerSort), [state.entries, explorerSort]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
   const {
     expandedFolders,
@@ -183,6 +186,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setActionError(null);
     setExpandedFolders(new Set());
     setShowHidden(DEFAULT_WORKSPACE_SETTINGS.showHidden);
+    setExplorerSort(DEFAULT_EXPLORER_SORT);
   }, [resetCreate, setContextMenu, setExpandedFolders]);
 
   const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
@@ -204,6 +208,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
         includeHidden = settings.showHidden;
         setShowHidden(settings.showHidden);
         showHiddenRef.current = settings.showHidden;
+        // Mocked or older settings documents may carry no order at all; the
+        // state setter's parameter type hides that, so fall back explicitly.
+        setExplorerSort(settings.explorerSort ?? DEFAULT_EXPLORER_SORT);
       } catch {
         if (rootPathRef.current !== rootPath) return;
         // Keep the in-memory default; the toggle still works for this session.
@@ -282,6 +289,23 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
     await refreshEntries();
   }, [refreshEntries]);
+
+  /**
+   * Applies a new tree ordering and persists it for the current workspace.
+   * Ordering is a pure reorder of already-loaded entries, so no refresh is
+   * needed — only the write can fail, and that surfaces as an action error
+   * without reverting the visible order.
+   */
+  const applyExplorerSort = useCallback(async (order: ExplorerSortOrder): Promise<void> => {
+    setExplorerSort(order);
+    const rootPath = rootPathRef.current;
+    if (!rootPath) return;
+    try {
+      await writeWorkspaceSettings(rootPath, { explorerSort: order });
+    } catch (error) {
+      setActionError(workspaceErrorMessage(error));
+    }
+  }, []);
 
   useEffect(() => {
     if (initialWorkspacePath) {
@@ -421,6 +445,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     () => ({
       setActivePath,
       toggleShowHidden,
+      setExplorerSort: applyExplorerSort,
       startCreate,
       submitCreate,
       submitRename,
@@ -453,6 +478,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       collapseFolder,
       expandFolder,
       moveEntry,
+      applyExplorerSort,
       confirmDelete,
       confirmExtensionCreate,
       dismissError,
@@ -493,6 +519,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       actionError={actionError}
       busy={busy}
       showHidden={showHidden}
+      explorerSort={explorerSort}
       moreMenuOpen={moreMenuOpen}
       expandedFolders={expandedFolders}
       activePath={activePath}

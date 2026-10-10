@@ -31,6 +31,7 @@ pub struct WorkspaceEntry {
     pub is_markdown: bool,
     pub byte_size: u64,
     pub updated_at: Option<u64>,
+    pub created_at: Option<u64>,
 }
 
 #[tauri::command]
@@ -509,6 +510,7 @@ pub fn workspace_entry(
         is_markdown: !is_dir && is_markdown_path(path),
         byte_size: if is_dir { 0 } else { metadata.byte_size },
         updated_at: metadata.updated_at,
+        created_at: metadata.created_at,
         relative_path: metadata.relative_path,
     })
 }

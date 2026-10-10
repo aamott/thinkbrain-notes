@@ -278,3 +278,35 @@ export function MenuCheckbox({
     </button>
   );
 }
+
+/**
+ * One choice in an exclusive set — the radio to {@link MenuCheckbox}'s
+ * checkbox. Same drawn-tick rule: `aria-checked` is the spoken state.
+ */
+export function MenuRadio({
+  label,
+  checked,
+  className,
+  onClick,
+}: {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly className?: string;
+  readonly onClick: (event: ReactMouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(MENU_ITEM, "text-foreground", className)}
+      role="menuitemradio"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onClick}
+    >
+      <span aria-hidden="true" className="w-3">
+        {checked ? "✓" : ""}
+      </span>
+      {label}
+    </button>
+  );
+}
