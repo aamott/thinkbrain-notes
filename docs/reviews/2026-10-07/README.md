@@ -117,8 +117,9 @@ this branch (fixed or resolved as duplicates); 12 remain below.
   not re-filed. `listNotes` full-vault filtering was fixed in the journal
   latency pass (`done-extension_listnotes_prefix-low-med.md`).
 - **Security posture:** extension code is deliberately trusted same-realm
-  JS (documented). The remaining real primitives are
-  `unscoped-fs-plugin-permissions` plus the already-tracked IPC gap.
+  JS (documented). `unscoped-fs-plugin-permissions` was closed in pass 2
+  (dialog fused into the Rust commands); the remaining real primitive is
+  the already-tracked IPC gap above.
 - **Known stragglers:** `PhoneShell.testHarness.tsx:71` still has a dead
   mock branch for the removed `list_managed_workspaces` (string-typed,
   compiles fine).
