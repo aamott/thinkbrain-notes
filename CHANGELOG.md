@@ -3,6 +3,23 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.4.0-1 — 2026-10-09
+
+Prerelease with editor safety, phone editing, and explorer sorting.
+
+- **Journal frontmatter is protected** — holding Backspace at the top of an
+  entry no longer deletes into the hidden frontmatter and breaks the entry.
+  Moving the cursor into the block (or selecting all) still edits it.
+- **Phone keyboard** — with the soft keyboard open, only the note scrolls;
+  the header no longer slides away with the content.
+- **Formatting bar on phones** — while typing in a note, a bar above the
+  keyboard offers bold, italic, strikethrough, code, heading, lists, tasks,
+  quote and link.
+- **Explorer sort** — a Sort button in the explorer header orders files by
+  recently modified, name, creation date or type, remembered per workspace.
+- **Extensions** — lifecycle, validation and hardening fixes from the
+  extension subsystem review; the journal now warms at startup.
+
 ## 0.3.2-1 — 2026-10-07
 
 Prerelease adding workspace management and first-run workspace guidance.
