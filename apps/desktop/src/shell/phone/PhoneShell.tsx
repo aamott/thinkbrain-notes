@@ -28,6 +28,7 @@ import { NewNoteMenu } from "./NewNoteMenu";
 import { NoteTitleRow } from "./NoteTitleRow";
 import { TabSwitcherSheet } from "./TabSwitcherSheet";
 import { useSoftKeyboardOpen } from "./useSoftKeyboardOpen";
+import { useVisualViewportBox } from "./useVisualViewportBox";
 import { useNewNoteMenuActions } from "./useNewNoteMenuActions";
 import { usePhoneAutosave } from "./usePhoneAutosave";
 import { phoneBreadcrumbs } from "./phoneBreadcrumbs";
@@ -337,6 +338,12 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   const newNoteMenuActions = useNewNoteMenuActions(shell.restoredWorkspacePath !== null);
   const softKeyboardOpen = useSoftKeyboardOpen();
+  // Edge-to-edge Android gets no adjustResize: only the visual viewport
+  // shrinks for the keyboard, and it can also pan inside the still-full-size
+  // layout viewport. Pinning the shell to the visual box keeps both the
+  // shrink and the pan inside this element — otherwise the browser pans the
+  // whole document instead.
+  const viewportBox = useVisualViewportBox();
 
   // Bubbles float over content but not over chrome surfaces: hidden under the
   // drawer, the tab switcher, the inspector and the bottom-panel sheet — an
@@ -398,6 +405,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
       <main
         data-phone-shell
         className="relative flex h-full min-w-0 flex-col overflow-clip bg-background text-foreground [--tn-shell-popout-left:0px] [--tn-phone-bubble-clearance:calc(4.5rem+env(safe-area-inset-bottom))]"
+        // `top` (the box is already `relative`) follows a visual-viewport pan
+        // without the containing-block side effects a transform would have on
+        // fixed-position descendants.
+        style={viewportBox === null ? undefined : { height: viewportBox.height, top: viewportBox.offsetTop }}
         aria-label="ThinkBrain mobile workspace"
       >
         <PhoneHeader

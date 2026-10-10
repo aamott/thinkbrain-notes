@@ -411,6 +411,26 @@ describe("PhoneShell", () => {
     expect(bubbleBar(host)).toBeNull();
   });
 
+  it("pins the shell to the visual viewport box so only content scrolls", async () => {
+    // The Android edge-to-edge case: adjustResize is ignored, only the
+    // visual viewport shrinks — and it can pan inside the layout viewport,
+    // so the shell root must track both the height and the offset.
+    vi.stubGlobal("innerHeight", 800);
+    vi.stubGlobal("visualViewport", {
+      height: 500,
+      scale: 1,
+      offsetTop: 120,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined
+    });
+
+    const host = await render();
+
+    const main = host.querySelector<HTMLElement>("main[data-phone-shell]");
+    expect(main?.style.height).toBe("500px");
+    expect(main?.style.top).toBe("120px");
+  });
+
   it("carries conflict and notification counts in the bubbles' accessible names", async () => {
     // `conflictBadges` is derived inside `useShellState`, so the badge input
     // is overridden on the rendered shell — the same way the navigation
