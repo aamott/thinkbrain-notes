@@ -149,6 +149,15 @@ const headingSpec = (
   };
 };
 
+/** Offsets of every non-overlapping `marker` occurrence in `text`. */
+const markerOffsets = (text: string, marker: string): number[] => {
+  const offsets: number[] = [];
+  for (let i = text.indexOf(marker); i !== -1; i = text.indexOf(marker, i + marker.length)) {
+    offsets.push(i);
+  }
+  return offsets;
+};
+
 /** Wraps (or unwraps) `range` in an inline marker, keeping the text selected. */
 const inlineSpec = (
   state: EditorState,
@@ -158,7 +167,30 @@ const inlineSpec = (
   const doc = state.doc;
   const m = marker.length;
   if (range.empty) {
-    // No selection: drop a marker pair and leave the cursor inside it.
+    // No selection. An odd count of markers before the cursor on this line
+    // means it sits inside an opened-but-unclosed span, so remove the
+    // enclosing pair — that is what makes a second tap undo the first.
+    const line = doc.lineAt(range.from);
+    const at = range.from - line.from;
+    const marks = markerOffsets(line.text, marker);
+    const before = marks.filter((p) => p < at);
+    const close = marks.find((p) => p >= at);
+    if (before.length % 2 === 1 && close !== undefined) {
+      const open = line.from + before[before.length - 1]!;
+      // A cursor inside the opener's own characters clamps to the deletion
+      // point; `range.from - m` alone would land before the document.
+      const caret = Math.max(open, range.from - m);
+      return {
+        specs: [
+          { from: open, to: open + m, insert: "" },
+          { from: line.from + close, to: line.from + close + m, insert: "" }
+        ],
+        anchor: caret,
+        head: caret
+      };
+    }
+    // Even count (or an open marker the line never closes): drop a marker
+    // pair and leave the cursor inside it.
     return { specs: [{ from: range.from, to: range.from, insert: marker + marker }], anchor: range.from + m, head: range.from + m };
   }
   const selected = doc.sliceString(range.from, range.to);

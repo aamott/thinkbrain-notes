@@ -48,6 +48,40 @@ describe("inline markers", () => {
     expect(out.anchor).toBe(6);
   });
 
+  it("removes the pair a second tap would otherwise stack inside", () => {
+    const on = apply("say ", { anchor: 4 }, "bold");
+    const off = apply(on.doc, { anchor: on.anchor }, "bold");
+    expect(off.doc).toBe("say ");
+    expect(off.anchor).toBe(4);
+  });
+
+  it("removes the pair enclosing the cursor", () => {
+    const out = apply("**text**", { anchor: 5 }, "bold");
+    expect(out.doc).toBe("text");
+    expect(out.anchor).toBe(3);
+    expect(apply("**a  b**", { anchor: 4 }, "bold").doc).toBe("a  b");
+  });
+
+  it("clamps the caret when the cursor sits inside the opening marker", () => {
+    const out = apply("**text**", { anchor: 1 }, "bold");
+    expect(out.doc).toBe("text");
+    expect(out.anchor).toBe(0);
+    expect(apply("~~a~~", { anchor: 1 }, "strikethrough").anchor).toBe(0);
+  });
+
+  it("still inserts a pair when the cursor sits between closed spans", () => {
+    const out = apply("x **a**  y", { anchor: 8 }, "bold");
+    expect(out.doc).toBe("x **a** **** y");
+    expect(out.anchor).toBe(10);
+    expect(apply("**a**  **b**", { anchor: 6 }, "bold").doc).toBe("**a** **** **b**");
+  });
+
+  it("counts markers on the cursor's line only", () => {
+    const out = apply("**done**\nnext ", { anchor: 14 }, "bold");
+    expect(out.doc).toBe("**done**\nnext ****");
+    expect(out.anchor).toBe(16);
+  });
+
   it("wraps with *, ~~ and ` for italic, strikethrough and code", () => {
     expect(apply("x", { anchor: 0, head: 1 }, "italic").doc).toBe("*x*");
     expect(apply("x", { anchor: 0, head: 1 }, "strikethrough").doc).toBe("~~x~~");
