@@ -1,10 +1,8 @@
 # Canvas
 
-Infinite canvas editor for spatial note arrangement — similar to Obsidian
-Canvas. Users place notes as cards on an infinite 2D surface, draw connections
-between them, and group related cards. A canvas is a user-owned sticky-note /
-whiteboard document persisted as `.canvas` JSON alongside the vault so it
-remains Git-friendly and sync-compatible.
+Infinite canvas editor for spatial note arrangement, similar to Obsidian
+Canvas: notes as cards on an infinite 2D surface, with drawn connections and
+groups, persisted as `.canvas` JSON files in the vault.
 
 This is a **future epic** — low urgency, not yet started. No prerequisites.
 
@@ -23,14 +21,12 @@ This is a **future epic** — low urgency, not yet started. No prerequisites.
 
 ## Architecture Decisions
 
-- **Canvas documents are user-owned files in the vault.** A canvas is a single
-  `.canvas` JSON file stored alongside Markdown notes; this is the explicit
-  vault-file exception for sticky-note/whiteboard document structure. It is
-  Git-friendly and sync-compatible, with a canonical format matching the
-  Obsidian Canvas schema for interoperability. A Markdown-with-frontmatter
-  alternative was considered and rejected because spatial layout does not map
-  cleanly to linear Markdown. Settings, cache, and viewport/session state stay
-  outside the vault.
+- **Canvas documents are user-owned files in the vault.** A single `.canvas`
+  JSON file alongside Markdown notes — the explicit vault-file exception for
+  whiteboard structure. Git-friendly and sync-compatible; canonical format
+  matches the Obsidian Canvas schema. A Markdown-with-frontmatter alternative
+  was rejected because spatial layout does not map to linear Markdown.
+  Settings, cache, and viewport/session state stay outside the vault.
 - **Canvas logic lives in `packages/core`.** The canvas document model (nodes,
   edges, positions, sizes) is platform-agnostic and must not depend on React or
   the DOM, per the hub-and-spoke rule. Rendering and interaction live in
@@ -44,9 +40,8 @@ This is a **future epic** — low urgency, not yet started. No prerequisites.
   layer (CSS transforms or a lightweight canvas/WebGL renderer) rather than
   scaling the DOM tree, to keep large canvases performant.
 - **Conflict-safe persistence.** Edits are debounced/batched and saved
-  atomically. External changes are detected before replacement and are never
-  silently overwritten; preserve both versions and let the user reload or
-  resolve. Structural auto-merge is deferred.
+  atomically. External changes are never silently overwritten; preserve both
+  versions and let the user reload or resolve.
 - **No proprietary backend.** Canvas files are plain files. Multi-user
   real-time collaboration is out of scope (see `collaboration` epic).
 - **No third-party canvas framework lock-in for MVP of this epic.** Evaluate
@@ -55,9 +50,8 @@ This is a **future epic** — low urgency, not yet started. No prerequisites.
 
 ## Dependencies
 
-- None. This is a standalone epic. The note model (`note-model`) and file
-  explorer (`workspace-explorer`) are already complete and provide the note
-  references and file management foundation canvas cards build on.
+- None. `note-model` and `workspace-explorer` provide the note references and
+  file management foundation cards build on.
 
 ## Non-Goals
 

@@ -32,3 +32,15 @@ previews.
 
 Approved mockup (D82). Field-definition editor, self-healing values, and `＋
 Add` (D83/D84 open vocabulary) shipped; extends `journal_settings_and_accessibility`.
+
+## Extension-Host Integration — `journal_extension_host_integration`
+
+`journal-calendar` activates as a built-in through `desktopExtensionHost`
+(`apps/desktop/src/extensions/builtins/journal.tsx`): panel `journal`, tab
+`calendar`, commands `new-entry`/`today`/`open-calendar`, editor header
+`metadata-widget`, D45-scoped settings — all registered inside `activate()`
+with disposable cleanup. Activation is warm (`onStartup`; D65 revisited) with
+view/command events as retry. Caveats: search reaches around `context`
+directly (`searchService`, `useSearchIndexStore`) — a documented built-in
+privilege, not extension-API surface; `Open folder…`/`Open settings` still
+have no extension-API route (tracked by `journal_panel_ui`).

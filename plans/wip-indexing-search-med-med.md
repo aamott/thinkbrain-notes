@@ -12,104 +12,65 @@ rebuildable and lives in OS app-data, never in the vault.
   to the whole workspace or to one folder.
 - Structured frontmatter indexing and facet queries for feature-owned filters (D41).
 - Search UI panel with debounced type-ahead and result snippets.
-- Per-workspace SQLite FTS5 cache stored in the OS app-data directory.
 
 ## Architecture Decisions
 
-- **SQLite FTS5 as an ephemeral cache.** A single `documents_fts` virtual table
-  holds all searchable fields; `path` is stored unindexed so results resolve
-  back to a workspace-relative file. The cache is always derivable from disk.
-- **Per-workspace cache files.** Each workspace gets its own SQLite file named
-  from a stable FNV-1a hash of the canonicalized root, so distinct vaults never
-  collide.
-- **One platform-owned derived metadata cache (D41).** Structured frontmatter and
-  facet values extend the existing rebuildable index; features do not maintain
+- **SQLite FTS5 as an ephemeral cache.** One `documents_fts` virtual table;
+  `path` stored unindexed so results resolve to a workspace-relative file.
+  Per-workspace SQLite files named from a stable FNV-1a hash of the
+  canonicalized root, so vaults never collide.
+- **One platform-owned derived metadata cache (D41).** Structured frontmatter
+  and facet values extend the rebuildable index; features do not maintain
   parallel caches or treat indexed metadata as source of truth.
-- **Frontend-driven indexing (OI-005).** The frontend reads files and runs the
-  shared core `parseNote`, then sends records to native SQLite via Tauri
-  commands. This is deliberate: it reuses the tested core parser and keeps the
-  UI responsive by yielding to the event loop between batches. It trades some
-  IPC overhead for parser correctness and a single parsing code path. This is
-  not a pending item — do not create a story for it.
-- **The watcher reports, the frontend indexes (OI-003).** A native `notify`
-  watcher detects edits made outside the app and reports which paths changed;
-  it deliberately parses nothing, because indexing stays frontend-driven per
-  OI-005. The frontend republishes those changes as the same `note.*` events an
-  in-app edit produces, so the search index, wiki-link index and calendar all
-  stay fresh without knowing a watcher exists. App writes record an expected
-  echo so the watcher does not re-report the app's own saves.
+- **Frontend-driven indexing (OI-005).** The frontend reads files, runs the
+  core `parseNote`, and sends records to native SQLite via Tauri commands —
+  reuses the tested parser and yields between batches. Deliberate; do not
+  create a story for it.
+- **The watcher reports, the frontend indexes (OI-003).** The native `notify`
+  watcher detects external edits and reports paths only; the frontend
+  republishes them as the same `note.*` events an in-app edit produces. App
+  writes record an expected echo so the watcher doesn't re-report them.
 - **A folder scope is part of the query, never a filter on its results.** Both
-  `search_index` and `query_index_metadata` take a `pathPrefix` and apply it in
-  SQL, sharing one definition of what a prefix means (`path_prefix_sql` in
-  `search/metadata.rs`) so the two cannot drift. A caller that filtered
-  afterwards would be handed whatever of its folder outranked the rest of the
-  vault — few notes, or none, wherever the folder is a small share of it, and
-  nothing would say so. An absent prefix searches everywhere, which is what a
-  search box over a workspace wants.
-- **Facet values describe the matching set, not the folder.** `query_metadata`
-  computes its facets over the entries the predicates matched, which is what a
-  drill-down wants and is not what a menu of alternatives wants: with `mood
-  good` in the predicates, `mood` comes back holding only `good`. A caller
-  offering values to choose between asks twice — once with no predicates for
-  the vocabulary, once with them for the matching set — and pays little for it,
-  since a query naming no facet keys skips the facet SQL entirely. The journal
-  panel does exactly that.
+  `search_index` and `query_index_metadata` take a `pathPrefix` applied in SQL
+  via the shared `path_prefix_sql` so the two cannot drift.
+- **Facet values describe the matching set, not the folder.** A caller offering
+  values to choose between asks twice — once predicate-free for the
+  vocabulary, once with predicates for the matching set.
 - **Pooled connections, never evicted (OI-004).** Index commands share a
-  per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`. Nothing
-  removes a handle when a workspace closes; revisit only if that matters.
+  per-workspace `rusqlite::Connection` from `SEARCH_CONNECTIONS`; nothing
+  removes a handle on workspace close — see `connection_pooling`.
 
-## Reusable pieces this epic produced
+## Reusable pieces
 
-- **`apps/desktop/src/lib/listWindow.ts`** — which rows of a long list are worth
-  drawing, and how much space to leave for the ones that are not. Knows nothing
-  about React or the DOM: it takes row heights and a scroll position and returns
-  indices. Written for the journal panel (D13), but the explorer tree, the
-  search results panel and the outline panel all render every row today and have
-  the same problem.
-- **Per-workspace, per-view collapsed groups in desktop state** (schema 5, D53).
-  Keyed by view id rather than named for the journal, so the explorer tree's
-  expansion — which is also lost on every restart — can take the same row.
+- `apps/desktop/src/lib/listWindow.ts` — pure virtualization math (row heights
+  + scroll position → visible indices). The explorer tree, search results and
+  outline panel render every row today and have the same problem.
+- Per-workspace, per-view collapsed groups in desktop state (schema 5, D53),
+  keyed by view id so the explorer tree can take the same row.
 
-## Known limits of search
+## Known limits
 
-- **A result cap, still silent.** `search_index` returns 50 hits by default and
-  never more than 200. That suits a ranked type-ahead list, where the tail is
-  not what the user is reading, but not a caller using search as a filter: the
-  journal panel asks for the ceiling and a query matching more entries than
-  that hides the rest without saying so. Path scoping made the cap reachable
-  rather than removing it. Raising or lifting it wants a caller that says it
-  wants every match — a paths-only query, without the snippet each hit carries.
-
-## Known limits of the watcher
-
-- **Not verified on Windows.** Exercised by hand on Linux and macOS (2026-08-13,
-  which is what closed out the two FSEvents defects fixed blind); both the paired
-  and unpaired rename shapes are handled. CI still runs `ubuntu-latest` only, so
-  Windows remains portable by construction rather than by evidence — its rename
-  shape and its refusal to remove an open file are the parts least like the two
-  that have been seen working.
-- **A symlinked folder inside the vault is reported twice and never suppressed.**
-  `notify` follows symlinks while the app records the canonical path, so the
-  recorded write and the reported event disagree. Costs a redundant reindex, not
-  a missed change.
-- **An in-app folder delete or rename rebuilds the index.** Deliberate: the OS
-  names only the folder, so the notes inside it cannot be enumerated to drop
-  them individually. This also fixes a standing bug where deleting a folder in
-  the app left every note inside it in the index.
-- **An outside write inside the same debounce window as one of ours is missed**
-  until that note changes again — the two are genuinely indistinguishable. See
-  the module docs in `watcher.rs`.
+- `search_index` returns 50 hits by default, 200 max — fine for type-ahead,
+  silently wrong for a caller using search as a filter. Raising it wants a
+  paths-only query without per-hit snippets.
+- Watcher is not verified on Windows (CI is `ubuntu-latest` only); rename
+  shapes are handled but portable-by-construction.
+- A symlinked folder inside the vault is reported twice — a redundant reindex,
+  not a missed change.
+- An in-app folder delete/rename rebuilds the index (the OS names only the
+  folder). Also fixes stale entries for notes inside deleted folders.
+- An outside write inside our debounce window is missed until that note
+  changes again — genuinely indistinguishable; see `watcher.rs` module docs.
 
 ## Status
 
-- ✅ Native SQLite FTS5 index (schema, upsert, delete, clear, search) — `apps/desktop/src-tauri/src/commands/search.rs`
-- ✅ Folder-scoped full-text search — `search_index` takes an optional `pathPrefix` (`SearchQuery` in `search.rs`), shared with the metadata queries via `path_prefix_sql`; `searchService.search(root, query, { pathPrefix, limit })` carries it, and the journal panel scopes to its own root
-- ✅ Per-workspace cache path resolution in OS app-data — `apps/desktop/src-tauri/src/commands/search.rs` (`resolve_index_db_path`, `stable_workspace_hash`)
-- ✅ Frontend indexing service (batched, abortable, progress) — `apps/desktop/src/search/searchService.ts` (`createSearchService`, `indexWorkspace`, `indexDocument`, `removeDocument`, `search`)
-- ✅ Background indexer hook on workspace open — `apps/desktop/src/search/searchIndexStore.ts` (`indexWorkspace` called from `DesktopShell.handleWorkspaceOpened`); aborts in-flight indexing on workspace switch
-- ✅ Incremental upsert/remove on in-app mutations — `searchIndexStore.subscribeToEvents()` wired in `DesktopShell`; listens to `note.saved`/`note.created`/`note.renamed`/`note.deleted` events from `workspaceAdapter`/`workspaceDocumentAdapter`
-- ✅ Search UI backend wiring (debounced type-ahead and snippets) — `apps/desktop/src/search/SearchPanel.tsx` reads `useSearchIndexStore` status, debounces 300ms, queries via `searchService.search`, renders snippets
-- ✅ Native command bridge and frontend types — `apps/desktop/src/native/commands.ts` types (`NativeDocumentInput`, `NativeSearchHit`) and `invokeNativeCommand` wrappers for `index_documents`/`search_index`/`clear_index`/`remove_index_document`
-- ✅ Structured frontmatter records and facet queries (D41) — `apps/desktop/src-tauri/src/commands/search/metadata.rs` (companion `document_metadata` table, path-scoped facet/metadata-filter queries with per-document AND semantics per D43); `packages/core/src/markdown.ts` (`collectIndexMetadata`); `apps/desktop/src/native/commands.ts` (`query_index_metadata` bridge); `apps/desktop/src/search/searchIndexStore.ts` (`queryMetadata` with typed available/unavailable/failure results)
-- ✅ File watcher for external edits (OI-003) — `apps/desktop/src-tauri/src/commands/watcher.rs` (native `notify` watcher, debounced, self-write suppression) and `apps/desktop/src/workspace/workspaceWatcher.ts` (translates changes into `note.*` events); started per workspace from `DesktopShell`
-- 🟨 Connection pooling / managed SQLite state (OI-004) — pooling done in `search.rs` (`get_search_connection`); pool eviction on workspace close still open — `connection_pooling`
+Shipped stories are summarized in `plans/indexing-search/done-summary.md`.
+
+- ✅ native FTS5 index, per-workspace cache, frontend indexing service,
+  background indexer, incremental upserts, search UI wiring, native bridge
+- ✅ `fts5_search_backend` — folder-scoped search shared across surfaces
+- ✅ frontmatter metadata facets (D41/D43)
+- ✅ conflict-safe note writes (`expected` precondition)
+- ✅ file watcher for external edits (OI-003)
+- 🟨 `connection_pooling` — pooling shipped; pool eviction on workspace close
+  still open (OI-004)

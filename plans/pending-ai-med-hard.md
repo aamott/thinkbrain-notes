@@ -119,7 +119,9 @@ Three kinds of messages in the thread:
 3. **Other notes** — host-injected contextual notices like "Your recent
    terminal commands:", "Your recently changed files:", etc. These come from
    the host, not the agent. Planner defines the full set.
-Line after agent chat shows options to copy, fork chat, show stats from that message.Symbols on bottom right of overall response.
+
+After each agent response: options to copy, fork chat, and show stats from
+that message; symbols sit bottom-right of the overall response.
 
 #### Expandable tabs menu (above the input composer)
 
@@ -129,8 +131,6 @@ Conditionally shown on top of input composer (where the user types). Tabs along 
   added/removed) across all file writes in the session/turn. If 10 edits are
   made across 5 files, the tab lists those 5 files with cumulative totals.
   Buttons: **reject all** and **accept all**. Zeros on accept/reject.
-  - **Reject all**
-  - **Accept all**
 - **Subagents** — list of active subagents; clicking one scrolls to that subagent's
   position in the chat.
 - Other tabs may be added later.
@@ -199,13 +199,12 @@ No UI mockup or implementation of these surfaces until answers are recorded.
 
 ## Current state (as inspected)
 
-- ✅ Assistant panel foundation exists (visual shell only).
-- ⬜ `AssistantPanel.tsx` is a visual-only placeholder; composer disabled; no
-  runtime behavior.
-- ⬜ `panelRegistry.tsx` has an `assistant` panel contribution (left-side
-  framing — will need to move to right action items menu per invariants).
-- ⬜ Rust has `agent-client-protocol` in `Cargo.toml`/lock but no ACP
-  module, commands, events, or lifecycle.
+- ✅ Assistant panel foundation exists (visual shell only): `AssistantPanel.tsx`
+  is a placeholder, composer disabled, no runtime behavior.
+- ⬜ `panelRegistry.tsx` registers `assistant` on the left — must move to the
+  right action items menu per invariants.
+- ⬜ Rust has `agent-client-protocol` in `Cargo.toml`/lock but no ACP module,
+  commands, events, or lifecycle.
 - ⬜ No `packages/core/src/ai/`, provider gateway, secret consumer, history
   adapter, or consent records exist.
 
@@ -216,7 +215,5 @@ is the planning pass's to decide.
 
 ## Status
 
-⬜ Unplanned. This is a fable, not an epic with stories yet — no `plans/ai/` directory
-exists and zero stories have been written. Nothing here has been implemented beyond the
-visual-only placeholder noted under "Current state" above. Awaiting the Opus 5 planning
-pass described in this document.
+⬜ Unplanned — a fable, not yet an epic with stories (no `plans/ai/` directory
+exists). Awaiting the Opus 5 planning pass described above.

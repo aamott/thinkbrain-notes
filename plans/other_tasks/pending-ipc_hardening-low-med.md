@@ -29,6 +29,10 @@
    `RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS` on Linux, an `O_NOFOLLOW` component
    walk elsewhere. Caveat: no open flag catches hard links — a checked-in
    file hard-linked to an outside same-filesystem file still passes.
+5. **Search pool creates indexes for any named directory** (2026-10-10
+   native-backend review). `get_search_connection` opens/creates an index
+   for a renderer-chosen root — same `RegisteredRoots` fix as #1 covers it.
+   `read_theme_file` was checked and already contains properly.
 
 ## Not done because
 

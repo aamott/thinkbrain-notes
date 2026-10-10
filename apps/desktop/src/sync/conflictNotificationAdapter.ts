@@ -7,7 +7,7 @@
  * activity-bar badge counts them, but a badge is easy to miss: this adapter
  * says it out loud, once, at the time.
  *
- * This fills the known gap in `pending-merge_ui-high-hard.md` ("No new-conflict
+ * This fills the known gap in `wip-merge_ui-high-hard.md` ("No new-conflict
  * toast"), which was blocked on the notification store (Story 1).
  *
  * Design:

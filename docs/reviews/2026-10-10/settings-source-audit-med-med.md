@@ -1,6 +1,6 @@
 # Audit: `apps/desktop/src/settings/` — bloat, over-testing, consolidation
 
-Task: `plans/other_tasks/pending-audit_settings_source-med-med.md`. Read-only audit; no source changes.
+Task: `audit_settings_source` (done — see `plans/other_tasks/done-summary.md`). Read-only audit; no source changes.
 
 ## Summary
 

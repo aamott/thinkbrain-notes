@@ -21,5 +21,5 @@ must not block the editor.
 
 - `plans/indexing-search/` — indexing-search epic and incremental indexing foundation
 - `apps/desktop/src-tauri/src/commands/search.rs` — shipped native `index_documents` and `remove_index_document` commands
-- A future typed frontend bridge remains planned for native index commands; background index lifecycle wiring is still open and no hook file is assigned.
+- `apps/desktop/src/native/commands.ts` + `apps/desktop/src/search/searchIndexStore.ts` — typed bridge and the existing incremental index lifecycle to mirror.
 - `plans/semantic-search/` — Architecture Decisions (indexing stays non-blocking)

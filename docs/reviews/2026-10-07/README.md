@@ -118,7 +118,7 @@ None — the last two were closed as documentation decisions:
 - **Already tracked elsewhere:** `read_extension_file`'s renderer-chosen
   `directory` root (`pending-ipc_hardening-low-med.md`) was deliberately
   not re-filed. `listNotes` full-vault filtering was fixed in the journal
-  latency pass (`done-extension_listnotes_prefix-low-med.md`).
+  latency pass (`extension_listnotes_prefix` — `plans/other_tasks/done-summary.md`).
 - **Security posture:** extension code is deliberately trusted same-realm
   JS (documented). `unscoped-fs-plugin-permissions` was closed in pass 2
   (dialog fused into the Rust commands); the remaining real primitive is

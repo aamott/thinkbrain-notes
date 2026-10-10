@@ -1,6 +1,6 @@
 # Verify Selective Restore UX
 
-Depends on: `pending-save_selective_restore-high-hard.md`
+Depends on: `save_selective_restore`
 
 ## Goal
 

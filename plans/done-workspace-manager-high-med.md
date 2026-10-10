@@ -32,9 +32,13 @@ welcome page. Mockup: `plans/workspace-manager/assets/workspace-manager-mockup.h
 
 ## Status
 
-- ✅ Native list, forget, managed delete — `known_workspaces_backend`
-- ✅ Manage workspaces modal (desktop + phone) — `manage_workspaces_modal`
-- ✅ Lift switching controller out of the explorer; unwind selector portal — `lift_workspace_switching`
-  - Selector placement kept as-is: `ui.workspaceSelectorPlacement` (title bar or panel headers) on desktop; always in the drawer on phone.
-- ⬜ Focus an already-open workspace window — `focus_open_workspace_window`
-- ⬜ Show in file manager (needs opener plugin) — `reveal_workspace_folder`
+Shipped stories are summarized in `plans/workspace-manager/done-summary.md`.
+
+- ✅ `known_workspaces_backend` — native list, forget, managed delete
+- ✅ `manage_workspaces_modal` — manage workspaces modal (desktop + phone)
+- ✅ `lift_workspace_switching` — switching controller lifted to shell level;
+  selector portal machinery removed
+- ✅ `focus_open_workspace_window` — focus an already-open workspace window
+- ✅ `reveal_workspace_folder` — show in file manager (needs opener plugin)
+- ✅ `detach_engine_on_delete` — detach sync engine + watcher before managed
+  delete; body-portaled overlays joined the overlay stack

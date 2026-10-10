@@ -1,9 +1,5 @@
 # Workspace Explorer
 
-> The prior desktop explorer was removed with the retired UI. Rebuild the
-> essential folder-open and read-only tree flow in the fresh shell before the
-> follow-up file-manager stories below.
-
 ## Goal
 
 Extend the file explorer beyond Markdown-only editing so users can manage and
@@ -56,22 +52,17 @@ default application.
 
 ## Status
 
-- ✅ fresh-shell workspace open, restore, and read-only explorer
-- ✅ Markdown CRUD UI integration in the fresh shell
-- ✅ Full-vault tree integration (folders + non-Markdown files, read-only) —
-  rebuilt against `list_workspace_entries` in the fresh shell
-- ✅ Dot-prefixed entries hidden by default — `lib.rs` `is_hidden_name`
-- ✅ Explorer icons, workspace selector, and multi-window workspace sessions
-- 🟨 Non-Markdown file operations (open / rename / delete) — generic
-  open/rename/delete shipped; unsupported binary formats still lack the OS
-  fallback — see `non_markdown_file_ops`
-- ✅ Drag-and-drop move in the file tree — see
-  `plans/workspace-explorer/done-summary.md`
-- ✅ New-folder action
-- ✅ Show-hidden toggle for dot-prefixed entries
-- ✅ Explorer tree/editor consumption of external file-change events — see
-  `plans/workspace-explorer/done-summary.md`; watcher lifecycle and index
-  updates belong to `plans/indexing-search/`.
-- ✅ FTS5 backend/index lifecycle integration — owned by
-  `plans/indexing-search/`; `fts5_search_backend` records the
-  explorer/UI integration.
+Shipped stories are summarized in `plans/workspace-explorer/done-summary.md`.
+
+- ✅ fresh-shell workspace open/restore, read-only explorer, Markdown CRUD,
+  full-vault tree, hidden-dotfile default, explorer icons, multi-window
+  sessions, new-folder action, show-hidden toggle
+- ✅ `drag_and_drop_move` — pointer/touch/keyboard move in the tree
+- ✅ `default_markdown_extension` — protected `.md` prefill on new note
+- ✅ file watcher consumption — tree/editor sync with external changes
+- ✅ `fts5_search_backend` — explorer search surfaces on the shared FTS5 index
+- 🟨 `non_markdown_file_ops` — generic open/rename/delete shipped; OS-default
+  fallback for unsupported binaries still open
+- ⬜ `drag_file_link_drop` — drop a tree file into a Markdown editor → link
+- ⬜ `editing_prop_group` — group the explorer view's editing props
+- ⬜ `tree_keyboard_consolidation` — one module owns the tree keyboard map
