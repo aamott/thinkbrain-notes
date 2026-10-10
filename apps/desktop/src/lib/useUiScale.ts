@@ -59,9 +59,10 @@ export function adjustUiScale(deltaPercent: number): void {
   useSettingsStore.getState().stageChange(UI_SCALE_KEY, clampUiScale(currentUiScale() + deltaPercent));
 }
 
-/** Restores the standard 100% scale. */
+/** Restores the definition's default scale — 100% on desktop, 125% on touch. */
 export function resetUiScale(): void {
-  useSettingsStore.getState().stageChange(UI_SCALE_KEY, DEFAULT_SCALE);
+  const fallback = appSettingsRegistry.getDefinition(UI_SCALE_KEY)?.default;
+  useSettingsStore.getState().stageChange(UI_SCALE_KEY, clampUiScale(fallback));
 }
 
 /**
