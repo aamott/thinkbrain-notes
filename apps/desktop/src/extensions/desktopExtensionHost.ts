@@ -36,7 +36,7 @@ import { appEvents, type AppEvents } from "../events/appEvents";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { createExtensionWorkspace, type DesktopExtensionWorkspace } from "./extensionWorkspace";
-import { getWorkspaceBridge } from "./workspaceBridge";
+import { getWorkspaceBridge, subscribeWorkspaceBridge } from "./workspaceBridge";
 import type { DesktopEditorHookContribution } from "../tabs/editorHookRegistry";
 import {
   appSettingsRegistry,
@@ -327,6 +327,8 @@ export interface DesktopExtensionHostRegistries {
 const extensionWorkspace = createExtensionWorkspace({
   documents: workspaceDocumentApi,
   getBridge: getWorkspaceBridge,
+  subscribeRoot: (listener) =>
+    subscribeWorkspaceBridge((bridge) => listener(bridge?.rootPath ?? null)),
   entries: workspaceDesktopApi
 });
 
@@ -435,7 +437,16 @@ function createDesktopExtensionContext(
         return own(context, registries.events.on(event, listener));
       }
     },
-    workspace: registries.workspace,
+    workspace: {
+      // The workspace object is shared across extensions, so the one
+      // subscription it offers is scoped here — same treatment `events.on`
+      // gets — rather than inside the surface itself.
+      ...registries.workspace,
+      onDidChangeRoot: (listener) => {
+        assertActive();
+        return own(context, registries.workspace.onDidChangeRoot(listener));
+      }
+    },
     settings
   };
 }

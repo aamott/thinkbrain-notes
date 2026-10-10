@@ -18,7 +18,6 @@ import {
   searchJournalEntries
 } from "../../journal/journalIndex";
 import { useSearchIndexStore } from "../../search/searchIndexStore";
-import { subscribeWorkspaceBridge } from "../workspaceBridge";
 import { searchService } from "../../search/searchService";
 import type { JournalFacet, JournalPredicate } from "../../journal/journalFacets";
 import { useCollapsedGroups } from "../../journal/journalCollapse";
@@ -29,8 +28,10 @@ import type { DesktopExtensionContext } from "../desktopExtensionHost";
  * The journal, as a built-in extension.
  *
  * It uses the same extension API a third-party would (D68): the service reaches
- * the workspace through `context.workspace`, and the panel factory closes over
- * it. Nothing here reaches into the shell.
+ * the workspace through `context.workspace`, events through `context.events`,
+ * and the panel factory closes over both. The one reach-around left is search
+ * (`searchService`, `useSearchIndexStore`) — the context has no search surface
+ * yet, so index-aware filtering stays a built-in privilege for now.
  *
  * Ids are fixed by D47 and must not drift — they appear in settings keys and in
  * saved workspace state.
@@ -281,15 +282,13 @@ export function activateJournal(context: DesktopExtensionContext): void {
     const [collapsed, setCollapsed] = useCollapsedGroups("journal");
 
     // A kept-mounted panel has no remount to notice a workspace switch or a
-    // changed `root` setting, so both feed the listing's key. The workspace
-    // root comes from the bridge — the same source the service reads — and
-    // the subscription fires inside the publish itself, where an effect
-    // reading `panelContext.rootPath` could still see the stale root.
+    // changed `root` setting, so both feed the listing's key. `onDidChangeRoot`
+    // fires inside the root change itself — the same source the service reads —
+    // where an effect reading `panelContext.rootPath` could still see the stale
+    // root.
     const [bridgeRoot, setBridgeRoot] = useState(() => context.workspace.rootPath());
     useEffect(() => {
-      const subscription = subscribeWorkspaceBridge((bridge) =>
-        setBridgeRoot(bridge?.rootPath ?? null)
-      );
+      const subscription = context.workspace.onDidChangeRoot(setBridgeRoot);
       return () => void subscription.dispose();
     }, []);
     const rootSetting = useWatchedSetting<string, string>(
@@ -322,6 +321,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
       // API has no route to yet; the states render without them until it does.
       <JournalPanelContainer
         service={service}
+        events={context.events}
         // What the listing is of: this vault, this journal folder. A switch of
         // either re-reads; the workspace part matters because `root` is
         // workspace-scoped and can read the same on both sides of a switch.
@@ -355,6 +355,7 @@ export function activateJournal(context: DesktopExtensionContext): void {
     return (
       <CalendarTabContainer
         service={service}
+        events={context.events}
         weekStartsOn={weekStartsOn}
         initialView={initialView}
         // D79/D80: the view persists per workspace; the date deliberately does

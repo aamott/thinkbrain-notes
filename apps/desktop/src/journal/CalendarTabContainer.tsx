@@ -7,10 +7,12 @@ import {
   type CalendarEntry,
   type CalendarView,
   type JournalDate,
-  type WeekStart
+  type WeekStart,
+  type EventSubscriber
 } from "@thinkbrain/core";
 import { useCallback, useEffect, useState } from "react";
 
+import type { AppEvents } from "../events/appEvents";
 import { CalendarTab } from "./CalendarTab";
 import { useJournalListRefresh, type JournalTroubleCode } from "./journalChrome";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
@@ -25,6 +27,11 @@ import { JournalError, type JournalService } from "./journalService";
 
 export interface CalendarTabContainerProps {
   readonly service: JournalService;
+  /**
+   * The extension's event surface (`context.events`), so its subscriptions
+   * are scoped to the activation rather than the app-wide bus.
+   */
+  readonly events: EventSubscriber<AppEvents>;
   readonly weekStartsOn?: WeekStart;
   /** Persisted per workspace (D56); absent falls back to the D64 default. */
   readonly initialView?: CalendarView;
@@ -37,6 +44,7 @@ export interface CalendarTabContainerProps {
 
 export function CalendarTabContainer({
   service,
+  events,
   weekStartsOn = 0,
   initialView = "month",
   onViewChange,
@@ -112,7 +120,7 @@ export function CalendarTabContainer({
 
   // The calendar is a second view of a folder the user edits from elsewhere, so
   // it has to hear about writes rather than trust its mount-time read (D68).
-  useJournalListRefresh(reload);
+  useJournalListRefresh(reload, events);
 
   const grid = calendarGrid({ view, date: focusDate, weekStartsOn });
   const aggregate = aggregateCalendarDays(entries, grid.range, {

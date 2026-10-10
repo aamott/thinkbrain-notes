@@ -281,6 +281,49 @@ describe("workspace and tab contributions", () => {
     expect(context?.workspace.rootPath()).toBeNull();
   });
 
+  it("notifies workspace.onDidChangeRoot on open, switch, and close", async () => {
+    let context: DesktopExtensionContext | undefined;
+    const host = createTrackedHost();
+    host.register(definition("root-watcher", (received) => {
+      context = received;
+    }));
+    await host.activate("root-watcher");
+
+    const roots: (string | null)[] = [];
+    context?.workspace.onDidChangeRoot((root) => roots.push(root));
+
+    const bridge = (rootPath: string | null) => ({
+      rootPath,
+      openNote: () => undefined,
+      openTab: () => undefined
+    });
+    setWorkspaceBridge(bridge("/vault"));
+    // A republish with an unchanged root does not re-notify.
+    setWorkspaceBridge(bridge("/vault"));
+    setWorkspaceBridge(bridge("/other"));
+    setWorkspaceBridge(null);
+
+    expect(roots).toEqual(["/vault", "/other", null]);
+  });
+
+  it("stops notifying and rejects new subscriptions after deactivation", async () => {
+    let context: DesktopExtensionContext | undefined;
+    const host = createTrackedHost();
+    host.register(definition("root-watcher", (received) => {
+      context = received;
+    }));
+    await host.activate("root-watcher");
+
+    const roots: (string | null)[] = [];
+    context?.workspace.onDidChangeRoot((root) => roots.push(root));
+
+    await host.deactivate("root-watcher");
+    setWorkspaceBridge({ rootPath: "/vault", openNote: () => undefined, openTab: () => undefined });
+
+    expect(roots).toEqual([]);
+    expect(() => context?.workspace.onDidChangeRoot(() => undefined)).toThrow("no longer active");
+  });
+
   it("registers a contributed tab under a prefixed kind and disposes it", async () => {
     const tabs = createDesktopTabRegistry([]);
     const host = createTrackedHost({ tabs });

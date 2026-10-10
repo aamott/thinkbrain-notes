@@ -33,6 +33,7 @@ const setup = (rootPath: string | null = "/vault", entries: readonly unknown[] =
   const workspace = createExtensionWorkspace({
     documents: api as never,
     getBridge: () => host,
+    subscribeRoot: () => ({ dispose: () => undefined }),
     entries: { listWorkspaceEntries } as never
   });
   return { api, host, workspace, listWorkspaceEntries };
@@ -141,6 +142,7 @@ describe("createExtensionWorkspace", () => {
     const workspace = createExtensionWorkspace({
       documents: documents() as never,
       getBridge: () => null,
+      subscribeRoot: () => ({ dispose: () => undefined }),
       entries: { listWorkspaceEntries: vi.fn(async () => []) } as never
     });
 

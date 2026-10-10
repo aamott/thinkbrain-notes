@@ -53,6 +53,7 @@ const mount = async (props: Partial<Parameters<typeof JournalPanelContainer>[0]>
     root?.render(
       <JournalPanelContainer
         {...props}
+        events={appEvents}
         service={props.service ?? service()}
         onOpenCalendar={props.onOpenCalendar ?? (() => undefined)}
       />
@@ -326,6 +327,7 @@ describe("searching the journal", () => {
     await act(async () =>
       root?.render(
         <JournalPanelContainer
+          events={appEvents}
           service={service({ listEntries: async () => listing(ENTRIES) })}
           onOpenCalendar={() => undefined}
           indexAvailable
@@ -413,6 +415,7 @@ describe("collapse state that outlives the panel (D53)", () => {
     await act(async () =>
       root?.render(
         <JournalPanelContainer
+          events={appEvents}
           service={props.service ?? service()}
           onOpenCalendar={() => undefined}
           collapsed={props.collapsed}
@@ -560,6 +563,7 @@ describe("metadata filters", () => {
     await act(async () =>
       root?.render(
         <JournalPanelContainer
+          events={appEvents}
           service={twoEntries}
           indexAvailable={false}
           loadFacets={async () => facets}
@@ -606,6 +610,7 @@ describe("kept-mounted freshness", () => {
     await act(async () =>
       root?.render(
         <JournalPanelContainer
+          events={appEvents}
           service={svc}
           listKey={"vault-b\0journal"}
           onOpenCalendar={() => undefined}

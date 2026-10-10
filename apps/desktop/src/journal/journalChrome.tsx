@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
-import { appEvents } from "../events/appEvents";
+import type { EventSubscriber } from "@thinkbrain/core";
+import type { AppEvents } from "../events/appEvents";
 
 /**
  * Chrome and wiring the journal's two surfaces share.
@@ -107,6 +108,9 @@ export function JournalTrouble({
  * listing field, and relisting on every keystroke-triggered save would churn
  * the folder while the user types.
  *
+ * The bus comes in as a parameter — `context.events` for the extension, so
+ * the subscriptions die with its activation rather than outliving it.
+ *
  * Not debounced. React batches the reloads that land in one task, and the app
  * has no path that writes many notes at once, so a timer would buy a saving
  * nothing can currently produce — and none of it can be pinned by a test.
@@ -114,13 +118,16 @@ export function JournalTrouble({
  * real and observable.
  */
 // eslint-disable-next-line react-refresh/only-export-components -- shared hook, no JSX
-export function useJournalListRefresh(reload: () => void): void {
+export function useJournalListRefresh(
+  reload: () => void,
+  events: EventSubscriber<AppEvents>
+): void {
   useEffect(() => {
     const subscriptions = (["note.created", "note.deleted", "note.renamed"] as const).map(
-      (event) => appEvents.on(event, reload)
+      (event) => events.on(event, reload)
     );
     return () => {
       for (const subscription of subscriptions) void subscription.dispose();
     };
-  }, [reload]);
+  }, [reload, events]);
 }

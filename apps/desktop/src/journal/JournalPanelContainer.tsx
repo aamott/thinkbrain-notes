@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { appEvents } from "../events/appEvents";
+import type { EventSubscriber } from "@thinkbrain/core";
+import type { AppEvents } from "../events/appEvents";
 import { createDebounced } from "../lib/debounce";
 import { JournalPanel } from "./JournalPanel";
 import { useJournalListRefresh } from "./journalChrome";
@@ -42,6 +43,11 @@ export interface JournalPanelContainerProps {
    * setting change, so both arrive through this key and re-read the folder.
    */
   readonly listKey?: string;
+  /**
+   * The extension's event surface (`context.events`), so its subscriptions
+   * are scoped to the activation rather than the app-wide bus.
+   */
+  readonly events: EventSubscriber<AppEvents>;
   /** False until the platform index is ready for this workspace (D41). */
   readonly indexAvailable?: boolean;
   /**
@@ -86,6 +92,7 @@ export interface JournalPanelContainerProps {
 export function JournalPanelContainer({
   service,
   listKey = "",
+  events,
   indexAvailable = false,
   searchEntries,
   loadFacets,
@@ -157,12 +164,12 @@ export function JournalPanelContainer({
 
   // The panel is kept mounted, so nothing remounts it into freshness: the
   // listing follows the folder changes every surface announces (D68).
-  useJournalListRefresh(reload);
+  useJournalListRefresh(reload, events);
 
   // A save can change the one thing the listing borrows from file contents:
   // the preview. Drop just that path so the visible window refetches it.
   useEffect(() => {
-    const subscription = appEvents.on("note.saved", ({ relativePath }) => {
+    const subscription = events.on("note.saved", ({ relativePath }) => {
       setPreviewState((current) => {
         if (!current.previews.has(relativePath)) return current;
         const previews = new Map(current.previews);
@@ -171,7 +178,7 @@ export function JournalPanelContainer({
       });
     });
     return () => void subscription.dispose();
-  }, []);
+  }, [events]);
 
   /**
    * Reads the first line of the entries the panel says are on screen (D9).

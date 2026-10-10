@@ -13,7 +13,7 @@
 import type { WorkspaceDesktopApi } from "../workspace/workspaceAdapter";
 import type { WorkspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import type { WorkspaceBridge } from "./workspaceBridge";
-import { WINDOWS_ABSOLUTE } from "@thinkbrain/core";
+import { WINDOWS_ABSOLUTE, type Disposable } from "@thinkbrain/core";
 
 /**
  * Matches a Windows drive-relative path, e.g. `C:file` — not absolute (no
@@ -34,6 +34,13 @@ export interface ExtensionNote {
 export interface DesktopExtensionWorkspace {
   /** Current workspace root, or `null` when no workspace is open. */
   rootPath(): string | null;
+  /**
+   * Fires when the workspace root changes — open, switch, or close (the
+   * listener then sees `null`). The notification is synchronous with the
+   * change, so a listener calling {@link rootPath} already reads the new
+   * root; an effect-driven read could still see the stale one.
+   */
+  onDidChangeRoot(listener: (rootPath: string | null) => void): Disposable;
   /** Reads a note's Markdown contents. */
   readNote(relativePath: string): Promise<string>;
   /** Overwrites a note's Markdown contents. */
@@ -58,6 +65,8 @@ export interface DesktopExtensionWorkspace {
 export interface ExtensionWorkspaceOptions {
   readonly documents: WorkspaceDocumentApi;
   readonly getBridge: () => WorkspaceBridge | null;
+  /** The host's root-change source; the workspace surface only re-exposes it. */
+  readonly subscribeRoot: (listener: (rootPath: string | null) => void) => Disposable;
   readonly entries: Pick<WorkspaceDesktopApi, "listWorkspaceEntries" | "renameWorkspaceEntry" | "deleteWorkspaceEntry">;
 }
 
@@ -128,6 +137,8 @@ export function createExtensionWorkspace(
 
   return {
     rootPath: () => getBridge()?.rootPath ?? null,
+
+    onDidChangeRoot: options.subscribeRoot,
 
     readNote: async (relativePath) => {
       const rootPath = resolve(relativePath);

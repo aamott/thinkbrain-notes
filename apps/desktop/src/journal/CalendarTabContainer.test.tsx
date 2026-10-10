@@ -53,6 +53,7 @@ const mount = async (
   await act(async () =>
     root?.render(
       <CalendarTabContainer
+        events={appEvents}
         service={props.service ?? service()}
         now={props.now ?? now}
         onChooseFolder={props.onChooseFolder}
