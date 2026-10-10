@@ -3,6 +3,7 @@
 import { spawnSync } from "node:child_process";
 
 const steps = [
+  ["Version consistency", "version:check", [], false],
   ["Lint", "lint", [], false],
   ["Typecheck", "typecheck", [], false],
   ["Format (Rust)", "format:rust", [], false],
