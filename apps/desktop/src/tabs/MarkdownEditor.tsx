@@ -8,6 +8,7 @@ import { notifyEditorCommands } from "./editorCommands";
 import { EditorErrorBanner } from "./EditorErrorBanner";
 import { frontmatterGuard } from "./frontmatterGuard";
 import { livePreview as livePreviewExtension } from "./livePreview";
+import { markdownFormat } from "./markdownFormat";
 import {
   markdownEditorHookRegistry,
   type MarkdownEditorHookPayload
@@ -114,7 +115,17 @@ export function MarkdownEditor({
         // sits inside the block, which live preview reads as "the cursor is in
         // here" and reveals it — so an entry opened showing the very thing the
         // dateline is there to replace. The body is also simply where you write.
-        selectionAnchor: bodyStart
+        selectionAnchor: bodyStart,
+        // Markdown-only command surface: its presence is what tells the phone
+        // shell's formatting bar to render for this tab.
+        commands: (getView) => ({
+          format: (action) => {
+            const view = getView();
+            if (!view) return;
+            view.dispatch(markdownFormat(view.state, action));
+            view.focus();
+          }
+        })
       };
     },
     // The compartments are created once per component instance, so this still

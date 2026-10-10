@@ -13,6 +13,7 @@ import { undo } from "@codemirror/commands";
 
 import { MarkdownEditor } from "./MarkdownEditor";
 import { releaseEditorStatesExcept } from "./editorStateCache";
+import { useEditorCommands, type EditorCommands } from "./editorCommands";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -270,6 +271,39 @@ describe("an edit that arrives as a whole new document", () => {
     });
 
     expect(view?.state.doc.toString()).toBe(before);
+  });
+});
+
+describe("MarkdownEditor registered commands", () => {
+  it("offers format, which wraps the selection at the cursor", async () => {
+    const box: { current: EditorCommands | null } = { current: null };
+    const Probe = (): null => {
+      box.current = useEditorCommands("tab-format");
+      return null;
+    };
+    const host = await mount(
+      <>
+        <MarkdownEditor
+          value="hello world"
+          stateKey="tab-format"
+          onChange={() => {}}
+          onSave={() => {}}
+        />
+        <Probe />
+      </>
+    );
+    const editor = host.querySelector(".cm-editor");
+    const view = editor === null ? null : EditorView.findFromDOM(editor as HTMLElement);
+    if (!view) throw new Error("No editor mounted.");
+
+    await act(async () => {
+      view.dispatch({ selection: { anchor: 0, head: 5 } });
+    });
+    expect(box.current?.format).toBeDefined();
+    await act(async () => box.current?.format?.("bold"));
+
+    expect(view.state.doc.toString()).toBe("**hello** world");
+    releaseEditorStatesExcept(new Set());
   });
 });
 

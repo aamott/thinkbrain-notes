@@ -17,6 +17,8 @@ import { TabCloseRequest } from "../TabCloseRequest";
 import { useCommandSurface } from "../useShellCommands";
 import { useNoteTitle } from "../useNoteTitle";
 import { TabContent } from "../TabContent";
+import { useEditorCommands } from "../../tabs/editorCommands";
+import { FormattingBar } from "./FormattingBar";
 import type { ShellState } from "../useShellState";
 import { usePhoneNavigation } from "./usePhoneNavigation";
 import { resolveBubbles } from "./bubbleModel";
@@ -338,6 +340,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   const newNoteMenuActions = useNewNoteMenuActions(shell.restoredWorkspacePath !== null);
   const softKeyboardOpen = useSoftKeyboardOpen();
+  // The formatting bar only exists where a tab's editor registered a `format`
+  // command — Markdown editors do, every other surface does not.
+  const editorCommands = useEditorCommands(route.kind === "tab" ? activeTab?.id : null);
   // Edge-to-edge Android gets no adjustResize: only the visual viewport
   // shrinks for the keyboard, and it can also pan inside the still-full-size
   // layout viewport. Pinning the shell to the visual box keeps both the
@@ -479,6 +484,13 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             />
           </div>
         </div>
+
+        {/* A normal flex child, not an overlay: it shrinks the content above
+            it, so with the shell pinned to the visual viewport it lands
+            directly on top of the soft keyboard. */}
+        {softKeyboardOpen && route.kind === "tab" && editorCommands?.format && (
+          <FormattingBar onFormat={editorCommands.format} />
+        )}
 
         {bubblesVisible && (
           <FloatingBubbles

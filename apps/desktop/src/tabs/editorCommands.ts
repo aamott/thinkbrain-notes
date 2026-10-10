@@ -17,6 +17,8 @@ import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
 import { useSyncExternalStore } from "react";
 
+import type { MarkdownFormatAction } from "./markdownFormat";
+
 export interface EditorCommands {
   readonly undo: () => void;
   readonly redo: () => void;
@@ -35,6 +37,12 @@ export interface EditorCommands {
    */
   readonly pending?: () => boolean;
   readonly saveLabel?: string;
+  /**
+   * Applies a Markdown formatting action at the selection — the phone
+   * formatting bar's entry point. Only Markdown editors register it, which is
+   * also how the bar knows whether to render at all.
+   */
+  readonly format?: (action: MarkdownFormatAction) => void;
 }
 
 interface RegisteredCommands {
