@@ -392,11 +392,9 @@ pub(crate) mod tests {
 
     /// Registers keyring-core's in-memory store for the whole test binary.
     ///
-    /// Under keyring v3 this file carried its own `HashMap` behind
-    /// `#[cfg(test)]`, which meant the tested code was not the shipped code.
-    /// v4's pluggable store lets the tests exercise the real path and swap only
-    /// the backend. The store is process-wide, exactly like the map it
-    /// replaces, so tests keep using distinct accounts.
+    /// The pluggable store lets the tests exercise the real credential path
+    /// and swap only the backend. The store is process-wide, so tests keep
+    /// using distinct accounts.
     pub(crate) fn with_a_store() {
         static ONCE: std::sync::Once = std::sync::Once::new();
         ONCE.call_once(|| {
