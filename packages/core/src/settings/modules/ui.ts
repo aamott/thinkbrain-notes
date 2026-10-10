@@ -26,6 +26,9 @@ export const uiModule: SettingsModule = {
           min: 50,
           max: 200,
           default: 100,
+          // The desktop registers a preset-percentage dropdown for this key;
+          // other hosts fall back to the plain number control.
+          control: "ui-scale",
           scope: "app",
           section: "ui.general",
           label: "Interface size",
