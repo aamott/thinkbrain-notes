@@ -45,6 +45,17 @@ pub fn list_workspace_entries(
     let start = match path_prefix.as_deref().map(str::trim) {
         Some("") | None => root.clone(),
         Some(prefix) => {
+            let normalized = normalize_relative_path(prefix)?;
+            // The same exclusions a full scan applies at every level: a
+            // hidden or ignored segment can never yield entries the tree
+            // would show, so a scoped walk under one is empty rather than a
+            // read the tree hides.
+            let excluded = normalized.split('/').any(|segment| {
+                (!include_hidden && is_hidden_name(segment)) || IGNORED_FOLDERS.contains(&segment)
+            });
+            if excluded {
+                return Ok(Vec::new());
+            }
             let dir = resolve_workspace_entry_path(&root, prefix)?;
             // A prefix naming a folder that does not exist yet is an empty
             // listing, not a failure — the same answer a full scan gave when

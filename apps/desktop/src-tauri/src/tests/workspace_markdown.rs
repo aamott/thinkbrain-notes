@@ -575,6 +575,77 @@ fn list_workspace_entries_rejects_a_prefix_that_escapes() {
 }
 
 #[test]
+fn list_workspace_entries_hidden_prefix_is_an_empty_listing() {
+    let root = temp_test_dir("list-hidden-prefix");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        ".private/note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("hidden note is created");
+
+    // A full scan never descends into `.private`, so a scoped walk under it
+    // must answer empty rather than list what the tree hides.
+    let entries = list_workspace_entries(
+        root.to_string_lossy().to_string(),
+        false,
+        Some(".private".to_string()),
+    )
+    .expect("hidden prefix is not an error");
+    assert!(entries.is_empty());
+
+    // `include_hidden` lifts the exclusion for the prefix as it does for the
+    // walk's own entries.
+    let entries = list_workspace_entries(
+        root.to_string_lossy().to_string(),
+        true,
+        Some(".private".to_string()),
+    )
+    .expect("hidden prefix with include_hidden succeeds");
+    assert!(
+        entries
+            .iter()
+            .any(|entry| entry.relative_path == ".private/note.md")
+    );
+
+    fs::remove_dir_all(root).expect("temp list-hidden-prefix directory is cleaned up");
+}
+
+#[test]
+fn list_workspace_entries_ignored_prefix_is_an_empty_listing() {
+    let root = temp_test_dir("list-ignored-prefix");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "node_modules/pkg/note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("ignored note is created");
+    create_workspace_file(
+        root.to_string_lossy().to_string(),
+        "deep/node_modules/x/note.md".to_string(),
+        Some("body".to_string()),
+    )
+    .expect("buried ignored note is created");
+
+    // Direct hit and a buried one — either way the full scan never reaches
+    // these files.
+    for prefix in ["node_modules", "deep/node_modules/x"] {
+        let entries = list_workspace_entries(
+            root.to_string_lossy().to_string(),
+            false,
+            Some(prefix.to_string()),
+        )
+        .expect("ignored prefix is not an error");
+        assert!(
+            entries.is_empty(),
+            "prefix {prefix} lists nothing: {entries:?}"
+        );
+    }
+
+    fs::remove_dir_all(root).expect("temp list-ignored-prefix directory is cleaned up");
+}
+
+#[test]
 fn collect_moved_files_fails_loudly_at_the_workspace_limit() {
     let root = temp_test_dir("move-limit");
     create_workspace_file(
