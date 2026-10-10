@@ -20,10 +20,10 @@ import { createDebounced } from "../lib/debounce";
 export const EXPLORER_REFRESH_DELAY_MS = 120;
 
 /**
- * Re-lists the workspace whenever a note is added, removed or renamed in it.
+ * Re-lists the workspace whenever a note changes in it.
  *
- * Edits are deliberately not listened for: a save changes bytes, not the shape
- * of the tree, and the tree shows names.
+ * Saves count too: "Recently modified" ordering reads `updated_at`, which a
+ * save moves, and the debounce keeps a save burst to one listing.
  *
  * Args:
  *   currentRootPath: The workspace the tree is showing, asked at delivery time
@@ -41,10 +41,7 @@ export function subscribeExplorerToNoteChanges(
 ): () => void {
   const scheduleRefresh = createDebounced(refresh, delayMs);
 
-  const stopListening = subscribeToNoteChanges(currentRootPath, (change) => {
-    if (change.kind === "saved") return;
-    scheduleRefresh();
-  });
+  const stopListening = subscribeToNoteChanges(currentRootPath, () => scheduleRefresh());
 
   return () => {
     // Order matters only for readability; both have to happen. A timer left
