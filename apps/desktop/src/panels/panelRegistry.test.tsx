@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { LeftPopout } from "./LeftPopout";
 import { RightPopout } from "./RightPopout";
+import { WorkspaceSwitchingHarness } from "../workspace/workspaceSwitching.testHarness";
 import {
   builtInDesktopPanels,
   createDesktopPanelRegistry,
@@ -244,15 +245,20 @@ describe("desktop panel registry", () => {
   });
 
   it("drives left and right popout rendering from registered contributions", () => {
+    // The kept-mounted explorer consumes the shell-level switching context.
     const leftMarkup = renderToStaticMarkup(
-      <LeftPopout
-        panel="tags"
-        rootPath={null}
-        explorerProps={context.explorerProps}
-        onOpenSearchResult={context.onOpenSearchResult}
-        onReviewConflict={context.onReviewConflict}
-        onOpenSyncSettings={context.onOpenSyncSettings}
-      />
+      <WorkspaceSwitchingHarness>
+        {() => (
+          <LeftPopout
+            panel="tags"
+            rootPath={null}
+            explorerProps={context.explorerProps}
+            onOpenSearchResult={context.onOpenSearchResult}
+            onReviewConflict={context.onReviewConflict}
+            onOpenSyncSettings={context.onOpenSyncSettings}
+          />
+        )}
+      </WorkspaceSwitchingHarness>
     );
     const rightMarkup = renderToStaticMarkup(
       <RightPopout panel="backlinks" context={context} />

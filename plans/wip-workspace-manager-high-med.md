@@ -34,6 +34,7 @@ welcome page. Mockup: `plans/workspace-manager/assets/workspace-manager-mockup.h
 
 - ✅ Native list, forget, managed delete — `known_workspaces_backend`
 - ✅ Manage workspaces modal (desktop + phone) — `manage_workspaces_modal`
-- ⬜ Lift switching controller out of the explorer; unwind selector portal — `lift_workspace_switching`
+- ✅ Lift switching controller out of the explorer; unwind selector portal — `lift_workspace_switching`
+  - Selector placement kept as-is: `ui.workspaceSelectorPlacement` (title bar or panel headers) on desktop; always in the drawer on phone.
 - ⬜ Focus an already-open workspace window — `focus_open_workspace_window`
 - ⬜ Show in file manager (needs opener plugin) — `reveal_workspace_folder`

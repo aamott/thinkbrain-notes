@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities, NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { WorkspaceExplorer, WorkspaceSelector } from "./WorkspaceExplorer";
-import { WorkspaceSelectorOutlet, WorkspaceSelectorProvider } from "./WorkspaceSelectorPortal";
+import { WorkspaceSwitchingHarness } from "./workspaceSwitching.testHarness";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import { readWorkspaceSettings, writeWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
@@ -88,7 +88,8 @@ async function renderSelector(capabilities = desktopCapabilities) {
 async function renderExplorer(
   api: WorkspaceDesktopApi,
   initialWorkspacePath?: string,
-  capabilities = desktopCapabilities
+  capabilities = desktopCapabilities,
+  props: Record<string, unknown> = {}
 ) {
   container = document.createElement("div");
   document.body.append(container);
@@ -100,13 +101,15 @@ async function renderExplorer(
   };
   await act(async () => {
     root?.render(
-      <WorkspaceSelectorProvider>
-        <WorkspaceSelectorOutlet variant="panel" />
-        <WorkspaceExplorer
-          api={resolvedApi}
-          initialWorkspacePath={initialWorkspacePath}
-        />
-      </WorkspaceSelectorProvider>
+      <WorkspaceSwitchingHarness api={resolvedApi} initialWorkspacePath={initialWorkspacePath ?? null}>
+        {(workspacePath) => (
+          <WorkspaceExplorer
+            api={resolvedApi}
+            initialWorkspacePath={workspacePath}
+            {...props}
+          />
+        )}
+      </WorkspaceSwitchingHarness>
     );
   });
 }
@@ -135,30 +138,31 @@ describe("WorkspaceExplorer presentation", () => {
     expect(new Set(markup).size).toBe(5);
   });
 
-  it("portals the selector into the outlet instead of the explorer content", async () => {
+  it("keeps the plain Files header when the selector is not placed in panels", async () => {
     await renderExplorer(workspaceDesktopApi);
 
-    const outlet = container?.querySelector('[data-workspace-selector-outlet="panel"]');
     const explorer = container?.querySelector('section[aria-label="Workspace explorer"]');
-    expect(outlet?.querySelector('button[aria-haspopup="menu"]')).not.toBeNull();
-    expect(explorer?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
+    expect(explorer?.querySelector("header h2")?.textContent).toBe("Files");
+    expect(explorer?.querySelector('header button[aria-haspopup="menu"]')).toBeNull();
   });
 
   it("renders the selector inside its own header row when it lives in panel headers", async () => {
-    // The popout mounts no outlet for the explorer — the selector trigger is
-    // the chrome row's title, drawn by the explorer itself.
+    // The explorer draws the selector itself in panel-headers placement; the
+    // shared controller comes from context, same as the title bar's instance.
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
     const api = { ...workspaceDesktopApi, workspaceAccessCapabilities: async () => desktopCapabilities };
     await act(async () => {
       root?.render(
-        <WorkspaceSelectorProvider>
-          <WorkspaceExplorer
-            api={api}
-            workspaceSelectorInPanel
-          />
-        </WorkspaceSelectorProvider>
+        <WorkspaceSwitchingHarness api={api}>
+          {() => (
+            <WorkspaceExplorer
+              api={api}
+              workspaceSelectorInPanel
+            />
+          )}
+        </WorkspaceSwitchingHarness>
       );
     });
 
@@ -166,8 +170,6 @@ describe("WorkspaceExplorer presentation", () => {
     const trigger = header?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
     expect(trigger).not.toBeNull();
     expect(trigger?.textContent).toContain("Choose workspace");
-    // Without an outlet the selector must not also appear through the portal.
-    expect(container.querySelector('[data-workspace-selector-outlet]')).toBeNull();
   });
 
   it("shows the Files label and create/overflow actions once a workspace is ready", async () => {
@@ -391,7 +393,6 @@ describe("WorkspaceExplorer presentation", () => {
 
     expect(openWorkspace).toHaveBeenCalledWith("/notes/current");
     expect(listWorkspaceEntries).toHaveBeenCalledWith("/notes/current", false);
-    expect(container?.textContent).toContain("current");
     expect(container?.textContent).toContain("This workspace is empty");
   });
 
@@ -399,7 +400,7 @@ describe("WorkspaceExplorer presentation", () => {
     const pickWorkspaceDirectory = vi.fn(() => Promise.resolve<string | null>("/notes/new"));
     const openWorkspaceWindow = vi.fn(() => Promise.resolve());
     const api = { ...workspaceDesktopApi, pickWorkspaceDirectory, openWorkspaceWindow };
-    await renderExplorer(api);
+    await renderExplorer(api, undefined, desktopCapabilities, { workspaceSelectorInPanel: true });
 
     const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
@@ -465,7 +466,7 @@ describe("WorkspaceExplorer presentation", () => {
       openWorkspace,
       openWorkspaceWindow
     };
-    await renderExplorer(api, undefined, managedCapabilities);
+    await renderExplorer(api, undefined, managedCapabilities, { workspaceSelectorInPanel: true });
 
     const trigger = container?.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']");
     if (!trigger) throw new Error("Workspace selector trigger was not rendered.");
@@ -542,10 +543,9 @@ describe("WorkspaceExplorer presentation", () => {
     };
     await act(async () => {
       root?.render(
-        <WorkspaceSelectorProvider>
-          <WorkspaceSelectorOutlet variant="panel" />
-          <WorkspaceExplorer api={failing} />
-        </WorkspaceSelectorProvider>
+        <WorkspaceSwitchingHarness api={failing}>
+          {() => <WorkspaceExplorer api={failing} workspaceSelectorInPanel />}
+        </WorkspaceSwitchingHarness>
       );
     });
 

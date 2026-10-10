@@ -12,7 +12,7 @@ import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings, writeWorkspaceSettin
 import { DEFAULT_EXPLORER_SORT, type ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
 export { WorkspaceSelector } from "./WorkspaceSelector";
-import { useWorkspaceSwitching } from "./useWorkspaceSwitching";
+import { useWorkspaceSwitchingContext } from "./workspaceSwitchingContext";
 import { useWorkspaceContextMenu } from "./useWorkspaceContextMenu";
 import { useWorkspaceInlineCreate } from "./useWorkspaceInlineCreate";
 import { useWorkspaceTreeNavigation } from "./useWorkspaceTreeNavigation";
@@ -24,7 +24,6 @@ import {
   workspaceMoveDestination
 } from "./workspaceMove";
 import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
-import { publishWorkspaceOnboarding } from "./workspaceOnboardingStore";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -40,13 +39,16 @@ export interface WorkspaceExplorerProps {
   /** Request that the explorer begin creating a note at the workspace root. */
   readonly newNoteFocusRequest?: number;
   readonly onNewNoteFocusHandled?: () => void;
+  /**
+   * Read by the shell for its switching controller's `onWorkspaceLaunched`;
+   * the explorer itself no longer owns launching.
+   */
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
   /** Asked for one file's earlier versions from the right-click menu. */
   readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
   /**
    * Set when the shell places the workspace selector in panel headers: the
-   * explorer renders the selector inside its own chrome row instead of
-   * portaling it into a popout outlet.
+   * explorer renders the selector inside its own chrome row.
    */
   readonly workspaceSelectorInPanel?: boolean;
 }
@@ -66,7 +68,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onMarkdownFileCreated,
   newNoteFocusRequest = 0,
   onNewNoteFocusHandled,
-  onWorkspaceLaunched,
   onShowVersions,
   workspaceSelectorInPanel = false
 }: WorkspaceExplorerProps) {
@@ -105,14 +106,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const rootPathRef = useRef(workspaceRootPath);
   const apiRef = useRef(api);
   const showHiddenRef = useRef(showHidden);
-  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected, onWorkspaceLaunched });
+  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected });
   // Refs are updated in an effect (not during render) per the react-hooks/refs
   // rule. Async helpers read `*.current` after each `await`.
   useEffect(() => {
     stateRef.current = state;
     apiRef.current = api;
     showHiddenRef.current = showHidden;
-    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected, onWorkspaceLaunched };
+    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected };
   });
 
   // In-flight operation counter so overlapping CRUD calls do not clobber the
@@ -242,31 +243,10 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     }
   }, []);
 
-  const switching = useWorkspaceSwitching({
-    api,
-    apiRef,
-    onWorkspaceLaunchedRef: callbacksRef,
-    loadWorkspace,
-    startOperation,
-    endOperation,
-    setActionError
-  });
-
-  // The explorer is keepMounted, so this surface is live even while its panel
-  // is hidden — letting the welcome tab and other chrome offer the same
-  // create/open entry points without owning the dialogs.
-  useEffect(() => {
-    publishWorkspaceOnboarding({
-      capabilities: switching.accessCapabilities,
-      workspaces: switching.knownWorkspaces,
-      openFolder: () => void switching.openWorkspace(),
-      createManagedVault: () => switching.setCreateManagedWorkspaceOpen(true),
-      importFromGit: switching.openGitLinkImport,
-      manageWorkspaces: switching.openManageWorkspaces,
-      openPath: (rootPath) => void switching.launchWorkspace(rootPath)
-    });
-    return () => publishWorkspaceOnboarding(null);
-  }, [switching]);
+  // The switching controller lives at shell level: the selector in the
+  // explorer's chrome, the open-workspace menu item and the empty state's
+  // actions all read the same instance through context.
+  const switching = useWorkspaceSwitchingContext();
 
   /**
    * Toggles the "show hidden entries" preference, persists it to the current

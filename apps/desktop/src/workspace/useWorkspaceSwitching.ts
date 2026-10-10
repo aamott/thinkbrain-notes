@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { NativeKnownWorkspace, NativeWorkspaceAccessCapabilities } from "../native/commands";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { forgetWorkspace, saveDesktopState } from "../settings/desktopState";
@@ -13,9 +13,17 @@ const DESKTOP_WORKSPACE_ACCESS: NativeWorkspaceAccessCapabilities = {
 
 /**
  * Everything about choosing, creating, importing and managing workspaces — as
- * opposed to exploring the one that is open. Owned by `WorkspaceExplorer`,
- * rendered by `WorkspaceSwitching`, the workspace selector and the manager
- * dialog.
+ * opposed to exploring the one that is open. Instantiated once at shell level
+ * and shared through `WorkspaceSwitchingContext`, rendered by the workspace
+ * selector (whichever placement it takes) and the manager/create/import
+ * dialogs the shell mounts.
+ *
+ * In-window opens do not load the workspace here: they go through
+ * `openWorkspaceInWindow`, which points the explorer's `initialWorkspacePath`
+ * at the new root and lets its existing load path run. Launch, pick and
+ * capability failures surface as transient notifications (the explorer banner
+ * belongs to in-workspace operations); create-dialog failures stay in the
+ * dialog via `createManagedWorkspaceError`.
  */
 export interface WorkspaceSwitchingController {
   readonly accessCapabilities: NativeWorkspaceAccessCapabilities | null;
@@ -28,8 +36,12 @@ export interface WorkspaceSwitchingController {
   readonly managedStorageNoticeOpen: boolean;
   readonly importFromGitOpen: boolean;
   readonly manageWorkspacesOpen: boolean;
-  /** A failure belonging to the manager dialog (not the explorer banner). */
+  /** A failure belonging to the manager dialog. */
   readonly manageWorkspacesError: string | null;
+  /** Busy state of the create-managed-vault dialog's submit. */
+  readonly creatingManagedWorkspace: boolean;
+  /** A failure belonging to the create-managed-vault dialog. */
+  readonly createManagedWorkspaceError: string | null;
   readonly createManagedWorkspace: (name: string) => Promise<boolean>;
   readonly openWorkspace: () => Promise<void>;
   readonly openGitLinkImport: () => void;
@@ -52,31 +64,51 @@ export interface WorkspaceSwitchingController {
 
 interface UseWorkspaceSwitchingOptions {
   readonly api: WorkspaceDesktopApi;
-  /** Latest api, read after each `await`. */
-  readonly apiRef: RefObject<WorkspaceDesktopApi>;
-  readonly onWorkspaceLaunchedRef: RefObject<{ readonly onWorkspaceLaunched?: (rootPath: string) => void }>;
-  readonly loadWorkspace: (rootPath: string) => Promise<void>;
-  readonly startOperation: () => void;
-  readonly endOperation: () => void;
-  readonly setActionError: Dispatch<SetStateAction<string | null>>;
+  /**
+   * Opens a workspace in this window. The shell points the explorer's
+   * `initialWorkspacePath` at the root so the explorer's own load path —
+   * settings restore, snapshot, entry listing — runs unchanged.
+   */
+  readonly openWorkspaceInWindow: (rootPath: string) => void;
+  /** Fired after a new-window launch so the shell can persist the choice. */
+  readonly onWorkspaceLaunched?: (rootPath: string) => void;
 }
+
+/** Reports a switching failure the explorer banner can no longer host. */
+const notifyWorkspaceError = (message: string): void => {
+  useNotificationStore.getState().addNotification({
+    source: "workspaces",
+    title: "Workspace action failed",
+    message,
+    severity: "transient",
+    variant: "error"
+  });
+};
 
 export function useWorkspaceSwitching({
   api,
-  apiRef,
-  onWorkspaceLaunchedRef,
-  loadWorkspace,
-  startOperation,
-  endOperation,
-  setActionError
+  openWorkspaceInWindow,
+  onWorkspaceLaunched
 }: UseWorkspaceSwitchingOptions): WorkspaceSwitchingController {
   const [accessCapabilities, setAccessCapabilities] = useState<NativeWorkspaceAccessCapabilities | null>(null);
   const [knownWorkspaces, setKnownWorkspaces] = useState<readonly NativeKnownWorkspace[]>([]);
-  const [createManagedWorkspaceOpen, setCreateManagedWorkspaceOpen] = useState(false);
+  const [createManagedWorkspaceOpen, setCreateManagedWorkspaceOpenState] = useState(false);
   const [managedStorageNoticeOpen, setManagedStorageNoticeOpen] = useState(false);
   const [importFromGitOpen, setImportFromGitOpen] = useState(false);
   const [manageWorkspacesOpen, setManageWorkspacesOpen] = useState(false);
   const [manageWorkspacesError, setManageWorkspacesError] = useState<string | null>(null);
+  const [creatingManagedWorkspace, setCreatingManagedWorkspace] = useState(false);
+  const [createManagedWorkspaceError, setCreateManagedWorkspaceError] = useState<string | null>(null);
+
+  // Refs holding the latest inputs so async helpers never read a stale
+  // closure after an `await`. Updated in an effect per the react-hooks/refs
+  // rule; the callbacks they replace are cheap, so no dep churn matters.
+  const apiRef = useRef(api);
+  const callbacksRef = useRef({ openWorkspaceInWindow, onWorkspaceLaunched });
+  useEffect(() => {
+    apiRef.current = api;
+    callbacksRef.current = { openWorkspaceInWindow, onWorkspaceLaunched };
+  });
 
   const refreshKnownWorkspaces = useCallback(() => {
     if (typeof apiRef.current.listKnownWorkspaces !== "function") return;
@@ -87,7 +119,7 @@ export function useWorkspaceSwitching({
       // The manager is the only surface this list backs, so its failure goes
       // there — an empty list with no error reads as "your vaults are gone".
       .catch((error: unknown) => setManageWorkspacesError(workspaceErrorMessage(error)));
-  }, [apiRef]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -104,7 +136,7 @@ export function useWorkspaceSwitching({
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setActionError(workspaceErrorMessage(error));
+        notifyWorkspaceError(workspaceErrorMessage(error));
         // Fall back to the same answer the absent-method branch gives. A
         // rejection used to leave `accessCapabilities` null forever, which is
         // not "we don't know yet" to the view — it renders "Checking workspace
@@ -118,7 +150,7 @@ export function useWorkspaceSwitching({
     return () => {
       active = false;
     };
-  }, [api, setActionError]);
+  }, [api]);
 
   // The list other windows may have changed — on mount, on refocus, and after
   // every mutation below.
@@ -132,33 +164,33 @@ export function useWorkspaceSwitching({
     try {
       if (accessCapabilities?.opensWorkspaceInNewWindow !== false) {
         await apiRef.current.openWorkspaceWindow(rootPath);
-        onWorkspaceLaunchedRef.current.onWorkspaceLaunched?.(rootPath);
+        callbacksRef.current.onWorkspaceLaunched?.(rootPath);
       } else {
-        await loadWorkspace(rootPath);
+        callbacksRef.current.openWorkspaceInWindow(rootPath);
       }
       refreshKnownWorkspaces();
     } catch (error) {
-      setActionError(workspaceErrorMessage(error));
+      notifyWorkspaceError(workspaceErrorMessage(error));
     }
-  }, [accessCapabilities, apiRef, loadWorkspace, onWorkspaceLaunchedRef, refreshKnownWorkspaces, setActionError]);
+  }, [accessCapabilities, refreshKnownWorkspaces]);
 
   const createManagedWorkspace = useCallback(async (name: string): Promise<boolean> => {
-    startOperation();
-    setActionError(null);
+    setCreatingManagedWorkspace(true);
+    setCreateManagedWorkspaceError(null);
     try {
       const workspace = await apiRef.current.createManagedWorkspace(name);
-      setCreateManagedWorkspaceOpen(false);
+      setCreateManagedWorkspaceOpenState(false);
       setManagedStorageNoticeOpen(true);
-      await loadWorkspace(workspace.root_path);
+      callbacksRef.current.openWorkspaceInWindow(workspace.root_path);
       refreshKnownWorkspaces();
       return true;
     } catch (error) {
-      setActionError(workspaceErrorMessage(error));
+      setCreateManagedWorkspaceError(workspaceErrorMessage(error));
       return false;
     } finally {
-      endOperation();
+      setCreatingManagedWorkspace(false);
     }
-  }, [apiRef, endOperation, loadWorkspace, refreshKnownWorkspaces, setActionError, startOperation]);
+  }, [refreshKnownWorkspaces]);
 
   const openGitLinkImport = useCallback(() => {
     setImportFromGitOpen(true);
@@ -169,9 +201,9 @@ export function useWorkspaceSwitching({
       const rootPath = await apiRef.current.pickWorkspaceDirectory();
       if (rootPath) await launchWorkspace(rootPath);
     } catch (error) {
-      setActionError(workspaceErrorMessage(error));
+      notifyWorkspaceError(workspaceErrorMessage(error));
     }
-  }, [apiRef, launchWorkspace, setActionError]);
+  }, [launchWorkspace]);
 
   const openManageWorkspaces = useCallback(() => {
     setManageWorkspacesError(null);
@@ -255,7 +287,14 @@ export function useWorkspaceSwitching({
           variant: "success"
         });
     return true;
-  }, [apiRef, knownWorkspaces, refreshKnownWorkspaces]);
+  }, [knownWorkspaces, refreshKnownWorkspaces]);
+
+  // Opening or closing the dialog starts a fresh attempt, so a previous
+  // failure never lingers into the next open.
+  const setCreateManagedWorkspaceOpen = useCallback((value: SetStateAction<boolean>) => {
+    setCreateManagedWorkspaceError(null);
+    setCreateManagedWorkspaceOpenState(value);
+  }, []);
 
   return useMemo(
     () => ({
@@ -266,6 +305,8 @@ export function useWorkspaceSwitching({
       importFromGitOpen,
       manageWorkspacesOpen,
       manageWorkspacesError,
+      creatingManagedWorkspace,
+      createManagedWorkspaceError,
       createManagedWorkspace,
       openWorkspace,
       openGitLinkImport,
@@ -288,6 +329,8 @@ export function useWorkspaceSwitching({
       importFromGitOpen,
       manageWorkspacesOpen,
       manageWorkspacesError,
+      creatingManagedWorkspace,
+      createManagedWorkspaceError,
       createManagedWorkspace,
       openWorkspace,
       openGitLinkImport,
@@ -295,7 +338,8 @@ export function useWorkspaceSwitching({
       refreshKnownWorkspaces,
       openManageWorkspaces,
       forgetWorkspaceEntry,
-      deleteManagedWorkspace
+      deleteManagedWorkspace,
+      setCreateManagedWorkspaceOpen
     ]
   );
 }

@@ -15,7 +15,7 @@ import {
   resolveActionItems,
   serializePinnedActionItems
 } from "./actionItemsModel";
-import { WorkspaceSelectorOutlet } from "../workspace/WorkspaceSelectorPortal";
+import { WorkspaceSwitchingSelector } from "../workspace/WorkspaceSwitching";
 
 /**
  * Back/Forward chrome: the ⌘ command-palette button's sizing, with hover
@@ -41,6 +41,8 @@ type TitleBarProps = {
   /** Currently open right panel, or `null` when the right dock is collapsed. */
   readonly rightPanel: RightPanel | null;
   readonly showWorkspaceSelector: boolean;
+  /** The open workspace's root, shown as the selector's current entry. */
+  readonly currentWorkspacePath?: string;
   /** Whether tab-activation history has a previous tab Back can return to. */
   readonly canGoBack: boolean;
   /** Whether a Forward visit exists after Back moved the history cursor. */
@@ -91,6 +93,7 @@ export function TitleBar({
   activeTabId,
   rightPanel,
   showWorkspaceSelector,
+  currentWorkspacePath,
   canGoBack,
   canGoForward,
   onBack,
@@ -253,7 +256,9 @@ export function TitleBar({
           </button>
         </div>
         {showWorkspaceSelector ? (
-          <WorkspaceSelectorOutlet variant="titlebar" />
+          <div className="flex min-w-0 flex-1 items-center">
+            <WorkspaceSwitchingSelector variant="titlebar" currentPath={currentWorkspacePath} />
+          </div>
         ) : (
           <>
             <span className="inline-flex items-center justify-center bg-primary text-primary-foreground rounded-small text-[0.625rem] font-extrabold h-4 w-4">

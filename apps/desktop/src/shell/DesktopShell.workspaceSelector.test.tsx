@@ -22,7 +22,13 @@ vi.mock("../workspace/workspaceAdapter", () => ({
     createWorkspaceFile: vi.fn(),
     createWorkspaceFolder: vi.fn(),
     renameWorkspaceEntry: vi.fn(),
-    deleteWorkspaceEntry: vi.fn()
+    deleteWorkspaceEntry: vi.fn(),
+    listKnownWorkspaces: vi.fn(async () => []),
+    workspaceAccessCapabilities: vi.fn(async () => ({
+      canOpenFolder: true,
+      canCreateManagedWorkspace: true,
+      opensWorkspaceInNewWindow: true
+    }))
   }
 }));
 
@@ -75,46 +81,55 @@ async function renderShell(): Promise<HTMLDivElement> {
 }
 
 describe("DesktopShell workspace selector placement", () => {
-  it("moves the Explorer-owned selector between title bar and eligible panel chrome", async () => {
+  it("mounts the selector in the title bar by default and in panel chrome when placed there", async () => {
     const host = await renderShell();
 
-    const titlebarOutlet = host.querySelector('[data-workspace-selector-outlet="titlebar"]');
-    const titlebarSelector = titlebarOutlet?.querySelector('button[aria-haspopup="menu"]');
-    expect(titlebarSelector).not.toBeNull();
-    expect(host.querySelector('[aria-label="Workspace and commands"]')).not.toBeNull();
-
-    const filesAction = host.querySelector<HTMLButtonElement>('[aria-label="Workspace sections"] [aria-label="Files"]');
-    await act(async () => filesAction?.click());
-    expect(host.querySelector('[data-workspace-selector-outlet="titlebar"] button')).toBe(titlebarSelector);
-    await act(async () => filesAction?.click());
+    // Title-bar placement: the trigger sits in the top chrome, not the explorer.
+    const titlebar = host.querySelector("header.bg-titlebar");
+    const titlebarSelector = titlebar?.querySelector('button[aria-haspopup="menu"]');
+    expect(titlebarSelector?.textContent).toContain("Choose workspace");
+    const filesPanel = host.querySelector('[aria-label="Files panel"]');
+    expect(filesPanel?.querySelector('header button[aria-haspopup="menu"]')).toBeNull();
 
     await act(async () => {
       useSettingsStore.getState().stageChange(PLACEMENT_KEY, "panel headers");
     });
 
-    // The explorer draws the selector inside its own chrome row — its title
-    // slot *is* the trigger, so the popout mounts no outlet for it.
-    const filesPanel = host.querySelector('[aria-label="Files panel"]');
+    // Panel-headers placement: the explorer draws the selector in its own
+    // chrome row; the title bar no longer carries one.
     const panelSelector = filesPanel?.querySelector('header button[aria-haspopup="menu"]');
-    expect(panelSelector).not.toBeNull();
-    expect(host.querySelector('[data-workspace-selector-outlet="panel"]')).toBeNull();
-    expect(host.querySelectorAll('button[aria-haspopup="menu"]')).toHaveLength(1);
-    expect(host.querySelector('[aria-label="ThinkBrain"]')?.textContent).toContain("ThinkBrain");
-    expect(host.querySelector('[aria-label="Workspace and commands"]')).toBeNull();
+    expect(panelSelector?.textContent).toContain("Choose workspace");
+    expect(titlebar?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
 
+    // Other opted-in popouts (Search) draw their own trigger in the title
+    // slot — a second instance sharing the one shell-level controller.
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[aria-label="Workspace sections"] [aria-label="Extensions"]')?.click();
+      host.querySelector<HTMLButtonElement>('[aria-label="Workspace sections"] [aria-label="Search"]')?.click();
+    });
+    const searchPanel = host.querySelector('[aria-label="Search panel"]');
+    expect(searchPanel?.querySelector('button[aria-haspopup="menu"]')?.textContent).toContain("Choose workspace");
+  });
+
+  it("opens the workspace manager from the title-bar selector without the explorer", async () => {
+    const host = await renderShell();
+    // Collapse the Files dock: the popout stays mounted under aria-hidden, so
+    // the dialog must not be rendered inside it.
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="Workspace sections"] [aria-label="Files"]')?.click();
     });
 
-    // Extensions is not an opted panel: no outlet anywhere, and every
-    // selector trigger in the tree sits inside a kept-mounted panel hidden
-    // by its neighbour — none is visible.
-    expect(host.querySelector('[aria-label="Extensions panel"]')).not.toBeNull();
-    expect(host.querySelector('[data-workspace-selector-outlet="panel"]')).toBeNull();
-    const triggers = host.querySelectorAll('button[aria-haspopup="menu"]');
-    expect(triggers.length).toBeGreaterThan(0);
-    for (const trigger of triggers) {
-      expect(trigger.closest(".hidden")).not.toBeNull();
-    }
+    const trigger = host.querySelector<HTMLButtonElement>('header.bg-titlebar button[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+
+    const manage = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menu"] *'))
+      .find((el) => el.textContent?.includes("Manage workspaces"));
+    expect(manage).toBeDefined();
+    await act(async () => manage!.click());
+    await act(async () => undefined);
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.closest('[aria-hidden="true"]')).toBeNull();
   });
 });

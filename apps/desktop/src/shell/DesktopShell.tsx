@@ -31,8 +31,10 @@ import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "..
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
-import { useWorkspaceOnboardingStore } from "../workspace/workspaceOnboardingStore";
-import { WorkspaceSelectorProvider } from "../workspace/WorkspaceSelectorPortal";
+import { useWorkspaceSwitching } from "../workspace/useWorkspaceSwitching";
+import { WorkspaceSwitchingContext } from "../workspace/workspaceSwitchingContext";
+import { WorkspaceSwitchingDialogs } from "../workspace/WorkspaceSwitching";
+import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import type { ShellState } from "./useShellState";
 
 export function DesktopShell({ shell }: { readonly shell: ShellState }) {
@@ -97,32 +99,30 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   // The new-tab page's entry points, wired to the desktop's own surfaces:
   // commands run through the palette's context, files through the palette's
   // quick-open. The phone chrome supplies the same three routed its own way.
-  const { paletteCommands, runCommand, openPalette, setLeftPanel, workspaceName } = shell;
+  const { paletteCommands, runCommand, openPalette, workspaceName } = shell;
   // With no workspace open, the landing tab's job is direction — the same
-  // create/open entry points the explorer's empty state offers. Explorer-owned
-  // dialogs render inside the explorer, so its panel is surfaced first.
-  const onboarding = useWorkspaceOnboardingStore((s) => s.actions);
+  // create/open entry points the explorer's empty state offers, run through
+  // the shell-level switching controller whose dialogs live here too.
+  const switching = useWorkspaceSwitching({
+    api: workspaceDesktopApi,
+    openWorkspaceInWindow: shell.openWorkspaceInWindow,
+    onWorkspaceLaunched: shell.explorerProps.onWorkspaceLaunched
+  });
   const newTab = useMemo(() => {
     if (workspaceName === null) {
-      const viaExplorer = (run: () => void) => () => {
-        setLeftPanel("explorer");
-        run();
-      };
       const actions: NewTabAction[] = [];
-      if (onboarding?.capabilities?.canCreateManagedWorkspace) {
-        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.createManagedVault) });
+      if (switching.accessCapabilities?.canCreateManagedWorkspace) {
+        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: () => switching.setCreateManagedWorkspaceOpen(true) });
       }
-      if (onboarding?.capabilities?.canOpenFolder) {
-        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.openFolder) });
+      if (switching.accessCapabilities?.canOpenFolder) {
+        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => void switching.openWorkspace() });
       }
-      if (onboarding) {
-        actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.importFromGit) });
-        for (const workspace of onboarding.workspaces) {
-          if (workspace.missing) continue;
-          actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => onboarding.openPath(workspace.rootPath) });
-        }
-        actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: viaExplorer(onboarding.manageWorkspaces) });
+      actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: switching.openGitLinkImport });
+      for (const workspace of switching.knownWorkspaces) {
+        if (workspace.missing) continue;
+        actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => void switching.launchWorkspace(workspace.rootPath) });
       }
+      actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: switching.openManageWorkspaces });
       return { workspaceName, actions };
     }
     const runById = (id: string) => {
@@ -137,7 +137,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
         { id: "search", label: "Search workspace", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => runById("search") }
       ]
     };
-  }, [paletteCommands, runCommand, openPalette, workspaceName, onboarding, setLeftPanel]);
+  }, [paletteCommands, runCommand, openPalette, workspaceName, switching]);
 
   const leftPopout = (
     <LeftPopout
@@ -160,7 +160,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   }, [leftWidth, leftPanel, effectiveRightPanel, rightWidth]);
 
   return (
-    <WorkspaceSelectorProvider>
+    <WorkspaceSwitchingContext.Provider value={switching}>
       <main
         className="grid grid-rows-[2.25rem_auto_minmax(0,1fr)_1.5rem] grid-cols-[minmax(0,1fr)] w-full max-w-full h-full min-w-0 overflow-hidden bg-background text-foreground"
         ref={rootRef}
@@ -171,6 +171,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           activeTabId={tabState.activeTabId}
           rightPanel={effectiveRightPanel}
           showWorkspaceSelector={workspaceSelectorPlacement === "title bar"}
+          currentWorkspacePath={shell.restoredWorkspacePath ?? undefined}
           canGoBack={canGoBackInTabs(tabState)}
           canGoForward={canGoForwardInTabs(tabState)}
           onBack={() => dispatchTabs({ type: "goBack" })}
@@ -314,7 +315,11 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           />
         )}
         <TabCloseRequest shell={shell} />
+        {/* One dialog set for every switching surface — title bar, panel
+            headers, landing-tab actions — mounted at shell level so it is
+            never hidden by the panel that opened it. */}
+        <WorkspaceSwitchingDialogs currentPath={shell.restoredWorkspacePath ?? undefined} />
       </main>
-    </WorkspaceSelectorProvider>
+    </WorkspaceSwitchingContext.Provider>
   );
 }

@@ -11,7 +11,7 @@ controller location is.
 
 ## Acceptance
 
-- [ ] Switching controller + its dialogs provided at shell level (context).
-- [ ] Selector rendered directly at each placement; portal/outlet files removed.
-- [ ] Placement setting decided (keep title bar or panel header + drawer only).
-- [ ] Tests; `pnpm qa` clean.
+- [x] Switching controller + its dialogs provided at shell level (context).
+- [x] Selector rendered directly at each placement; portal/outlet files removed.
+- [x] Placement setting decided (kept `ui.workspaceSelectorPlacement` (title bar | panel headers); phone drawer always).
+- [x] Tests; `pnpm qa` clean.

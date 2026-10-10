@@ -140,14 +140,13 @@ describe("PhoneShell", () => {
     expect(filesPanel(host)?.querySelector('button[aria-haspopup="menu"]')).toBeNull();
   });
 
-  // Both dialogs are owned and rendered by WorkspaceExplorer inside the Files
-  // branch, which is `aria-hidden` while a note route is up. The drawer's
-  // `onAction` hook must swap the drawer's entry for Files before the action
-  // opens its dialog, or the dialog mounts under the hidden ancestor.
+  // The switching dialogs mount at shell level above every route, so a drawer
+  // action only needs the drawer dismissed — no Files reveal, and the dialog
+  // can never land under the Files branch's `aria-hidden` ancestor.
   it.each([
     { action: "Create vault…", dialogTitle: "Create managed vault" },
     { action: "Bring in from Git link…", dialogTitle: "Bring in workspace from Git link" }
-  ])("reveals Files for the drawer's %s action before its dialog opens", async ({
+  ])("opens the drawer's %s dialog at shell level once the drawer closes", async ({
     action,
     dialogTitle
   }) => {
@@ -168,9 +167,7 @@ describe("PhoneShell", () => {
     await act(async () => item.click());
 
     expect(visibleDialog(host, "Navigation")).toBeNull();
-    expect(filesVisible(host)).toBe(true);
-    // Explorer-owned dialogs portal to <body>, so they can never mount under
-    // the Files branch's `aria-hidden` ancestor the way they once could.
+    expect(filesVisible(host)).toBe(false);
     const heading = [...document.querySelectorAll('[role="dialog"] h2')].find(
       (h) => h.textContent === dialogTitle
     );

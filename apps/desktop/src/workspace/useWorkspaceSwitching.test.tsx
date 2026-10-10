@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, useEffect, useRef } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NativeKnownWorkspace } from "../native/commands";
@@ -26,21 +26,19 @@ const knownWorkspaces: NativeKnownWorkspace[] = [
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let controller: WorkspaceSwitchingController | null = null;
+let openedInWindow: string[];
 
-const noop = () => undefined;
-const noopAsync = async () => undefined;
-
-function Probe({ api }: { readonly api: WorkspaceDesktopApi }) {
-  const apiRef = useRef(api);
-  const onWorkspaceLaunchedRef = useRef({});
+function Probe({
+  api,
+  onWorkspaceLaunched
+}: {
+  readonly api: WorkspaceDesktopApi;
+  readonly onWorkspaceLaunched?: (rootPath: string) => void;
+}) {
   const switching = useWorkspaceSwitching({
     api,
-    apiRef,
-    onWorkspaceLaunchedRef,
-    loadWorkspace: noopAsync,
-    startOperation: noop,
-    endOperation: noop,
-    setActionError: noop
+    openWorkspaceInWindow: (rootPath) => openedInWindow.push(rootPath),
+    onWorkspaceLaunched
   });
   useEffect(() => {
     controller = switching;
@@ -48,7 +46,10 @@ function Probe({ api }: { readonly api: WorkspaceDesktopApi }) {
   return null;
 }
 
-async function render(api: Partial<WorkspaceDesktopApi> = {}) {
+async function render(
+  api: Partial<WorkspaceDesktopApi> = {},
+  onWorkspaceLaunched?: (rootPath: string) => void
+) {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -63,7 +64,7 @@ async function render(api: Partial<WorkspaceDesktopApi> = {}) {
     ...api
   };
   await act(async () => {
-    root?.render(<Probe api={resolved} />);
+    root?.render(<Probe api={resolved} onWorkspaceLaunched={onWorkspaceLaunched} />);
   });
   await act(async () => undefined);
 }
@@ -72,6 +73,7 @@ beforeEach(() => {
   vi.mocked(forgetWorkspace).mockClear();
   vi.mocked(saveDesktopState).mockClear();
   useNotificationStore.getState().clearAll();
+  openedInWindow = [];
 });
 
 afterEach(async () => {
@@ -134,6 +136,96 @@ describe("useWorkspaceSwitching workspace list", () => {
     expect(ok).toBe(false);
     expect(controller?.manageWorkspacesError).toBe("Vault is busy");
     expect(forgetWorkspace).not.toHaveBeenCalled();
+    expect(useNotificationStore.getState().notifications).toHaveLength(0);
+  });
+});
+
+describe("useWorkspaceSwitching launching", () => {
+  const inWindow = {
+    workspaceAccessCapabilities: async () => ({
+      canOpenFolder: true,
+      canCreateManagedWorkspace: false,
+      opensWorkspaceInNewWindow: false
+    })
+  };
+
+  it("launches in a new window when the host opens workspaces that way", async () => {
+    const openWorkspaceWindow = vi.fn(async () => undefined);
+    const onWorkspaceLaunched = vi.fn();
+    await render({ openWorkspaceWindow }, onWorkspaceLaunched);
+
+    await act(async () => controller?.launchWorkspace("/notes/work"));
+
+    expect(openWorkspaceWindow).toHaveBeenCalledWith("/notes/work");
+    expect(onWorkspaceLaunched).toHaveBeenCalledWith("/notes/work");
+    expect(openedInWindow).toEqual([]);
+  });
+
+  it("opens in the same window via openWorkspaceInWindow when the host does not spawn windows", async () => {
+    const openWorkspaceWindow = vi.fn(async () => undefined);
+    const onWorkspaceLaunched = vi.fn();
+    await render({ ...inWindow, openWorkspaceWindow }, onWorkspaceLaunched);
+
+    await act(async () => controller?.launchWorkspace("/notes/work"));
+
+    expect(openedInWindow).toEqual(["/notes/work"]);
+    expect(openWorkspaceWindow).not.toHaveBeenCalled();
+    expect(onWorkspaceLaunched).not.toHaveBeenCalled();
+  });
+
+  it("publishes a transient error notification when a launch fails", async () => {
+    const openWorkspaceWindow = vi.fn(async () => {
+      throw new Error("window refused");
+    });
+    await render({ openWorkspaceWindow });
+
+    await act(async () => controller?.launchWorkspace("/notes/work"));
+
+    const note = useNotificationStore.getState().notifications.at(-1);
+    expect(note?.source).toBe("workspaces");
+    expect(note?.variant).toBe("error");
+    expect(note?.message).toContain("window refused");
+  });
+});
+
+describe("useWorkspaceSwitching managed creation", () => {
+  it("closes the dialog, opens the vault in-window, and shows the storage notice", async () => {
+    const createManagedWorkspace = vi.fn(async () => ({
+      root_path: "/app/vaults/Personal",
+      name: "Personal"
+    }));
+    await render({ createManagedWorkspace });
+
+    await act(async () => controller?.setCreateManagedWorkspaceOpen(true));
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await controller?.createManagedWorkspace("Personal");
+    });
+
+    expect(ok).toBe(true);
+    expect(createManagedWorkspace).toHaveBeenCalledWith("Personal");
+    expect(controller?.createManagedWorkspaceOpen).toBe(false);
+    expect(controller?.creatingManagedWorkspace).toBe(false);
+    expect(controller?.createManagedWorkspaceError).toBeNull();
+    expect(controller?.managedStorageNoticeOpen).toBe(true);
+    expect(openedInWindow).toEqual(["/app/vaults/Personal"]);
+  });
+
+  it("keeps the failure in the dialog and clears the busy flag", async () => {
+    const createManagedWorkspace = vi.fn(async () => {
+      throw new Error("name already taken");
+    });
+    await render({ createManagedWorkspace });
+
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await controller?.createManagedWorkspace("Personal");
+    });
+
+    expect(ok).toBe(false);
+    expect(controller?.createManagedWorkspaceError).toBe("name already taken");
+    expect(controller?.creatingManagedWorkspace).toBe(false);
+    expect(openedInWindow).toEqual([]);
     expect(useNotificationStore.getState().notifications).toHaveLength(0);
   });
 });
