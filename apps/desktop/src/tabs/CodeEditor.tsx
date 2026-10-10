@@ -20,6 +20,8 @@ export interface CodeEditorProps {
   readonly rootPath?: string | null;
   readonly relativePath?: string | null;
   readonly stateKey?: string;
+  /** Whether this editor's surface is visible; hidden editors disarm pinch. */
+  readonly active?: boolean;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
 }
@@ -38,6 +40,7 @@ export function CodeEditor({
   error,
   relativePath = null,
   stateKey,
+  active = true,
   onChange,
   onSave
 }: CodeEditorProps) {
@@ -57,7 +60,6 @@ export function CodeEditor({
         // Use the app's token-based highlight style, falling back to CodeMirror's
         // defaults for any tags not explicitly covered.
         syntaxHighlighting(codeHighlightStyle, { fallback: true }),
-        EditorView.lineWrapping,
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -103,7 +105,8 @@ export function CodeEditor({
     label: "[CodeEditor]",
     onChange,
     onSave,
-    mount: buildView
+    mount: buildView,
+    active
   });
 
   return (

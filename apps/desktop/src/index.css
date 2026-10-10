@@ -228,7 +228,6 @@
     cursor: text;
     background-color: var(--color-editor);
     font-family: var(--font-mono);
-    font-size: var(--text-sm);
     line-height: 1.65;
   }
   .cm-scroller {
