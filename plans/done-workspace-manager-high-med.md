@@ -4,7 +4,7 @@
 
 Let users add, launch, remove and delete workspaces from one place — a
 "Manage workspaces…" modal reached from the workspace switcher and the
-welcome page. Mockup: `plans/workspace-manager/assets/workspace-manager-mockup.html`.
+welcome page.
 
 ## Scope
 
