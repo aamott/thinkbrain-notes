@@ -11,14 +11,14 @@ include spacing, typography, radius, shadow, and z-index scales.
 - [x] All theme tokens (light and dark) are defined in
       `packages/ui/src/styles/`; `apps/desktop/src/index.css` contains no theme
       token definitions.
-- [ ] Token categories cover: color, spacing, typography, radius, shadow,
+- Token categories cover: color, spacing, typography, radius, shadow,
       z-index.
-- [ ] `apps/desktop` imports the consolidated token stylesheet from
+- `apps/desktop` imports the consolidated token stylesheet from
       `@thinkbrain/ui`.
-- [ ] Existing token names (`--tn-color-*`, `--tn-radius-medium`,
+- Existing token names (`--tn-color-*`, `--tn-radius-medium`,
       `--tn-shadow-soft`, `--tn-font-sans`) are preserved or migrated with a
       clear mapping.
-- [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
+- `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass.
 
 ## File References
 

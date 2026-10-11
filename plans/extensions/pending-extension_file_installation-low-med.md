@@ -39,15 +39,15 @@ code without the explicit app-privileges warning.
 
 ## Acceptance criteria
 
-- [ ] Only the approved package format accepted and safely extracted
+- Only the approved package format accepted and safely extracted
       (size/path/symlink/duplicate/manifest/entry preflight; temp-dir extract,
       atomic move, temp cleanup on failure).
-- [ ] User confirms code runs with app privileges before installation.
-- [ ] Install atomic, outside the workspace, id/version validated,
+- User confirms code runs with app privileges before installation.
+- Install atomic, outside the workspace, id/version validated,
       recoverable on failure.
-- [ ] Uninstall/deactivate cleanup follows the settings/data policy without
+- Uninstall/deactivate cleanup follows the settings/data policy without
       affecting other extensions.
-- [ ] URL install and marketplace unreachable from this path.
+- URL install and marketplace unreachable from this path.
 
 ## Validation
 

@@ -10,11 +10,11 @@ renderer-exposed Tauri surface regardless of declared capabilities.
 
 ## Acceptance
 
-- [ ] Prerequisite decision recorded: (a) worker/process RPC + sandboxed
+- Prerequisite decision recorded: (a) worker/process RPC + sandboxed
       iframe/webview for UI, (b) separate extension-host process with a
       versioned message API, or (c) curated/trusted marketplace with no
       sandbox claim + strong publisher/review/revocation model.
-- [ ] `extension_registry`/`extension_packaging` stories blocked until the
+- `extension_registry`/`extension_packaging` stories blocked until the
       choice is made; their designs updated to match.
-- [ ] Local developer-directory loading stays same-realm and labelled
+- Local developer-directory loading stays same-realm and labelled
       trusted-local either way.

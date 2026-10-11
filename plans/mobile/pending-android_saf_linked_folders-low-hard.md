@@ -35,15 +35,15 @@ Before production implementation:
 
 ## Acceptance
 
-- [ ] The research gate is completed against then-current dependencies and real
+- The research gate is completed against then-current dependencies and real
       Android devices/providers
-- [ ] The selected design preserves user-owned standard Markdown files without
+- The selected design preserves user-owned standard Markdown files without
       pretending a SAF URI is a native path
-- [ ] Persisted grants, revoked access, external edits and reconciliation
+- Persisted grants, revoked access, external edits and reconciliation
       conflicts have explicit UX and typed failure behavior
-- [ ] Git, search, backups, attachments and change detection have documented,
+- Git, search, backups, attachments and change detection have documented,
       tested locations and lifecycle semantics
-- [ ] The mobile epic and workspace-access documentation are updated with the
+- The mobile epic and workspace-access documentation are updated with the
       final decision before implementation begins
 
 ## References

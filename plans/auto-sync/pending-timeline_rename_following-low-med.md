@@ -20,5 +20,5 @@ truncation as the contract. A product call, not an autonomous fix.
 
 ## Acceptance
 
-- [ ] Rename behavior decided and either implemented or documented in the
+- Rename behavior decided and either implemented or documented in the
       file-history design

@@ -25,7 +25,7 @@ the contract in `history_walk.rs`.
 
 ## Acceptance
 
-- [ ] A `Modification` where `previous_entry_mode.is_blob() && !entry_mode.is_blob()`
+- A `Modification` where `previous_entry_mode.is_blob() && !entry_mode.is_blob()`
       emits `NoteChange::Removed` instead of dropping the record
-- [ ] Symlink handling decided (follow or documented exclusion)
-- [ ] A fixture constructs a `Link`/executable entry and pins the ledger behavior
+- Symlink handling decided (follow or documented exclusion)
+- A fixture constructs a `Link`/executable entry and pins the ledger behavior

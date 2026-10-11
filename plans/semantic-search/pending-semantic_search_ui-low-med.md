@@ -8,13 +8,13 @@ with keyword hits.
 
 ## Acceptance Criteria
 
-- [ ] A control in the search panel toggles semantic search on/off.
-- [ ] With semantic search on, results come from the hybrid search path.
-- [ ] With semantic search off, results come from the existing FTS5 path
+- A control in the search panel toggles semantic search on/off.
+- With semantic search on, results come from the hybrid search path.
+- With semantic search off, results come from the existing FTS5 path
       (current default behaviour unchanged).
-- [ ] Indexing/embedding progress is reported reusing the existing indexing
+- Indexing/embedding progress is reported reusing the existing indexing
       status UI pattern.
-- [ ] Disabled gracefully when no workspace is open or embeddings are
+- Disabled gracefully when no workspace is open or embeddings are
       unavailable.
 
 ## References

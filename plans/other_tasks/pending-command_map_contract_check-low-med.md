@@ -9,5 +9,5 @@ is handwritten — arg/result drift fails only at runtime
 
 - [ ] CI check that every `app_command_list!` entry has a `NativeCommandMap`
       key and vice versa (cheap: a script diffing the two lists).
-- [ ] Decide: generate the map via ts-rs/tauri-specta (medium) or keep the
+- Decide: generate the map via ts-rs/tauri-specta (medium) or keep the
       hand-written map + drift check (easy). Document the choice.

@@ -21,6 +21,6 @@ so the key already carries freshness).
 
 ## Acceptance
 
-- [ ] Paging a note's history does not re-walk the graph for pages two and on
-- [ ] A cursor replay uses the roots the cursor captured, not live roots
-- [ ] Decide/record where the memoized stream lives and how it invalidates
+- Paging a note's history does not re-walk the graph for pages two and on
+- A cursor replay uses the roots the cursor captured, not live roots
+- Decide/record where the memoized stream lives and how it invalidates

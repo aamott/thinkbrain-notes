@@ -11,12 +11,12 @@ can't be discovered without activation.
 
 ## Acceptance
 
-- [ ] Manifest contributions cover every stub-able/discoverable surface
+- Manifest contributions cover every stub-able/discoverable surface
       (settings schemas as pure data, tabs, editor hooks/headers).
-- [ ] `onStartup` becomes a simple eager flag; `onCommand:`/`onView:` removed
+- `onStartup` becomes a simple eager flag; `onCommand:`/`onView:` removed
       (manifest version bump + migration note).
-- [ ] Settings lists extension controls without activating code.
-- [ ] Decide privilege tiers in the same pass: built-ins that reach app
+- Settings lists extension controls without activating code.
+- Decide privilege tiers in the same pass: built-ins that reach app
       stores/services (journal) labelled privileged vs public-API
       extensions; journal's reach-arounds replaced by context services or
       moved out of `builtins/` as a first-party feature.
