@@ -126,13 +126,6 @@ export function createEditorDisplayController(
       const gen = ++generation;
       // Clear the preview first so the real reflow lands clean.
       clearPreview(view);
-      // While the pos is still rendered at the OLD size, its line block is
-      // measured — capture the doc-space top so the first jump can scale it
-      // by the font ratio (CodeMirror's own estimates for unrendered
-      // content are far too noisy to scroll by).
-      const oldDocTop = view.lineBlockAt(anchor.pos).top;
-      const baseFont = appliedState.fontSize;
-      const estNewDocTop = oldDocTop * (size / baseFont);
       appliedState = { fontSize: size, lineWrapping: appliedState.lineWrapping };
       view.dispatch({
         effects: compartment.reconfigure(
@@ -140,21 +133,27 @@ export function createEditorDisplayController(
         )
       });
       // Re-land the anchored document position at the live midpoint plus
-      // its original char offset. The first cycle lets the reflow render;
-      // if the pos is still outside the rendered window, jump to the
-      // scaled estimate (close enough to render it), then refine with
-      // real coordinates. Bounded so a vanished pos can't loop.
+      // its original char offset. When the pos sits outside the rendered
+      // window, `scrollIntoView` — not a raw scroll to a height estimate —
+      // pulls its block into the viewport: the scroll target makes the
+      // viewport computation include that block, so the measure loop
+      // renders it from whichever direction it truly lies. Estimate-
+      // following can converge on the *estimated* top while the real
+      // block still sits in a render gap — the scroll delta goes to ~0,
+      // the loop dies, and the char never draws. The microtask deferral
+      // exists because dispatching inside a measure write is illegal.
+      // Bounded so a vanished pos can't loop.
       const target = anchor;
       const docAtCommit = view.state.doc;
       const viewRefDead = (): boolean => !view.dom.isConnected;
-      let attempts = 6;
+      let attempts = 10;
       const anchorNow = (): void => {
         view.requestMeasure({
           key: createEditorDisplayController,
           // Guard BEFORE touching coordinates: a stale generation, a dead
           // view, or a replaced doc can throw or return geometry for
           // content that no longer exists.
-          read: (v): { rect: { left: number; top: number } } | { est: number } | null => {
+          read: (v): { rect: { left: number; top: number } } | { gap: true } | null => {
             if (gen !== generation || viewRefDead() || v.state.doc !== docAtCommit) {
               return null;
             }
@@ -164,35 +163,33 @@ export function createEditorDisplayController(
             } catch {
               // Not laid out this cycle.
             }
-            try {
-              return { est: v.lineBlockAt(target.pos).top + v.documentTop };
-            } catch {
-              return null;
-            }
+            return { gap: true };
           },
           write: (res) => {
             if (res === null || gen !== generation || viewRefDead()) return;
             const s = view.scrollDOM;
-            const dy = target.y + target.offsetY;
             if ("rect" in res) {
-              s.scrollTop += res.rect.top - dy;
+              s.scrollTop += res.rect.top - (target.y + target.offsetY);
               s.scrollLeft += res.rect.left - (target.x + target.offsetX);
               return;
             }
-            if (attempts-- > 0) {
-              if ("est" in res) {
-                // First jump: doc-space estimate → the scrollTop that puts
-                // the pos at the desired client y. Later misses refine by
-                // the client-space estimate delta.
-                if (attempts === 5) {
-                  const scrollerTop = s.getBoundingClientRect().top;
-                  s.scrollTop = estNewDocTop - (dy - scrollerTop);
-                } else {
-                  s.scrollTop += res.est - dy;
-                }
+            if (attempts-- <= 0) return;
+            // `nearest`, not `center`: the scroll target keeps scrolling
+            // each measure cycle until the pos is inside the viewport.
+            // An in-flight one must become a no-op after the rect write
+            // above lands the pos — `center` would re-scroll and undo it.
+            queueMicrotask(() => {
+              if (
+                gen === generation &&
+                !viewRefDead() &&
+                view.state.doc === docAtCommit
+              ) {
+                view.dispatch({
+                  effects: EditorView.scrollIntoView(target.pos, { y: "nearest" })
+                });
               }
-              anchorNow();
-            }
+            });
+            anchorNow();
           }
         });
       };

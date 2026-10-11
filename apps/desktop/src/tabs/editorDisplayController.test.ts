@@ -2,7 +2,7 @@
 
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createEditorDisplayController } from "./editorDisplayController";
 import type { PinchAnchor } from "./editorPinchZoom";
@@ -98,6 +98,21 @@ describe("createEditorDisplayController", () => {
     runAll(); // the queued commit write must no-op against generation
     expect(view.scrollDOM.scrollTop).toBe(top);
     expect(ctl.applied()).toEqual({ fontSize: 20, lineWrapping: false });
+  });
+
+  it("renders a gap-held anchor via scrollIntoView, not estimate scrolls", async () => {
+    const ctl = setup();
+    const scrollIntoView = vi.spyOn(EditorView, "scrollIntoView");
+    const real = view.coordsAtPos;
+    // The pos sits in a render gap — no coordinates until CM draws it.
+    view.coordsAtPos = () => null;
+    const top = view.scrollDOM.scrollTop;
+    ctl.commit(view, 26, { ...ANCHOR });
+    runAll();
+    await Promise.resolve(); // flush the deferred scrollIntoView dispatches
+    expect(scrollIntoView).toHaveBeenCalledWith(ANCHOR.pos, { y: "nearest" });
+    view.coordsAtPos = real;
+    expect(view.scrollDOM.scrollTop).toBe(top);
   });
 
   it("a dead view never receives a queued write", () => {
