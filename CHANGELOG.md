@@ -3,6 +3,24 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.4.1 — 2026-10-11
+
+Patch release focused on mobile reading comfort.
+
+- **Pinch-to-zoom in notes** — a two-finger pinch inside a note scales the
+  editor font size (10–32px), previewed live during the gesture; on release
+  the character under your fingers is re-landed exactly. Page zoom outside
+  the editor is untouched.
+- **Editor display settings wired** — `editor.fontSize` and
+  `editor.lineWrapping` were registered but dead; both now reconfigure open
+  editors live. Font size is absolute pixels, independent of interface
+  scale.
+- **Scroll restoration** — a note's reading position survives tab switches,
+  editor remounts and interface-scale changes via stable content anchors.
+- **Mobile zoom fixes** — settings and navigation no longer scale
+  disproportionately at larger interface sizes, and Back/Forward no longer
+  skips past navigation targets.
+
 ## 0.4.0 — 2026-10-10
 
 First stable release — and the first update an installed copy has ever been
