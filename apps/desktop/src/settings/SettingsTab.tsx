@@ -12,7 +12,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
-import { cn } from "../lib/utils";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { getExtensionBootstrap } from "../extensions/bootstrapRef";
 import { getWorkspaceBridge } from "../extensions/workspaceBridge";
@@ -27,29 +26,26 @@ import { SettingsHeaderBar } from "./SettingsHeaderBar";
  * Fills its container and switches the navigation from a fixed desktop column
  * to a modal drawer with focus restoration on narrow screens.
  */
-export function SettingsTab() {
+export function SettingsTab({ active = true }: { readonly active?: boolean }) {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const loadError = useSettingsStore((s) => s.loadError);
   const [navOpen, setNavOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement | null>(null);
+  // Render-time state adjustment (not an effect): the phone shell keeps this
+  // tab mounted under other routes, and an invisible open nav would stay
+  // registered on the shared overlay stack and keep trapping Tab. Closing it
+  // synchronously means SettingsNav never renders open while hidden.
+  if (!active && navOpen) setNavOpen(false);
   // Guard against double-load in React StrictMode (dev double-mounts effects).
   const loadedRef = useRef(false);
 
-  const openNav = useCallback((): void => setNavOpen(true), []);
   const closeNavAndRestoreFocus = useCallback((): void => {
     setNavOpen(false);
     requestAnimationFrame(() => hamburgerRef.current?.focus());
   }, []);
-
-  useEffect(() => {
-    if (!navOpen) return;
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      closeNavAndRestoreFocus();
-    };
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  const toggleNav = useCallback((): void => {
+    if (navOpen) closeNavAndRestoreFocus();
+    else setNavOpen(true);
   }, [navOpen, closeNavAndRestoreFocus]);
 
   // An extension registers its settings schema when it activates, and most
@@ -98,9 +94,24 @@ export function SettingsTab() {
           {loadError}
         </div>
       )}
-      <SettingsHeaderBar />
+      <SettingsHeaderBar
+        active={active}
+        navigationButton={
+          <button
+            ref={hamburgerRef}
+            type="button"
+            className="hidden size-11 shrink-0 cursor-pointer place-items-center text-muted-foreground max-[760px]:grid"
+            aria-label="Open settings navigation"
+            aria-controls="settings-navigation"
+            aria-expanded={navOpen}
+            onClick={toggleNav}
+          >
+            <Menu aria-hidden="true" />
+          </button>
+        }
+      />
       <div className="relative flex min-h-0 min-w-0 flex-1">
-        {navOpen && (
+        {active && navOpen && (
           <button
             type="button"
             className="absolute inset-0 z-20 cursor-pointer border-0 bg-overlay p-0"
@@ -109,23 +120,9 @@ export function SettingsTab() {
             onClick={closeNavAndRestoreFocus}
           />
         )}
-        <SettingsNav open={navOpen} onClose={closeNavAndRestoreFocus} />
+        <SettingsNav open={active && navOpen} onClose={closeNavAndRestoreFocus} />
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-editor">
-          <button
-            ref={hamburgerRef}
-            type="button"
-            className={cn(
-              "hidden max-[760px]:absolute max-[760px]:inset-s-2 max-[760px]:top-2 max-[760px]:z-20 max-[760px]:size-9 max-[760px]:cursor-pointer max-[760px]:place-items-center max-[760px]:text-muted-foreground max-[760px]:opacity-100 max-[760px]:transition-opacity max-[760px]:duration-150 max-[760px]:grid",
-              navOpen && "max-[760px]:pointer-events-none max-[760px]:opacity-0"
-            )}
-            aria-label="Open settings navigation"
-            aria-controls="settings-navigation"
-            aria-expanded={navOpen}
-            onClick={openNav}
-          >
-            <Menu aria-hidden="true" />
-          </button>
-          <SettingsContent />
+          <SettingsContent active={active} />
         </main>
       </div>
     </div>

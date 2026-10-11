@@ -6,7 +6,7 @@
  * same so users receive identical file and status handling.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { Download, MoreVertical, RotateCcw, Upload } from "lucide-react";
 import type { SettingsModule } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
@@ -54,7 +54,16 @@ function buildBreadcrumbPath(
 /**
  * Header actions for settings persistence and portable file exchange.
  */
-export function SettingsHeaderBar() {
+export function SettingsHeaderBar({
+  navigationButton,
+  active = true
+}: {
+  /** Optional leading control (e.g. the mobile settings-nav trigger) rendered
+   *  beside the breadcrumb. */
+  readonly navigationButton?: ReactNode;
+  /** False while the settings tab is mounted but covered by another route. */
+  readonly active?: boolean;
+}) {
   const activeSection = useSettingsStore((s) => s.activeSection);
   const isDirty = useSettingsStore(selectIsDirty);
   const dirtyCount = useSettingsStore(selectDirtyCount);
@@ -65,6 +74,9 @@ export function SettingsHeaderBar() {
   const [isSaving, setIsSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnchorRef = useRef<HTMLButtonElement>(null);
+  // Render-time adjustment like SettingsTab's nav: a hidden header must not
+  // leave its actions menu open under an invisible surface.
+  if (!active && menuOpen) setMenuOpen(false);
   const status = useTransientStatus();
   // Subscribed so a late-registered extension module can resolve its
   // breadcrumb labels instead of falling back to "Settings".
@@ -138,33 +150,36 @@ export function SettingsHeaderBar() {
 
   return (
     <header
-      className="flex min-h-8 flex-none items-center justify-between gap-3 border-b border-border bg-editor px-[0.9rem] py-1 text-[0.72rem] text-muted-foreground max-[760px]:min-h-11"
+      className="flex min-h-8 flex-none items-center justify-between gap-3 border-b border-border bg-editor px-[0.9rem] py-1 text-[0.72rem] text-muted-foreground max-[760px]:min-h-11 max-[760px]:gap-2 max-[760px]:px-2"
       data-testid="settings-header-bar"
       aria-label="Settings header"
     >
-      <nav className="flex min-w-0 items-center truncate" aria-label="Settings location">
-        {breadcrumbPath.map((segment, index) => (
-          <span
-            key={`${segment}-${index}`}
-            className={cn(
-              "flex min-w-0 items-center truncate",
-              index === breadcrumbPath.length - 1
-                ? "text-foreground"
-                : "text-muted-foreground"
-            )}
-          >
-            {index > 0 && (
-              <span
-                className="select-none px-[0.28rem] text-muted-foreground/60"
-                aria-hidden="true"
-              >
-                ›
-              </span>
-            )}
-            <span className="min-w-0 truncate">{segment}</span>
-          </span>
-        ))}
-      </nav>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        {navigationButton}
+        <nav className="flex min-w-0 items-center truncate" aria-label="Settings location">
+          {breadcrumbPath.map((segment, index) => (
+            <span
+              key={`${segment}-${index}`}
+              className={cn(
+                "flex min-w-0 items-center truncate",
+                index === breadcrumbPath.length - 1
+                  ? "text-foreground"
+                  : "text-muted-foreground"
+              )}
+            >
+              {index > 0 && (
+                <span
+                  className="select-none px-[0.28rem] text-muted-foreground/60"
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+              )}
+              <span className="min-w-0 truncate">{segment}</span>
+            </span>
+          ))}
+        </nav>
+      </div>
 
       <div className="relative flex items-center gap-2" role="toolbar" aria-label="Settings actions">
         {status.message && (

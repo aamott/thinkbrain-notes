@@ -42,6 +42,8 @@ export interface MarkdownEditorProps {
    * come back to, and then nothing is remembered.
    */
   readonly stateKey?: string;
+  /** Whether this editor's surface is visible; hidden editors disarm pinch. */
+  readonly active?: boolean;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
 }
@@ -64,6 +66,7 @@ export function MarkdownEditor({
   noteIndex,
   onOpenNote,
   stateKey,
+  active = true,
   onChange,
   onSave
 }: MarkdownEditorProps) {
@@ -140,7 +143,8 @@ export function MarkdownEditor({
     label: "[MarkdownEditor]",
     onChange,
     onSave,
-    mount: buildView
+    mount: buildView,
+    active
   });
 
   // Reconfigure both compartmented extensions (live preview + wiki-link
@@ -186,7 +190,7 @@ export function MarkdownEditor({
         context={headerContext}
       />
       <div
-        className="min-h-0 flex-1 overflow-auto cursor-text [&_.cm-editor]:min-h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:text-sm [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
+        className="min-h-0 flex-1 overflow-hidden cursor-text [&_.cm-editor]:h-full [&_.cm-editor]:cursor-text [&_.cm-editor]:bg-editor [&_.cm-editor]:text-foreground [&_.cm-editor]:font-mono [&_.cm-editor]:leading-1.65 [&_.cm-scroller]:overflow-auto [&_.cm-scroller]:cursor-text [&_.cm-content]:min-h-full [&_.cm-content]:pt-4 [&_.cm-content]:px-5 [&_.cm-content]:pb-16 [&_.cm-focused]:outline-none"
         ref={hostRef}
         onPointerDown={onHostPointerDown}
       />

@@ -1,7 +1,7 @@
 /**
  * Form-factor defaults applied to the `ui` settings module at registration.
  *
- * Touch-first form factors default the interface to 125%: small screens and
+ * Touch-first form factors default the interface to 110%: small screens and
  * coarse pointers need the roomier chrome, while pointer-fine desktops keep
  * 100%. This rewrites the definition's `default` before registration so every
  * consumer — the settings row, `useEffectiveValue`, `useUiScale` — resolves
@@ -15,7 +15,7 @@
 import type { SettingsModule } from "@thinkbrain/core";
 import { uiModule } from "@thinkbrain/core";
 
-export const MOBILE_UI_SCALE = 125;
+export const MOBILE_UI_SCALE = 110;
 
 /** The interface sizes the `ui.scale` dropdown offers, ascending. */
 export const UI_SCALE_PRESETS: readonly number[] = [75, 90, 100, 110, 125, 150, 175, 200];
@@ -25,7 +25,7 @@ export function coarsePointer(): boolean {
   return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 }
 
-/** The `ui` module with `ui.scale`'s default raised to 125% on coarse pointers. */
+/** The `ui` module with `ui.scale`'s default raised to 110% on coarse pointers. */
 export function uiModuleForFormFactor(coarse: boolean = coarsePointer()): SettingsModule {
   if (!coarse) return uiModule;
   return {

@@ -15,8 +15,12 @@
  * pointer coordinates consistent with layout.
  */
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 
+import {
+  captureRegisteredScrollAnchors,
+  restoreRegisteredScrollAnchors
+} from "./scrollAnchors";
 import { appSettingsRegistry, useSettingsStore } from "../settings/settingsStore";
 import { resolveEffectiveValue } from "../settings/settingsHelpers";
 import { useEffectiveValue } from "../settings/useEffectiveValue";
@@ -59,7 +63,7 @@ export function adjustUiScale(deltaPercent: number): void {
   useSettingsStore.getState().stageChange(UI_SCALE_KEY, clampUiScale(currentUiScale() + deltaPercent));
 }
 
-/** Restores the definition's default scale — 100% on desktop, 125% on touch. */
+/** Restores the definition's default scale — 100% on desktop, 110% on touch. */
 export function resetUiScale(): void {
   const fallback = appSettingsRegistry.getDefinition(UI_SCALE_KEY)?.default;
   useSettingsStore.getState().stageChange(UI_SCALE_KEY, clampUiScale(fallback));
@@ -72,12 +76,26 @@ export function resetUiScale(): void {
 export function useUiScale(): void {
   const scale = clampUiScale(useEffectiveValue(UI_SCALE_KEY));
 
-  useEffect(() => {
+  // Mount-only cleanup restores the browser default when the hook unmounts.
+  // Clearing in the [scale] effect's cleanup would wipe the *previous*
+  // scale's font size on every change, destroying the pre-scale baseline
+  // the anchor capture measures against.
+  useEffect(
+    () => () => {
+      document.documentElement.style.fontSize = "";
+    },
+    []
+  );
+
+  // Layout phase: capture anchors against the old metrics, write the new
+  // root size, then restore in the same commit so the reflow never paints a
+  // drifted viewport. The hook stays feature-agnostic — it only talks to
+  // the registry; which scrollers opt in is their own business.
+  useLayoutEffect(() => {
     const root = document.documentElement;
+    const snapshots = captureRegisteredScrollAnchors();
     root.style.fontSize = `${(BASE_FONT_PX * scale) / 100}px`;
-    return () => {
-      root.style.fontSize = "";
-    };
+    restoreRegisteredScrollAnchors(snapshots);
   }, [scale]);
 
   useEffect(() => {

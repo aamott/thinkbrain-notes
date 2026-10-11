@@ -3,13 +3,25 @@ import { EditorView } from "@codemirror/view";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
+  useState,
   type PointerEvent as ReactPointerEvent,
   type RefObject
 } from "react";
 
 import { minimalChange } from "../lib/codemirror";
+import { useEffectiveValue } from "../settings/useEffectiveValue";
+import { useSettingsStore } from "../settings/settingsStore";
 import { cmHistoryCommands, registerEditorCommands, type EditorCommands } from "./editorCommands";
+import { createEditorDisplayController } from "./editorDisplayController";
+import {
+  EDITOR_FONT_SIZE_KEY,
+  EDITOR_LINE_WRAPPING_KEY,
+  resolveEditorFontSize,
+  resolveEditorLineWrapping
+} from "./editorDisplaySettings";
+import { installEditorPinchZoom, type EditorPinchZoomHandle } from "./editorPinchZoom";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 
 /**
@@ -57,7 +69,8 @@ export function useCodeMirrorView({
   label,
   onChange,
   onSave,
-  mount
+  mount,
+  active = true
 }: {
   readonly value: string;
   /** Identity to park state under while this tab is off screen; undefined parks nothing. */
@@ -67,6 +80,8 @@ export function useCodeMirrorView({
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
   readonly mount: (callbacks: CodeMirrorCallbacks) => MountedEditorView;
+  /** Whether this editor's surface is the visible route; hidden editors disarm pinch. */
+  readonly active?: boolean;
 }): {
   readonly hostRef: RefObject<HTMLDivElement | null>;
   readonly viewRef: RefObject<EditorView | null>;
@@ -74,14 +89,92 @@ export function useCodeMirrorView({
 } {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // Snapshot taken while the host is still attached — see the layout effect
+  // below for why a passive cleanup reads it too late.
+  const earlyScrollRef = useRef<ReturnType<EditorView["scrollSnapshot"]> | undefined>(undefined);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+
+  // Editor display preferences live in one per-view controller so a changed
+  // preference — or a pinch gesture's commit — reconfigures the live view
+  // instead of forcing a remount.
+  const fontSize = resolveEditorFontSize(useEffectiveValue(EDITOR_FONT_SIZE_KEY));
+  const lineWrapping = resolveEditorLineWrapping(useEffectiveValue(EDITOR_LINE_WRAPPING_KEY));
+  const [displayCtl] = useState(() =>
+    createEditorDisplayController({
+      fontSize: resolveEditorFontSize(
+        useSettingsStore.getState().getEffectiveValue(EDITOR_FONT_SIZE_KEY)
+      ),
+      lineWrapping: resolveEditorLineWrapping(
+        useSettingsStore.getState().getEffectiveValue(EDITOR_LINE_WRAPPING_KEY)
+      )
+    })
+  );
+  const displayRef = useRef({ fontSize, lineWrapping });
+  const pinchRef = useRef<EditorPinchZoomHandle | null>(null);
+  const activeRef = useRef(active);
+
+  // Latest-value mirrors live in effects — never write refs during render.
+  // These run before the mount effect below, so the initial values the
+  // mount reads are already current.
+  useEffect(() => {
+    displayRef.current = { fontSize, lineWrapping };
+  }, [fontSize, lineWrapping]);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onSaveRef.current = onSave;
   }, [onChange, onSave]);
+
+  // A preference change reconfigures the compartment in place and re-lands
+  // the same reading position with a scroll snapshot in the same
+  // transaction — no remount, no jump. The initial extension already carries
+  // the current values, so the first run is a no-op.
+  const displayInitRef = useRef(false);
+  useEffect(() => {
+    if (!displayInitRef.current) {
+      displayInitRef.current = true;
+      return;
+    }
+    const view = viewRef.current;
+    if (!view) return;
+    const applied = displayCtl.applied();
+    if (applied.fontSize === fontSize && applied.lineWrapping === lineWrapping) {
+      // A pinch commit already applied these values (and its own anchor) —
+      // don't reconfigure again, and DON'T cancel: the gesture is still
+      // draining fingers and cancelling would release the lock early.
+      return;
+    }
+    // A genuine external preference change wins over an in-flight gesture.
+    pinchRef.current?.cancel();
+    displayCtl.applyPreferences(view, { fontSize, lineWrapping });
+  }, [fontSize, lineWrapping, displayCtl]);
+
+  // A hidden editor must not keep a gesture armed or start a new one.
+  useEffect(() => {
+    pinchRef.current?.setEnabled(active);
+  }, [active]);
+
+  // A detached `.cm-scroller` reports scrollTop 0, and passive-effect
+  // cleanups run after React has removed the DOM — so an unmount would park
+  // a snapshot of "scrolled to top". Layout-effect cleanups fire before the
+  // host nodes go away, which is the last moment scrollDOM still tells the
+  // truth. (Effect re-runs keep the DOM attached; the passive cleanup then
+  // snapshots live and clears this.)
+  useLayoutEffect(() => {
+    return () => {
+      // Cancel an in-flight pinch before snapshotting — the transform
+      // preview must be cleared while the view is still attached, or the
+      // parked snapshot would be taken under a distorted layout.
+      pinchRef.current?.cancel();
+      earlyScrollRef.current = viewRef.current?.scrollSnapshot();
+    };
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -96,6 +189,10 @@ export function useCodeMirrorView({
     });
     const parked = stateKey === undefined ? undefined : recallEditorState(stateKey);
 
+    // The display compartment is appended last so a reconfigure lands on
+    // fresh and parked states identically.
+    const extensions = [mounted.extensions, displayCtl.extension()];
+
     const view = new EditorView({
       parent: host,
       state:
@@ -105,8 +202,14 @@ export function useCodeMirrorView({
           ...(mounted.selectionAnchor === undefined
             ? {}
             : { selection: { anchor: mounted.selectionAnchor(valueRef.current) } }),
-          extensions: mounted.extensions
-        })
+          extensions
+        }),
+      // The parked snapshot was taken against the same document this state
+      // carries, so `scrollTo` restores the exact measured position — raw px
+      // would only be correct if the reflow could never move the text.
+      ...(parked?.scrollSnapshot === undefined
+        ? {}
+        : { scrollTo: parked.scrollSnapshot })
     });
     viewRef.current = view;
 
@@ -127,26 +230,62 @@ export function useCodeMirrorView({
       // close over that mount's callbacks. Swapping the whole configuration
       // rebinds them to this one; the state fields keyed to the same extension
       // instances — the undo history above all — carry across untouched.
-      view.dispatch({ effects: StateEffect.reconfigure.of(mounted.extensions) });
-      view.scrollDOM.scrollTop = parked.scrollTop;
+      view.dispatch({ effects: StateEffect.reconfigure.of(extensions) });
     }
+
+    // Two-finger pinch previews the scale visually and commits one rounded
+    // `editor.fontSize` at gesture end. The preview stays a transform —
+    // never a layout change — because any reflow or scroll write mid-gesture
+    // can rebuild the line DOM, which detaches the touches' fixed targets
+    // and silently swallows the rest of the sequence. The commit clears the
+    // transform, applies the real font size, re-lands the anchored
+    // character under the fingers, then persists once.
+    const pinch = installEditorPinchZoom(
+      view,
+      {
+        getFontSize: () => displayRef.current.fontSize,
+        preview: (size, anchor) => displayCtl.preview(view, size, anchor),
+        cancel: () => {
+          if (viewRef.current !== view) return;
+          displayCtl.cancelPreview(view);
+        },
+        commit: (size, anchor) => {
+          displayCtl.commit(view, size, anchor);
+          void useSettingsStore
+            .getState()
+            .setSingleSettingImmediately(EDITOR_FONT_SIZE_KEY, size);
+        }
+      },
+      activeRef.current
+    );
+    pinchRef.current = pinch;
 
     mounted.afterMount?.(view, viewRef);
 
     return () => {
       unregisterCommands?.();
+      // Detach touch handling while the view still exists — a destroyed
+      // view must never see another event — and cancelling here must not
+      // touch the early scroll snapshot the layout cleanup already took.
+      pinchRef.current = null;
+      pinch.destroy();
       if (stateKey !== undefined) {
         // Scroll position is DOM state rather than editor state, so it has to
-        // be taken before the view goes.
+        // be taken before the view goes — as a scrollSnapshot, which survives
+        // the layout reflow a remount can cause.
         rememberEditorState(stateKey, {
           state: view.state,
-          scrollTop: view.scrollDOM.scrollTop
+          scrollSnapshot: earlyScrollRef.current ?? view.scrollSnapshot()
         });
       }
+      // Whether or not this mount parked anything, the early snapshot is only
+      // valid for the teardown it was captured in — a stale value must not
+      // travel into a later unmount under another key (or no key).
+      earlyScrollRef.current = undefined;
       view.destroy();
       viewRef.current = null;
     };
-  }, [mount, stateKey, label]);
+  }, [mount, stateKey, label, displayCtl]);
 
   // External value updates (e.g. file reloaded from disk, or a whole-note
   // edit like the metadata widget's) merge in as the smallest diff, so the
@@ -156,12 +295,22 @@ export function useCodeMirrorView({
     const view = viewRef.current;
     if (!view) return;
     const change = minimalChange(view.state.doc.toString(), value);
-    if (change) view.dispatch({ changes: change });
-  }, [value]);
+    if (change) {
+      // A doc change voids any in-flight gesture immediately — don't wait
+      // for the next move/end event to notice `startDoc` went stale — and
+      // invalidates any queued commit measure (its coords would describe
+      // the old document).
+      pinchRef.current?.cancel();
+      displayCtl.cancelPreview(view);
+      view.dispatch({ changes: change });
+    }
+  }, [value, displayCtl]);
 
   const onHostPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const view = viewRef.current;
     if (!view) return;
+    // A touch belonging to an owned pinch must never become a caret click.
+    if (event.pointerType === "touch" && pinchRef.current?.ownsTouchGesture) return;
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
     // Only intercept clicks that land at or past the end of the document
     // (i.e. below the last line of text). Clicks within the document are

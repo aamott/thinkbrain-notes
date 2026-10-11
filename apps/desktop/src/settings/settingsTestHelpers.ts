@@ -31,7 +31,8 @@ const INITIAL_ACTIONS: Partial<SettingsStoreState> = (() => {
     setActiveSection: s.setActiveSection,
     setSearchQuery: s.setSearchQuery,
     getEffectiveValue: s.getEffectiveValue,
-    setSettingImmediately: s.setSettingImmediately
+    setSettingImmediately: s.setSettingImmediately,
+    setSingleSettingImmediately: s.setSingleSettingImmediately
   };
 })();
 

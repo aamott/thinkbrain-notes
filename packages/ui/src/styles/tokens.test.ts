@@ -14,6 +14,7 @@ describe("semantic theme tokens", () => {
       "--tn-color-statusbar",
       "--tn-color-tab-active",
       "--tn-color-tab-inactive",
+      "--tn-shadow-bubble",
       "--tn-duration-overlay"
     ];
 

@@ -19,8 +19,10 @@ import {
   type SettingSection,
   type SettingsModule
 } from "@thinkbrain/core";
+import { useDismissable } from "@thinkbrain/ui";
 import { cn } from "../lib/utils";
 import { createDebounced } from "../lib/debounce";
+import { useNarrowViewport } from "../shell/useNarrowViewport";
 import { appSettingsRegistry, useSettingDefinitions, useSettingsModules, useSettingsStore } from "./settingsStore";
 import { fuzzySearch, type FuzzySearchField } from "./fuzzyMatch";
 import { requestSettingHighlight } from "./settingHighlight";
@@ -283,6 +285,12 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
   const setSearchQuery = useSettingsStore((state) => state.setSearchQuery);
   const [inputValue, setInputValue] = useState(searchQuery);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const narrow = useNarrowViewport();
+  // Register with the shared overlay stack only while the nav is the narrow
+  // drawer — on wide layouts it is a permanent column, not a dismissable
+  // overlay. Escape, header/system Back and the Tab trap all route through
+  // dismissTopOverlay, so nothing here needs its own key listener.
+  const { containerRef } = useDismissable({ open: open && narrow, onDismiss: onClose });
   const debouncedSetSearchQuery = useMemo(
     () => createDebounced(setSearchQuery, SEARCH_DEBOUNCE_MS),
     [setSearchQuery]
@@ -329,6 +337,7 @@ export function SettingsNav({ open, onClose }: SettingsNavProps) {
 
   return (
     <nav
+      ref={containerRef}
       id="settings-navigation"
       className={cn(
         "flex min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar p-2 text-sidebar-foreground max-[760px]:invisible max-[760px]:pointer-events-none max-[760px]:absolute max-[760px]:inset-y-0 max-[760px]:inset-s-0 max-[760px]:z-30 max-[760px]:w-[min(15rem,calc(100%-2rem))] max-[760px]:-translate-x-full max-[760px]:shadow-panel max-[760px]:transition-[transform_180ms_ease,visibility_0s_linear_180ms]",

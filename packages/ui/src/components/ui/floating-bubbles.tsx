@@ -71,7 +71,7 @@ export function FloatingBubbles({
           className={cn(
             // 48px clears the touch minimum. The circle is the resting shape;
             // with labels on, it grows into a pill carrying icon + text.
-            "pointer-events-auto relative flex cursor-pointer items-center justify-center gap-2 border border-border shadow-panel tn-focus-ring",
+            "pointer-events-auto relative flex cursor-pointer items-center justify-center gap-2 border border-border shadow-bubble tn-focus-ring",
             showLabels ? "h-12 rounded-full px-4 text-sm font-medium" : "size-12 rounded-full",
             item.variant === "primary"
               ? "bg-primary text-primary-foreground"

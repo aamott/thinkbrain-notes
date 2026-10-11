@@ -28,6 +28,7 @@ export function InspectorSheet({
   panel,
   context,
   onDismiss,
+  onStepBack,
   onBack
 }: {
   readonly open: boolean;
@@ -36,10 +37,13 @@ export function InspectorSheet({
   readonly context: RightPanelContext;
   /** Scrim tap: dismisses the inspector (and any flow it belongs to). */
   readonly onDismiss: () => void;
+  /** Registered-overlay dismiss (Escape, shell Back, Android Back): steps one
+   *  level out of the flow — a child of the actions menu returns to it. */
+  readonly onStepBack: () => void;
   /** Header Back: steps the flow back to the surface that opened it. */
   readonly onBack: () => void;
 }) {
-  const { containerRef } = useDismissable({ open, onDismiss });
+  const { containerRef } = useDismissable({ open, onDismiss: onStepBack });
   return (
     <>
       <Scrim open={open} onDismiss={onDismiss} className={`inset-x-0 ${PHONE_OVERLAY_BOUNDS}`} />

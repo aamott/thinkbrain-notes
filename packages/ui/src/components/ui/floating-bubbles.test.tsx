@@ -100,6 +100,25 @@ describe("FloatingBubbles", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the bubble drop shadow on resting and active primary bubbles", async () => {
+    const host = await render(
+      bubbles({
+        left: [
+          item({ key: "new-note", label: "New note", variant: "primary", active: true }),
+          item({ key: "home" })
+        ]
+      })
+    );
+
+    // Regression: the active/primary styling must never cost the elevation
+    // cue — both variants share `shadow-bubble`, not the panel halo.
+    for (const label of ["New note", "Home"]) {
+      const bubble = host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
+      expect(bubble?.className).toContain("shadow-bubble");
+      expect(bubble?.className).not.toContain("shadow-panel");
+    }
+  });
+
   it("marks popup triggers with aria-haspopup and aria-expanded", async () => {
     const host = await render(
       bubbles({ right: [item({ key: "actions", label: "Actions", hasPopup: true, active: true })] })

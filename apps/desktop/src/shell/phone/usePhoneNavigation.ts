@@ -350,6 +350,11 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   );
 
   const back = useCallback(() => {
+    // Same precedence as the Android bridge: registered dismissable overlays
+    // (e.g. the settings-nav drawer) first, then ephemeral menus, then content
+    // history. Skipping the first step let header Back walk history out from
+    // under an open drawer that system Back would have closed.
+    if (dismissTopOverlay()) return;
     if (closeEphemeralMenu()) return;
     if (entryRef.current.depth > 0) window.history.back();
   }, [closeEphemeralMenu]);

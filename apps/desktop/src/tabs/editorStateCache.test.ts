@@ -8,7 +8,9 @@ import {
 } from "./editorStateCache";
 
 const park = (key: string, doc: string): void => {
-  rememberEditorState(key, { state: EditorState.create({ doc }), scrollTop: 0 });
+  // Fixtures park state only — a real parked view also carries a
+  // scrollSnapshot, but the cache contract makes it optional.
+  rememberEditorState(key, { state: EditorState.create({ doc }) });
 };
 
 const parkedDoc = (key: string): string | undefined =>
