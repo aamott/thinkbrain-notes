@@ -40,9 +40,9 @@ export function ActionItemsMenu({
   const panels = useRightPanelContributions();
 
   return (
-    // The shared shell owns the dismiss layer (spanning the whole shell —
-    // bubbles included — so a tap on the ⋮ bubble closes rather than
-    // retriggers), Escape, and roving focus; this menu is only the rows.
+    // The shared shell owns the dismiss layer (the bubble group floats
+    // above it while open so the ⋮ bubble toggle-closes), Escape, and
+    // roving focus; this menu is only the rows.
     <BubbleMenuShell
       name="actions"
       label="Action items"

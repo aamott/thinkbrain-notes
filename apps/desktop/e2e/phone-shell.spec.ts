@@ -64,6 +64,43 @@ test.describe("phone shell", () => {
     await expect(page.getByRole("dialog", { name: "Open tabs" })).toBeVisible();
   });
 
+  test("tapping a trigger bubble again closes its menu", async ({ page }) => {
+    await page.goto("/");
+
+    // While a menu is open its dismiss layer covers the shell; the second
+    // tap on the trigger must still reach the bubble and toggle it closed
+    // (the layer swallows pointerdown, then the retargeted click would
+    // reopen it — the bubble group sits above the layer while a menu is up).
+    const actions = page.locator('[data-bubble="actions"]');
+    const actionsMenu = page.getByRole("menu", { name: "Action items" });
+    await actions.tap();
+    await expect(actionsMenu).toBeVisible();
+    await actions.tap();
+    await expect(actionsMenu).toHaveCount(0);
+
+    const newNote = page.locator('[data-bubble="new-note"]');
+    const newNoteMenu = page.getByRole("menu", { name: "New note actions" });
+    await newNote.tap();
+    await expect(newNoteMenu).toBeVisible();
+    await newNote.tap();
+    await expect(newNoteMenu).toHaveCount(0);
+  });
+
+  test("explorer header actions meet the 44px touch target", async ({ page }) => {
+    await page.goto("/");
+
+    const explorer = page.locator('section[aria-label="Workspace explorer"]');
+    // The bubble strip also carries a "New note" button, so the explorer
+    // scope matters — not just for readability but to avoid a strict-mode
+    // collision.
+    for (const name of ["New note", "New folder", "Sort files", "More actions"]) {
+      const box = await explorer.getByRole("button", { name }).boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+    }
+  });
+
   test("keeps desktop chrome at a wide viewport", async ({ page }) => {
     // Same coarse pointer, wide viewport: the width half of the gate alone
     // decides, so desktop chrome comes back.
