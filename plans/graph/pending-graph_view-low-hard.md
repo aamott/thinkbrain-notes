@@ -11,19 +11,19 @@ Depends on link target resolution (shipped; see `plans/graph/done-summary.md`).
 
 ## Acceptance Criteria
 
-- [ ] Graph view renders all notes as nodes and resolved wiki links as directed
+- Graph view renders all notes as nodes and resolved wiki links as directed
       edges.
-- [ ] Force-directed layout is stable and performant for vaults up to a few
+- Force-directed layout is stable and performant for vaults up to a few
       thousand notes (virtualize or sample beyond that).
-- [ ] Pan, zoom, and drag-to-rearrange (local layout only, not persisted)
+- Pan, zoom, and drag-to-rearrange (local layout only, not persisted)
       work smoothly.
-- [ ] Clicking a node opens the note in the editor.
-- [ ] Node appearance reflects note status (e.g. `status` frontmatter field)
+- Clicking a node opens the note in the editor.
+- Node appearance reflects note status (e.g. `status` frontmatter field)
       via theme tokens, not hardcoded colors.
-- [ ] Graph recomputes when the index updates (file save / reindex).
-- [ ] Graph assembly (nodes/edges) is in `packages/core` with no rendering
+- Graph recomputes when the index updates (file save / reindex).
+- Graph assembly (nodes/edges) is in `packages/core` with no rendering
       dependency; rendering is desktop-only in `apps/desktop`.
-- [ ] Vitest covers graph assembly in `packages/core`.
+- Vitest covers graph assembly in `packages/core`.
 
 ## References
 

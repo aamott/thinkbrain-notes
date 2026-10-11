@@ -12,16 +12,16 @@ resolution (shipped; see `plans/graph/done-summary.md`).
 
 ## Acceptance Criteria
 
-- [ ] Local graph renders the active note plus its direct neighbors (incoming
+- Local graph renders the active note plus its direct neighbors (incoming
       and outgoing links), centered on the active note.
-- [ ] Optional depth control (1 hop default, 2 hops available) limits the
+- Optional depth control (1 hop default, 2 hops available) limits the
       neighborhood size.
-- [ ] Clicking a neighbor node opens that note and re-centers the local graph
+- Clicking a neighbor node opens that note and re-centers the local graph
       on it.
-- [ ] Local graph updates when the active note changes or the index updates.
-- [ ] Reuses the same node/edge assembly and rendering as the full graph view
+- Local graph updates when the active note changes or the index updates.
+- Reuses the same node/edge assembly and rendering as the full graph view
       (no separate rendering pipeline).
-- [ ] Vitest covers the neighborhood-selection logic in `packages/core`.
+- Vitest covers the neighborhood-selection logic in `packages/core`.
 
 ## References
 

@@ -10,15 +10,15 @@ handling.
 
 ## Acceptance Criteria
 
-- [ ] "New Canvas" action creates a `.canvas` file in the current folder and
+- "New Canvas" action creates a `.canvas` file in the current folder and
       opens it.
-- [ ] `.canvas` files appear in the file explorer with a distinct icon.
-- [ ] Opening a `.canvas` file opens the canvas view in a tab.
-- [ ] Rename and delete work for `.canvas` files from the explorer context
+- `.canvas` files appear in the file explorer with a distinct icon.
+- Opening a `.canvas` file opens the canvas view in a tab.
+- Rename and delete work for `.canvas` files from the explorer context
       menu.
-- [ ] Deleting a canvas does not affect referenced notes.
-- [ ] Canvas tab integrates with the existing tab/layout system.
-- [ ] Reload, close, rename, and delete flows detect external changes or pending
+- Deleting a canvas does not affect referenced notes.
+- Canvas tab integrates with the existing tab/layout system.
+- Reload, close, rename, and delete flows detect external changes or pending
       saves, preserve both versions, and offer explicit reload/resolve without
       silently overwriting the user's canvas; structural auto-merge is deferred.
 

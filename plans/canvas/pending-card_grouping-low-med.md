@@ -8,15 +8,15 @@ contents.
 
 ## Acceptance Criteria
 
-- [ ] Selecting multiple cards and grouping creates a group containing them.
-- [ ] Group renders as a labeled container behind its child cards.
-- [ ] Moving a group moves all child cards; resizing a group reflows children
+- Selecting multiple cards and grouping creates a group containing them.
+- Group renders as a labeled container behind its child cards.
+- Moving a group moves all child cards; resizing a group reflows children
       where practical.
-- [ ] Groups can be collapsed to hide child cards (showing only the group
+- Groups can be collapsed to hide child cards (showing only the group
       header).
-- [ ] Ungrouping removes the group container but keeps cards in place.
-- [ ] Groups can be nested (a group inside another group).
-- [ ] Group label is editable.
+- Ungrouping removes the group container but keeps cards in place.
+- Groups can be nested (a group inside another group).
+- Group label is editable.
 
 ## References
 
