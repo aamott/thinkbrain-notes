@@ -65,7 +65,7 @@ type TabContentProps = {
    * open dirty file is saved before the restore runs. Only version-diff tabs
    * call it.
    */
-  readonly onRestoreVersion?: (notePath: string, changeId: string) => Promise<void>;
+  readonly onRestoreVersion: (notePath: string, changeId: string) => Promise<void>;
   /**
    * Whether this surface is the visible route. PhoneShell keeps the tab body
    * mounted while a files/panel route covers it; inactive tab surfaces use
@@ -210,12 +210,7 @@ export function TabContent({
         notePath={tab.comparedNotePath ?? relativePath ?? null}
         changeId={tab.versionChangeId ?? null}
         currentBuffer={unsavedNoteContents ?? null}
-        onRestore={
-          onRestoreVersion ??
-          (async () => {
-            throw new Error("Restoring a version is not available right now.");
-          })
-        }
+        onRestore={onRestoreVersion}
       />
     );
   }
@@ -244,10 +239,8 @@ export function TabContent({
           value={document.contents}
           isSaving={document.phase === "saving"}
           error={document.error}
-          rootPath={rootPath ?? null}
           relativePath={relativePath ?? null}
           stateKey={tab.id}
-          active={active}
           onChange={(contents) => onChange(tab.id, contents)}
           onSave={() => { void onSave(tab); }}
         />
@@ -318,7 +311,6 @@ export function TabContent({
         // Switching tabs unmounts this editor; the id is how the next mount
         // finds the cursor, scroll and undo history it left behind.
         stateKey={tab.id}
-        active={active}
         onChange={(contents) => onChange(tab.id, contents)}
         onSave={() => {
           void onSave(tab);
