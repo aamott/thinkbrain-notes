@@ -24,7 +24,6 @@ import { describeSignInStatus } from "./signInCopy";
 
 const PROFILE_KEY = "sync.signInProfile";
 const NEW_VALUE = "new";
-const LEGACY_VALUE = "legacy";
 
 export function GitLinkControl({ definition, value, onChange, disabled }: ControlProps) {
   const [username, setUsername] = useState("");
@@ -45,13 +44,13 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
         : "";
   const rawDestination = typeof value === "string" ? value : "";
   const destination = redactCredentials(rawDestination);
-  const legacyNotice =
+  const redactedNotice =
     destination !== rawDestination
       ? "A username or token was removed from this link. Save settings to finish clearing it."
       : null;
   const validation = definition.validation?.(destination) ?? null;
   const isHttps = destination.trim().startsWith("https://");
-  const selectValue = selectValueOf(selectedId, status);
+  const selectValue = selectValueOf(selectedId);
   const selectedForHost =
     status?.selected?.saved === true && status.selected.host === status.host;
   const canSaveLink =
@@ -60,7 +59,7 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     rootPath !== null &&
     validation === null &&
     isHttps &&
-    (selectedForHost || (selectValue === LEGACY_VALUE && status?.legacy !== null));
+    selectedForHost;
   const canUpdate =
     !disabled &&
     busy === null &&
@@ -71,10 +70,10 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     // `store_profile` would only return `sync.auth_required`. Mirrors the
     // import dialog, which hides these fields outright.
     status?.storage === "available" &&
-    (selectValue === NEW_VALUE || selectValue === LEGACY_VALUE || selectedForHost) &&
+    (selectValue === NEW_VALUE || selectedForHost) &&
     username.trim() !== "" &&
     token !== "";
-  const canForget = !disabled && busy === null && selectedId !== "" && selectValue !== LEGACY_VALUE;
+  const canForget = !disabled && busy === null && selectedId !== "";
 
   useEffect(() => {
     if (destination === rawDestination) return;
@@ -127,10 +126,9 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     if (!canSaveLink || rootPath === null) return;
     void run("link", "Could not save this git link. Check the link and try again.", async () => {
       if (!(await persistLink())) return;
-      const profileId = selectValue === NEW_VALUE || selectValue === LEGACY_VALUE ? null : selectValue;
+      const profileId = selectValue === NEW_VALUE ? null : selectValue;
       const saved = await saveSyncLink(rootPath, destination.trim(), profileId);
       stageChange(PROFILE_KEY, saved.profile.id);
-      if (saved.migrated) await saveSettings();
       setNotice("Git link saved. Checking this git link.");
     });
   };
@@ -139,7 +137,7 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     if (!canUpdate || rootPath === null) return;
     void run("sign-in", "Could not save this sign-in. Check the git link and try again.", async () => {
       if (!(await persistLink())) return;
-      const updating = selectValue !== NEW_VALUE && selectValue !== LEGACY_VALUE ? selectedId : null;
+      const updating = selectValue !== NEW_VALUE ? selectedId : null;
       const saved = await saveSyncCredentials(
         rootPath,
         destination.trim(),
@@ -210,7 +208,7 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
             disabled={disabled || busy !== null}
             onChange={(event) => {
               const next = event.target.value;
-              if (next === NEW_VALUE || next === LEGACY_VALUE) {
+              if (next === NEW_VALUE) {
                 stageChange(PROFILE_KEY, "");
                 return;
               }
@@ -223,11 +221,6 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
             <option value={NEW_VALUE}>New sign-in</option>
             {selectedId !== "" && !status?.profiles.some((profile) => profile.id === selectedId) && (
               <option value={selectedId}>{status?.selected?.label ?? "Unknown sign-in"}</option>
-            )}
-            {status?.legacy && (
-              <option value={LEGACY_VALUE}>
-                {status.legacy.username}@{status.legacy.host} (this repository)
-              </option>
             )}
             {status?.profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
@@ -291,22 +284,20 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
           </button>
         </div>
       </fieldset>
-      {(legacyNotice ?? notice) && (
+      {(redactedNotice ?? notice) && (
         <p
           role={notice?.startsWith("Git link saved") || notice?.startsWith("Sign-in saved") ? "status" : "alert"}
           className="m-0 text-xs text-muted-foreground"
         >
-          {legacyNotice ?? notice}
+          {redactedNotice ?? notice}
         </p>
       )}
     </div>
   );
 }
 
-function selectValueOf(selectedId: string, status: SignInStatus | null): string {
-  if (selectedId !== "") return selectedId;
-  if (status?.legacy) return LEGACY_VALUE;
-  return NEW_VALUE;
+function selectValueOf(selectedId: string): string {
+  return selectedId !== "" ? selectedId : NEW_VALUE;
 }
 
 function saveError(error: unknown, fallback: string): string {

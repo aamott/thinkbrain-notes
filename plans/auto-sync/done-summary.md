@@ -71,3 +71,7 @@ loss.
 - `mobile_cross_compile` — gix check-gated in CI for Android/iOS targets
   plus local Android NDK validation. Caveat: `cargo check` does not link —
   device-test anything native-adjacent.
+- `merge_ui` — conflict triage cards + merge tab with per-chunk source-labeled
+  choices, live result preview, and zero git jargon (copy audited on rendered
+  pixels); images get metadata cards. Known gaps: image cards lack thumbnails,
+  and a merge tab stays open after being answered (no self-closing tabs yet).

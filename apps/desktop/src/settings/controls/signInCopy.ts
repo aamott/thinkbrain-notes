@@ -29,12 +29,6 @@ export function describeSignInStatus(status: SignInStatus): {
   if (status.selected?.saved) {
     return { text: `Sign-in saved as ${status.selected.label}.`, role: "status" };
   }
-  if (status.legacy) {
-    return {
-      text: "This repository has a saved sign-in from an earlier version.",
-      role: "status"
-    };
-  }
   if (status.profiles.length === 0) {
     return {
       text: `${status.storageMessage} No sign-in is saved yet.`,

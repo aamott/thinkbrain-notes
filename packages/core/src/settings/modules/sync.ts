@@ -150,6 +150,9 @@ export const syncModule: SettingsModule = {
       label: "Saved undo history",
       settings: [
         {
+          // No reader: the key exists to anchor the `sync-history-policy`
+          // control row (retention explainer + cleanup actions). Its empty
+          // value is persisted but never consulted.
           key: "historyPolicy",
           type: "string",
           default: "",
