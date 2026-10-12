@@ -41,12 +41,6 @@ interface UseWorkspaceLifecycleOptions {
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
   readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
-  /**
-   * Kept in the signature because `useShellState` still passes it; no longer
-   * consumed here since the workspace bridge's `openFile` member was removed
-   * (nothing ever read it).
-   */
-  readonly openFileDocument?: (rootPath: string, relativePath: string) => void;
 }
 export function useWorkspaceLifecycle({
   tabState,
@@ -282,7 +276,6 @@ export function useWorkspaceLifecycle({
     leftWidthRef,
     newNoteFocusRequest,
     openWorkspaceInWindow,
-    persistDesktopState,
     resetPanelWidth,
     requestNewNoteFocus,
     restoredWorkspacePath,

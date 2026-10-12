@@ -74,7 +74,7 @@ export function resolveWikiLinkTarget(
     (note) => note.aliases.map(normalize),
     (note) => {
       const normalizedPath = normalize(note.relativePath);
-      const lastSegment = normalizedPath.split("/").pop() ?? normalizedPath;
+      const lastSegment = normalizedPath.split("/").pop()!;
       return [normalizedPath, lastSegment];
     }
   ];

@@ -20,8 +20,8 @@ export const MOBILE_UI_SCALE = 110;
 /** The interface sizes the `ui.scale` dropdown offers, ascending. */
 export const UI_SCALE_PRESETS: readonly number[] = [75, 90, 100, 110, 125, 150, 175, 200];
 
-/** Whether the primary pointer is coarse (touch). Exported seam for tests. */
-export function coarsePointer(): boolean {
+/** Whether the primary pointer is coarse (touch). */
+function coarsePointer(): boolean {
   return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 }
 

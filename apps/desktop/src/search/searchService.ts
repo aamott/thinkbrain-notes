@@ -79,8 +79,6 @@ export interface SearchOptions {
 
 /** Options for batch indexing. */
 export interface IndexOptions {
-  /** Number of documents per native `index_documents` call. Defaults to 50. */
-  readonly batchSize?: number;
   /** Aborts an in-flight `indexWorkspace` between batches. */
   readonly signal?: AbortSignal;
   /** Invoked after each batch with cumulative `{ indexed, total }`. */
@@ -182,20 +180,19 @@ export function createSearchService(): SearchService {
      *   The total number of documents successfully indexed.
      */
     async indexWorkspace(rootPath, files, options) {
-      const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
       const { signal, onProgress } = options ?? {};
 
       // Start fresh — a failed clear is fatal and should surface immediately.
       await invokeNativeCommand("clear_index", { rootPath });
 
       let indexed = 0;
-      for (let start = 0; start < files.length; start += batchSize) {
+      for (let start = 0; start < files.length; start += DEFAULT_BATCH_SIZE) {
         // Honor abort between batches so a cancelled re-index stops promptly.
         if (signal?.aborted) {
           throw new AbortError();
         }
 
-        const batch = files.slice(start, start + batchSize);
+        const batch = files.slice(start, start + DEFAULT_BATCH_SIZE);
 
         // The reads within a batch are independent, so they go out together.
         // Awaited one at a time, time-to-searchable grew with the note count
@@ -233,7 +230,7 @@ export function createSearchService(): SearchService {
     async indexDocument(rootPath, relativePath) {
       const parsed = await readAndParseNote(rootPath, relativePath, undefined, "searchService");
       if (parsed === null) return;
-      const fileName = relativePath.split("/").pop() ?? relativePath;
+      const fileName = relativePath.split("/").pop()!;
       const document = buildDocumentInput(relativePath, fileName, parsed);
       // FTS5 upsert (DELETE+INSERT) makes this safe for re-indexing existing docs.
       await invokeNativeCommand("index_documents", { rootPath, documents: [document] });

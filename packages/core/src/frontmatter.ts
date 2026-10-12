@@ -114,10 +114,6 @@ export function serializeFrontmatter(metadata: Readonly<Record<string, unknown>>
 
   const yamlText = stringify(cleanMetadata, { lineWidth: 0 }).trimEnd();
 
-  if (yamlText.length === 0) {
-    return "";
-  }
-
   return `---\n${yamlText}\n---`;
 }
 

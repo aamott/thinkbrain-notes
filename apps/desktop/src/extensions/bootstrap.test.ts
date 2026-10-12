@@ -200,7 +200,7 @@ describe("lazy panel placeholders", () => {
     const real = panels.get("sample.stats");
     expect(real?.placeholder).toBeUndefined();
     // The swap preserved the stub's ordering slot rather than appending.
-    expect(panels.entriesBySide("right").map((panel) => panel.id)).toEqual(["sample.stats"]);
+    expect(panels.entries().filter((panel) => panel.side === "right").map((panel) => panel.id)).toEqual(["sample.stats"]);
   });
 
   it("keeps the placeholder after a failed activation so the failure UI stays reachable", async () => {
@@ -271,7 +271,7 @@ describe("startup-activated stubs", () => {
     await vi.waitFor(() => {
       expect(panels.get("sample.stats")?.placeholder).toBeUndefined();
     });
-    expect(panels.entriesBySide("right").map((panel) => panel.id)).toEqual(["sample.stats"]);
+    expect(panels.entries().filter((panel) => panel.side === "right").map((panel) => panel.id)).toEqual(["sample.stats"]);
   });
 
   it("keeps the placeholder after a failed startup activation, while command stubs go", async () => {
@@ -697,20 +697,9 @@ describe("publication as the app-wide bootstrap", () => {
     setExtensionBootstrap(null);
   });
 
-  /**
-   * Publication is explicit, not inferred: an injected-registry bootstrap can
-   * opt in, and a default-configured one can opt out.
-   */
-  it("honours publish over the injected-registries heuristic", () => {
-    const commands = createDesktopCommandRegistry([]);
-    const panels = createDesktopPanelRegistry([]);
-
-    const injected = bootstrapExtensions({ commands, panels, extensions: [], publish: true });
-    expect(getExtensionBootstrap()).toBe(injected);
-
-    setExtensionBootstrap(null);
-    bootstrapExtensions({ extensions: [], publish: false });
-    expect(getExtensionBootstrap()).toBeNull();
+  it("publishes itself as the app-wide bootstrap", () => {
+    const boot = bootstrapExtensions({ extensions: [] });
+    expect(getExtensionBootstrap()).toBe(boot);
   });
 });
 

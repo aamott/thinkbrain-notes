@@ -14,13 +14,12 @@ import { useEffectiveValue } from "./useEffectiveValue";
 // change, while persistence still uses the strict `AppThemeSetting` union.
 export type AppTheme = AppThemeSetting | (string & {});
 
-export interface ThemeProviderState {
+interface ThemeProviderState {
   readonly theme: AppTheme;
   readonly setTheme: (theme: AppTheme) => void;
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const ThemeProviderContext = createContext<ThemeProviderState>({
+const ThemeProviderContext = createContext<ThemeProviderState>({
   theme: "system",
   // Fail loudly if `useTheme` is consumed outside a `ThemeProvider`. A silent
   // no-op here would mask the missing-provider bug (theme changes would
@@ -40,8 +39,6 @@ export function useTheme(): ThemeProviderState {
 
 export interface ThemeProviderProps {
   readonly children: ReactNode;
-  /** Theme used until the settings store finishes loading (defaults to "system"). */
-  readonly defaultTheme?: AppTheme;
 }
 
 /**
@@ -65,10 +62,7 @@ export interface ThemeProviderProps {
  * `themeFileBase` state (never touching the DOM directly). This eliminates
  * effect races and stale-base bugs.
  */
-export function ThemeProvider({
-  children,
-  defaultTheme = "system",
-}: ThemeProviderProps) {
+export function ThemeProvider({ children }: ThemeProviderProps) {
   const loaded = useSettingsStore((s) => s.loaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const stageChange = useSettingsStore((s) => s.stageChange);
@@ -76,12 +70,13 @@ export function ThemeProvider({
   // The hook subscribes to the raw value maps before resolving the value so
   // staged or loaded changes trigger a render.
   const themeFromStore = useEffectiveValue("appearance.theme");
-  // Resolve the display theme: use the store value once loaded, else the prop
-  // default. The store value is `unknown` (typed as the registry default), so
-  // coerce to the AppTheme string union.
+  // Resolve the display theme: use the store value once loaded, else the
+  // "system" fallback while the store is still loading. The store value is
+  // `unknown` (typed as the registry default), so coerce to the AppTheme
+  // string union.
   const theme: AppTheme = loaded && typeof themeFromStore === "string"
     ? (themeFromStore as AppTheme)
-    : defaultTheme;
+    : "system";
 
   // A staged non-string value (e.g. null) clears the file.
   const themeFileFromStore = useEffectiveValue("appearance.themeFile");

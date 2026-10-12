@@ -17,7 +17,6 @@ import {
   parseExtensionManifest,
   resolveEntryPath,
   validateExtensionModule,
-  type CompatibilityHost,
   type ExtensionManifest,
   type ManifestDiagnostic
 } from "@thinkbrain/core";
@@ -54,7 +53,6 @@ export interface LoadExtensionResult {
 export interface LocalDirectoryLoaderOptions {
   readonly readFile: ExtensionFileReader;
   readonly importModule: ExtensionModuleImporter;
-  readonly compatibilityHost?: CompatibilityHost;
 }
 
 export interface LocalDirectoryLoader {
@@ -90,14 +88,12 @@ function sourceUrlFor(directory: string, relativePath: string): string {
 /**
  * Creates a loader for extension directories.
  *
- * @param options Injected file reader, module importer, and host descriptor.
+ * @param options Injected file reader and module importer.
  * @returns A loader whose `load` never throws; failures become diagnostics.
  */
 export function createLocalDirectoryLoader(
   options: LocalDirectoryLoaderOptions
 ): LocalDirectoryLoader {
-  const compatibilityHost = options.compatibilityHost ?? HOST_COMPATIBILITY;
-
   const load = async (directory: string): Promise<LoadExtensionResult> => {
     let manifestSource: string;
     try {
@@ -122,7 +118,7 @@ export function createLocalDirectoryLoader(
 
     const diagnostics: ManifestDiagnostic[] = [...parsed.diagnostics];
 
-    const compatibility = evaluateCompatibility(parsed.manifest, compatibilityHost);
+    const compatibility = evaluateCompatibility(parsed.manifest, HOST_COMPATIBILITY);
     if (!compatibility.compatible) {
       return failure(...diagnostics, ...compatibility.reasons);
     }

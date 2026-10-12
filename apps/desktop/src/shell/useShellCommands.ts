@@ -20,7 +20,6 @@ import { createStaticTab, type DesktopTabAction } from "../tabs/tabModel";
 import {
   isSelectableLeftPanel,
   isSelectableRightPanel,
-  type BottomPanel,
   type LeftPanel,
   type RightPanel
 } from "./shellTypes";
@@ -65,12 +64,6 @@ interface UseShellCommandsOptions {
   readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
   readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
   readonly toggleRightPanel: (panel: RightPanel) => void;
-  /**
-   * Bottom-dock setter, accepted for callers that already hold it (the shell's
-   * layout hook hands over its whole panel API). The command context no longer
-   * sets a bottom surface directly — the one it pinned was never available.
-   */
-  readonly updateBottomPanel: (panel: BottomPanel | null) => void;
   readonly toggleBottomPanel: () => void;
 }
 

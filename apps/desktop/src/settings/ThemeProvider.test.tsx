@@ -74,15 +74,13 @@ afterEach(async () => {
 });
 
 /** Renders the ThemeProvider into a fresh container and flushes effects. */
-async function renderProvider(
-  defaultTheme: "system" | "light" | "dark" = "system"
-): Promise<HTMLDivElement> {
+async function renderProvider(): Promise<HTMLDivElement> {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
     root?.render(
-      <ThemeProvider defaultTheme={defaultTheme}>
+      <ThemeProvider>
         <span>probe</span>
       </ThemeProvider>
     );
@@ -99,11 +97,11 @@ async function flushAsyncFileRead(): Promise<void> {
 }
 
 describe("ThemeProvider", () => {
-  it("uses the default theme when the store is not loaded", async () => {
-    // Store stays `loaded: false`; the prop default should drive the attribute.
-    // "system" resolves to "light" because happy-dom's matchMedia defaults to
-    // light (no dark preference).
-    await renderProvider("system");
+  it("uses the 'system' fallback when the store is not loaded", async () => {
+    // Store stays `loaded: false`; the provider's built-in "system" fallback
+    // should drive the attribute. "system" resolves to "light" because
+    // happy-dom's matchMedia defaults to light (no dark preference).
+    await renderProvider();
 
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
   });
@@ -121,7 +119,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "system", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
+    await renderProvider();
 
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
   });
@@ -137,21 +135,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "system", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
-
-    expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
-  });
-
-  it("defaults to 'light' when matchMedia is unavailable", async () => {
-    // Simulate an SSR / very old webview where `window.matchMedia` is absent.
-    // The provider must fall back to "light" rather than crashing.
-    vi.stubGlobal("matchMedia", undefined);
-    useSettingsStore.setState({
-      loaded: true,
-      appValues: { "appearance.theme": "system", "appearance.themeFile": null }
-    });
-
-    await renderProvider("system");
+    await renderProvider();
 
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
   });
@@ -171,7 +155,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "system", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
+    await renderProvider();
 
     // Unmount synchronously inside act so the cleanup effect runs.
     await act(async () => root?.unmount());
@@ -192,7 +176,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "system", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
+    await renderProvider();
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("light");
 
     // Simulate the OS switching to dark.
@@ -220,7 +204,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "dark", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
+    await renderProvider();
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
 
     // OS switches to light. The user explicitly chose dark, so the attribute
@@ -241,7 +225,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "system", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
+    await renderProvider();
 
     const attr = document.documentElement.dataset.thinkbrainTheme;
     expect(attr).not.toBe("system");
@@ -255,7 +239,7 @@ describe("ThemeProvider", () => {
       appValues: { "appearance.theme": "dark", "appearance.themeFile": null }
     });
 
-    await renderProvider("system");
+    await renderProvider();
 
     // The user's selection wins because no theme file is active.
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
@@ -273,7 +257,7 @@ describe("ThemeProvider", () => {
       }
     });
 
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
 
     // The file's base ("dark") overrides the user's "light" selection.
@@ -292,7 +276,7 @@ describe("ThemeProvider", () => {
       }
     });
 
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
 
     // Parse failure reverts to the user's selection.
@@ -310,7 +294,7 @@ describe("ThemeProvider", () => {
       }
     });
 
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
     // Sanity check: the file's base took precedence initially.
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
@@ -343,7 +327,7 @@ describe("ThemeProvider", () => {
         "appearance.themeFile": "/tmp/dark.tbtheme.json"
       }
     });
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
 
@@ -391,7 +375,7 @@ describe("ThemeProvider", () => {
         "appearance.themeFile": "/tmp/slow.tbtheme.json"
       }
     });
-    await renderProvider("system");
+    await renderProvider();
 
     // The user picks a different file before the first read comes back.
     await act(async () => {
@@ -429,7 +413,7 @@ describe("ThemeProvider", () => {
       }
     });
 
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
     // The file's base is "dark".
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
@@ -491,7 +475,7 @@ describe("ThemeProvider", () => {
         "appearance.themeFile": "/tmp/first-dark.tbtheme.json"
       }
     });
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");
 
@@ -555,7 +539,7 @@ describe("ThemeProvider", () => {
         "appearance.themeFile": "/tmp/clear-dark.tbtheme.json"
       }
     });
-    await renderProvider("system");
+    await renderProvider();
     await flushAsyncFileRead();
     // The file's dark base overrides the user's "light".
     expect(document.documentElement.dataset.thinkbrainTheme).toBe("dark");

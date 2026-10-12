@@ -32,11 +32,7 @@ export function BacklinksPanel({
     );
   }
 
-  if (
-    indexedRoot !== rootPath
-    || status === "indexing"
-    || (status === "idle" && indexedRoot !== null)
-  ) {
+  if (indexedRoot !== rootPath || status === "indexing") {
     return (
       <Unavailable
         title="Indexing links"

@@ -56,8 +56,6 @@ export interface ExtensionPanelMountPointProps {
   readonly mount: ExtensionPanelMount;
   readonly rootPath: string | null;
   readonly documentContents: string | null;
-  /** Receives anything the panel throws. Defaults to a console report. */
-  readonly onError?: (error: unknown) => void;
 }
 
 function reportToConsole(error: unknown): void {
@@ -82,8 +80,7 @@ function showFailure(element: HTMLElement): void {
 export function ExtensionPanelMountPoint({
   mount,
   rootPath,
-  documentContents,
-  onError = reportToConsole
+  documentContents
 }: ExtensionPanelMountPointProps) {
   const elementRef = useRef<HTMLDivElement>(null);
   const listenersRef = useRef(new Set<(state: ExtensionPanelState) => void>());
@@ -99,12 +96,10 @@ export function ExtensionPanelMountPoint({
   // Read inside the mount effect so a state change between render and effect
   // cannot hand the panel a stale snapshot without a matching notification.
   const stateRef = useRef(state);
-  const onErrorRef = useRef(onError);
 
-  // Declared first, so both refs are current before the effects below run.
+  // Declared first, so the ref is current before the effects below run.
   useEffect(() => {
     stateRef.current = state;
-    onErrorRef.current = onError;
   });
 
   useEffect(() => {
@@ -135,7 +130,7 @@ export function ExtensionPanelMountPoint({
       // The panel is trusted code, but a throw in one panel must not take the
       // shell down with it.
       showFailure(element);
-      onErrorRef.current(error);
+      reportToConsole(error);
     }
 
     return () => {
@@ -156,7 +151,7 @@ export function ExtensionPanelMountPoint({
             );
           }
         } catch (error: unknown) {
-          onErrorRef.current(error);
+          reportToConsole(error);
         }
       }
       element.replaceChildren();
@@ -172,7 +167,7 @@ export function ExtensionPanelMountPoint({
       try {
         listener(state);
       } catch (error: unknown) {
-        onErrorRef.current(error);
+        reportToConsole(error);
       }
     }
   }, [state]);

@@ -27,9 +27,7 @@ export function WorkspaceContextMenu({ menu, actions, rootPath }: {
   const createParentPath = target.kind === "folder" ? target.entry.relative_path : target.kind === "file" ? target.entry.parent_path : "";
   // Absolute path feeds the system-clipboard file copy, which file managers
   // need to know which file to carry. `/` joins fine even on Windows.
-  const absolutePath = target.kind !== "background" && rootPath
-    ? `${rootPath}/${target.entry.relative_path}`
-    : null;
+  const absolutePath = target.kind !== "background" ? `${rootPath}/${target.entry.relative_path}` : "";
 
   const copyText = (text: string) => {
     void navigator.clipboard?.writeText(text)?.catch((error) => {
@@ -52,8 +50,8 @@ export function WorkspaceContextMenu({ menu, actions, rootPath }: {
           {target.kind === "file" && <MenuButton label="Previous versions…" onClick={() => showVersions(target.entry)} />}
           <MenuButton label="Copy name" onClick={() => copyText(target.entry.name)} />
           <MenuButton label="Copy relative path" onClick={() => copyText(target.entry.relative_path)} />
-          {absolutePath && <MenuButton label="Copy absolute path" onClick={() => copyText(absolutePath)} />}
-          {absolutePath && canCopyFiles && (
+          <MenuButton label="Copy absolute path" onClick={() => copyText(absolutePath)} />
+          {canCopyFiles && (
             <MenuButton
               label={target.kind === "folder" ? "Copy folder" : "Copy file"}
               onClick={() => { void copyFilesToClipboard([absolutePath]); closeContextMenu(); }}

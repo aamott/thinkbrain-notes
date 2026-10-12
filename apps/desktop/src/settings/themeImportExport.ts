@@ -45,7 +45,7 @@ import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
 import { resolveThemeBase } from "./themeResolution";
-import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
+import { pickAndReadTextFile, saveAndWriteTextFile } from "../native/fs";
 
 // ---------------------------------------------------------------------------
 // DOM access (split out for testability).
@@ -190,7 +190,7 @@ export async function buildThemeExport(): Promise<string> {
  *   a non-event the caller can ignore.
  */
 export async function writeThemeExportFile(json: string): Promise<boolean> {
-  return await writeJsonViaSaveDialog("Export theme", "theme.tbtheme.json", json);
+  return await saveAndWriteTextFile("Export theme", "theme.tbtheme.json", json);
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ export interface ImportThemeResult {
  */
 export async function importTheme(): Promise<ImportThemeResult | null> {
   // Filter to `.tbtheme.json` files so the dialog only shows theme files.
-  const picked = await readPickedFile("Import theme", ["tbtheme.json"]);
+  const picked = await pickAndReadTextFile("Import theme", ["tbtheme.json"]);
   if (picked === null) return null; // user cancelled
 
   const { path, contents } = picked;

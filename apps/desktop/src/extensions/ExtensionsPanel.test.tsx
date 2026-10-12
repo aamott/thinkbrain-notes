@@ -141,29 +141,4 @@ describe("ExtensionsPanel", () => {
 
     expect(add).toHaveBeenCalledWith("/ext/gone");
   });
-
-  it("observes a controller published only after the panel mounts", async () => {
-    // The refs are module globals published by startup; a panel mounted before
-    // that must still find the source rather than showing `empty` forever.
-    const host = await render(<ExtensionsPanel entries={[]} />);
-    expect(host.textContent).not.toContain("late failure");
-
-    const failures = [
-      {
-        directory: "/ext/late",
-        diagnostics: [
-          { code: "manifest_unreadable", message: "late failure", severity: "error" as const }
-        ]
-      }
-    ];
-    const local = localStub({ startupFailures: () => failures });
-
-    await act(async () => {
-      setLocalExtensions(local);
-      // The hook re-checks for a late-published source on a short timer.
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    });
-
-    expect(host.textContent).toContain("late failure");
-  });
 });

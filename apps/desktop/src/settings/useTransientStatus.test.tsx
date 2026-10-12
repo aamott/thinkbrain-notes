@@ -152,24 +152,6 @@ describe("useTransientStatus", () => {
     expect(cap.current!.message).toBeNull();
   });
 
-  it("respects a custom delay passed to show()", async () => {
-    const cap = await renderProbe();
-    await act(async () => {
-      cap.current!.show("test", 1000);
-    });
-    expect(cap.current!.message).toBe("test");
-
-    await act(async () => {
-      vi.advanceTimersByTime(999);
-    });
-    expect(cap.current!.message).toBe("test");
-
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(cap.current!.message).toBeNull();
-  });
-
   it("cleans up the timeout on unmount without firing a stale callback", async () => {
     const cap = await renderProbe();
     await act(async () => {

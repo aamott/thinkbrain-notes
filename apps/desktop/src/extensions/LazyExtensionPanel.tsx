@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components -- the exports here are
+   ReactNode factories so non-tsx modules (bootstrap, session restore) can mount
+   these surfaces; the components are internal to the factories. */
 import { useEffect, useState, type ReactNode } from "react";
 
 import type { DesktopPanelContext } from "../panels/panelRegistryModel";
@@ -75,7 +78,7 @@ function LazyExtensionSurface<Context>({
   return <>{resolved}</>;
 }
 
-export interface LazyExtensionPanelProps {
+interface LazyExtensionPanelProps {
   /** Idempotent activation trigger owned by the bootstrap. */
   readonly ensureActive: () => Promise<void>;
   /** Renders the real panel, valid only after activation resolves. */
@@ -83,12 +86,11 @@ export interface LazyExtensionPanelProps {
   readonly context: DesktopPanelContext;
 }
 
-export function LazyExtensionPanel(props: LazyExtensionPanelProps) {
+function LazyExtensionPanel(props: LazyExtensionPanelProps) {
   return <LazyExtensionSurface {...props} />;
 }
 
 /** Factory form, so the bootstrap can stay a plain `.ts` module. */
-// eslint-disable-next-line react-refresh/only-export-components -- factory for non-tsx bootstrap
 export function createLazyExtensionPanel(props: LazyExtensionPanelProps): ReactNode {
   return <LazyExtensionPanel {...props} />;
 }
@@ -101,13 +103,12 @@ export function createLazyExtensionPanel(props: LazyExtensionPanelProps): ReactN
  * and `resolve` hands the real view's factory output once the registry has
  * swapped the placeholder out.
  */
-export interface LazyExtensionTabProps {
+interface LazyExtensionTabProps {
   readonly ensureActive: () => Promise<void>;
   readonly resolve: (context: DesktopTabContext) => ReactNode;
   readonly context: DesktopTabContext;
 }
 
-// eslint-disable-next-line react-refresh/only-export-components -- factory for non-tsx restore code
 export function createLazyExtensionTab(props: LazyExtensionTabProps): ReactNode {
   return <LazyExtensionSurface {...props} />;
 }

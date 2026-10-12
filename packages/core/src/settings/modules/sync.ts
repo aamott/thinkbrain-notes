@@ -24,11 +24,11 @@ export const DEFAULT_SETTLE_AUTOMATICALLY = true;
  * answers these questions before any window is listening. Changing one means
  * changing the other.
  */
-export const DEFAULT_SYNC_AUTOMATICALLY = true;
-export const DEFAULT_SYNC_INTERVAL_SECONDS = 60;
-export const DEFAULT_SYNC_QUIET_SECONDS = 30;
-export const DEFAULT_SYNC_ON_OPEN = true;
-export const DEFAULT_SYNC_ON_LEAVE = true;
+const DEFAULT_SYNC_AUTOMATICALLY = true;
+const DEFAULT_SYNC_INTERVAL_SECONDS = 60;
+const DEFAULT_SYNC_QUIET_SECONDS = 30;
+const DEFAULT_SYNC_ON_OPEN = true;
+const DEFAULT_SYNC_ON_LEAVE = true;
 
 /**
  * Bounds on the two intervals, mirrored in `schedule.rs` as `MIN_*`/`MAX_*`.
@@ -38,10 +38,10 @@ export const DEFAULT_SYNC_ON_LEAVE = true;
  * someone's host. The ceiling is where "sync automatically" stops meaning
  * anything; past it, turning it off is the honest choice.
  */
-export const SYNC_INTERVAL_SECONDS_MIN = 30;
-export const SYNC_INTERVAL_SECONDS_MAX = 3600;
-export const SYNC_QUIET_SECONDS_MIN = 5;
-export const SYNC_QUIET_SECONDS_MAX = 300;
+const SYNC_INTERVAL_SECONDS_MIN = 30;
+const SYNC_INTERVAL_SECONDS_MAX = 3600;
+const SYNC_QUIET_SECONDS_MIN = 5;
+const SYNC_QUIET_SECONDS_MAX = 300;
 
 /**
  * How long private undo copies are kept. Repeated on the native side as

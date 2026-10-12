@@ -9,13 +9,13 @@ export type PaletteItem =
   | { readonly id: string; readonly kind: "command"; readonly command: DesktopCommand }
   | { readonly id: string; readonly kind: "file"; readonly file: WorkspaceFileResult };
 
-export interface CommandPaletteState {
+interface CommandPaletteState {
   readonly query: string;
   /** Index into the current filtered result set, never an absolute registry index. */
   readonly activeIndex: number;
 }
 
-export interface CommandPaletteResults {
+interface CommandPaletteResults {
   readonly commandResults: readonly DesktopCommand[];
   readonly fileResults: readonly WorkspaceFileResult[];
   readonly items: readonly PaletteItem[];
@@ -24,14 +24,14 @@ export interface CommandPaletteResults {
   readonly status: "results" | "empty";
 }
 
-export const COMMAND_PALETTE_KEYS = ["ArrowUp", "ArrowDown", "Home", "End", "Enter", "Escape"] as const;
-export type CommandPaletteKey = typeof COMMAND_PALETTE_KEYS[number];
+const COMMAND_PALETTE_KEYS = ["ArrowUp", "ArrowDown", "Home", "End", "Enter", "Escape"] as const;
+type CommandPaletteKey = typeof COMMAND_PALETTE_KEYS[number];
 
 export function isCommandPaletteKey(key: string): key is CommandPaletteKey {
   return (COMMAND_PALETTE_KEYS as readonly string[]).includes(key);
 }
 
-export interface CommandPaletteKeyDecision {
+interface CommandPaletteKeyDecision {
   readonly state: CommandPaletteState;
   readonly type: "none" | "close" | "execute";
   readonly item?: PaletteItem;
@@ -60,7 +60,7 @@ export function filterDesktopCommands(
     .map(({ command }) => command);
 }
 
-export function filterWorkspaceFiles(
+function filterWorkspaceFiles(
   files: readonly WorkspaceFileResult[],
   query: string
 ): readonly WorkspaceFileResult[] {
@@ -123,9 +123,7 @@ export function handleCommandPaletteKey(
       ? count - 1
       : key === "ArrowDown"
         ? (results.activeIndex + 1) % count
-        : key === "ArrowUp"
-          ? (results.activeIndex + count - 1) % count
-          : results.activeIndex;
+        : (results.activeIndex + count - 1) % count; // ArrowUp is the only key left
 
   return { state: { ...state, activeIndex }, type: "none" };
 }

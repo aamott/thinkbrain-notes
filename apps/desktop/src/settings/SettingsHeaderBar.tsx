@@ -41,7 +41,7 @@ function buildBreadcrumbPath(
   // activeSection is scope-qualified (e.g. "app:editor.display") so the
   // scroll-spy can distinguish mixed-scope sections. Strip the scope prefix
   // for the breadcrumb lookup, which only needs the section id.
-  const { sectionId } = parseQualifiedSectionId(activeSection);
+  const sectionId = parseQualifiedSectionId(activeSection);
 
   for (const module of modules) {
     const sectionPath = findSectionLabelPath(module.sections, sectionId);

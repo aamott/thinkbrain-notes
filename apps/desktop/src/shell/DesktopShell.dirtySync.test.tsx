@@ -41,7 +41,13 @@ vi.mock("../workspace/workspaceAdapter", () => ({
     createWorkspaceFile: vi.fn(),
     createWorkspaceFolder: vi.fn(),
     renameWorkspaceEntry: vi.fn(),
-    deleteWorkspaceEntry: vi.fn()
+    deleteWorkspaceEntry: vi.fn(),
+    listKnownWorkspaces: vi.fn(async () => []),
+    workspaceAccessCapabilities: vi.fn(async () => ({
+      canOpenFolder: true,
+      canCreateManagedWorkspace: true,
+      opensWorkspaceInNewWindow: true
+    }))
   }
 }));
 

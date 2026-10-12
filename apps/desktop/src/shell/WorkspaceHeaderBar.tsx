@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Folder, FolderGit2, Redo2, Undo2 } from "lucide-react";
 import { restoreBreadcrumbSegments, type DesktopTab } from "../tabs/tabModel";
 import { useEditorCommands } from "../tabs/editorCommands";
@@ -19,8 +19,6 @@ export interface WorkspaceHeaderBarProps {
   readonly isSaving?: boolean;
   /** Callback to trigger saving the active note. */
   readonly onSave?: () => void;
-  /** Optional extra action buttons to render in the header bar. */
-  readonly children?: ReactNode;
 }
 
 const IS_APPLE = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || navigator.platform || "");
@@ -40,8 +38,7 @@ export function WorkspaceHeaderBar({
   activeTab,
   isDirty = false,
   isSaving = false,
-  onSave,
-  children
+  onSave
 }: WorkspaceHeaderBarProps) {
   const [isGitLinked, setIsGitLinked] = useState(false);
   // Whatever the active tab's editable surface offers — undo/redo on its
@@ -113,7 +110,6 @@ export function WorkspaceHeaderBar({
       </div>
 
       <div className="flex items-center gap-2">
-        {children}
         {commands &&
           ([
             { act: commands.undo, can: commands.canUndo, icon: Undo2, label: "Undo", shortcut: UNDO_SHORTCUT },

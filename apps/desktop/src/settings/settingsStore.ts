@@ -383,9 +383,11 @@ export function createSettingsStore(
           lastLoadedAppDocument = appSerialized;
         }
         let workspaceSerialized: string | null = null;
-        if (workspaceMerged !== null && state.workspaceRootPath !== null) {
+        // `workspaceMerged` is only non-null when a workspace is open, so a
+        // non-null merged map already guarantees a non-null root path here.
+        if (workspaceMerged !== null) {
           workspaceSerialized = await gateway.writeWorkspaceSettings(
-            state.workspaceRootPath,
+            state.workspaceRootPath!,
             (current) =>
               serializeDynamicWorkspaceSettings(workspaceMerged, registry, current)
           );

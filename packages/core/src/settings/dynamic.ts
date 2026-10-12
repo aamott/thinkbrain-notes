@@ -22,7 +22,7 @@ import {
 export interface ParseDynamicAppSettingsResult {
   /** Flat `fullKey -> value` map of app-scoped settings (defaults merged in). */
   readonly values: Record<string, unknown>;
-  /** Diagnostics for invalid JSON, bad shape, or migration failures. */
+  /** Diagnostics for invalid JSON or bad shape. */
   readonly diagnostics: SettingsDiagnostic[];
 }
 
@@ -44,7 +44,7 @@ const defaultsFailure = (
  * `appearance.theme`, `editor.fontSize`), the `desktopState` nested object
  * (shell layout state, NOT a setting), and a `version` field. This function:
  *   1. Parses the JSON (or returns defaults + a diagnostic on failure).
- *   2. Runs registry migrations (version-tracked) on the raw record.
+ *   2. Reads and validates the document's `version` field.
  *   3. Extracts only the keys known to the registry as app-scoped settings.
  *   4. Merges with `extractDefaults(registry, "app")` so missing keys get
  *      defaults.
@@ -55,11 +55,11 @@ const defaultsFailure = (
  *
  * Args:
  *   rawJson: Raw JSON from `read_app_settings`, or null if the file is absent.
- *   registry: The settings registry providing definitions and migrations.
+ *   registry: The settings registry providing definitions.
  *
  * Returns:
  *   A flat key-value map of app-scoped settings (defaults merged) plus
- *   diagnostics for any parse/migration/shape problems.
+ *   diagnostics for any parse/shape problems.
  */
 export function parseDynamicAppSettings(
   rawJson: string | null,
@@ -97,30 +97,19 @@ export function parseDynamicAppSettings(
     );
   }
 
-  // Run migrations on the raw record (version-tracked), then extract settings.
-  // Only an error gives up on the document: a version this build cannot make
-  // sense of at all (`settings.version.invalid`) says nothing about what the
-  // rest of it means, while a merely newer one is a warning and the keys below
-  // are still read. Skipped migration steps emit warnings too.
+  // Read the version, then extract settings. Only an error gives up on the
+  // document: a version this build cannot make sense of at all
+  // (`settings.version.invalid`) says nothing about what the rest of it means,
+  // while a merely newer one is a warning and the keys below are still read.
   const versionRead = readSettingsVersion(parsed);
   const versionDiagnostics = versionRead.diagnostic ? [versionRead.diagnostic] : [];
   if (versionRead.diagnostic?.severity === "error") {
     return { values: defaults, diagnostics: versionDiagnostics };
   }
 
-  let record: Record<string, unknown>;
-  let migrationDiagnostics: SettingsDiagnostic[];
-  try {
-    const migrated = migrateDynamicSettingsObject(parsed, registry);
-    record = migrated.record;
-    migrationDiagnostics = migrated.diagnostics;
-  } catch (error) {
-    return defaultsFailure(defaults, "settings.migration_failed", getErrorMessage(error), "error");
-  }
-
-  // Extract only known app-scoped keys from the migrated record; unknown keys
-  // are ignored so stale/misspelled entries don't leak into the settings model.
-  const values = extractScopedValues(record, defaults, registry, "app");
+  // Extract only known app-scoped keys from the record; unknown keys are
+  // ignored so stale/misspelled entries don't leak into the settings model.
+  const values = extractScopedValues(parsed, defaults, registry, "app");
 
   // Validate the merged values against the registry so invalid persisted values
   // (e.g. out-of-range numbers, stale enum strings) surface as diagnostics
@@ -130,7 +119,7 @@ export function parseDynamicAppSettings(
 
   return {
     values,
-    diagnostics: [...versionDiagnostics, ...migrationDiagnostics, ...validationDiagnostics]
+    diagnostics: [...versionDiagnostics, ...validationDiagnostics]
   };
 }
 
@@ -197,9 +186,8 @@ export function serializeDynamicSettings(
   }
 
   // Stamp the current version, but never a lower one than the document already
-  // carried. An older build writing "version 1" over a v2 document would tell
-  // the next v2 build its own file had been migrated backwards, and the v2
-  // migration would run a second time over data that had already had it.
+  // carried: a newer build's marker must survive a round trip through an
+  // older one.
   base.version = Math.max(
     readSettingsVersion(base).version,
     CURRENT_SETTINGS_VERSION
@@ -225,9 +213,9 @@ export function serializeDynamicAppSettings(
  * Parses raw workspace settings JSON into a flat key-value map merged with
  * registry defaults for the workspace scope.
  *
- * Deliberately unlike {@link parseDynamicAppSettings}: workspace documents run
- * no migrations and emit no diagnostics — unknown or invalid values are simply
- * ignored (parse failure or a non-object document yields defaults).
+ * Deliberately unlike {@link parseDynamicAppSettings}: workspace documents
+ * emit no diagnostics — unknown or invalid values are simply ignored (parse
+ * failure or a non-object document yields defaults).
  */
 export function parseDynamicWorkspaceSettings(
   rawJson: string | null,
@@ -285,63 +273,4 @@ function extractScopedValues(
     }
   }
   return values;
-}
-
-/**
- * Runs registry migrations on a raw settings record in version order.
- *
- * Operates on the flat key-value record using the registry's
- * `getMigrations()` list. Migrations are applied in ascending `fromVersion`
- * order; each step transforms the record and advances the version field. The
- * `desktopState` nested key and other non-setting keys pass through untouched.
- *
- * Rather than requiring an unbroken chain, the dynamic system tolerates gaps in
- * migration chains (e.g. from extensions): when a step's `fromVersion` does
- * not match the record's current version, the step is skipped and a warning
- * diagnostic is emitted rather than throwing. The caller decides whether to
- * surface those warnings.
- *
- * Args:
- *   record: The parsed raw settings record (mutated copy returned).
- *   registry: The settings registry providing the migration list.
- *
- * Returns:
- *   An object with the migrated record (with `version` set to the current
- *   settings version) and a list of warning diagnostics for any skipped
- *   migration steps.
- */
-function migrateDynamicSettingsObject(
-  record: Readonly<Record<string, unknown>>,
-  registry: SettingsRegistry
-): { record: Record<string, unknown>; diagnostics: SettingsDiagnostic[] } {
-  const fromVersion = readSettingsVersion(record).version;
-  let value: Record<string, unknown> = { ...record };
-  const diagnostics: SettingsDiagnostic[] = [];
-
-  const migrations = [...registry.getMigrations()].sort(
-    (a, b) => a.fromVersion - b.fromVersion
-  );
-
-  for (const step of migrations) {
-    if (step.fromVersion < fromVersion) continue;
-    const currentVersion = readSettingsVersion(value).version;
-    if (currentVersion !== step.fromVersion) {
-      // Skip if the record's version doesn't match this step's expected source.
-      // This is lenient compared to the legacy strict check, but the dynamic
-      // system may have gaps in migration chains from extensions. Emit a
-      // warning so the skip is observable rather than silent.
-      diagnostics.push({
-        code: "settings.migration_skipped",
-        message: `Migration step from version ${step.fromVersion} to ${step.toVersion} was skipped; record version is ${currentVersion}.`,
-        severity: "warning",
-        path: "version"
-      });
-      continue;
-    }
-    value = step.migrate(value);
-    value.version = step.toVersion;
-  }
-
-  value.version = CURRENT_SETTINGS_VERSION;
-  return { record: value, diagnostics };
 }

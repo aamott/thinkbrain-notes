@@ -92,7 +92,7 @@ export async function flushPromises(): Promise<void> {
 
 /** `createRoot` + `act` render/click/dispatch/unmount harness. No
  *  `@testing-library/react` dependency; call `unmount()` in `afterEach`. */
-export interface SettingsTestHarness {
+interface SettingsTestHarness {
   render(component: React.ReactElement): Promise<HTMLDivElement>;
   click(element: Element): Promise<void>;
   dispatch(element: Element, event: Event): Promise<void>;

@@ -24,7 +24,6 @@ describe("markdownEditorHookRegistry", () => {
       "markdown-language",
       "markdown-live-preview",
       "wiki-link-autocomplete",
-      "line-wrapping",
       "cursor-theme",
       "aria-content-attributes",
       "default-keybindings",

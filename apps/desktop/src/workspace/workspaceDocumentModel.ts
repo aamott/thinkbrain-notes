@@ -21,11 +21,6 @@ export type FileOperationResult =
    */
   | { readonly ok: false; readonly message: string; readonly code: string };
 
-/** @deprecated Use {@link FileOperationResult}. */
-export type WorkspaceDocumentResult = FileOperationResult;
-/** @deprecated Use {@link FileOperationResult}. */
-export type TextFileResult = FileOperationResult;
-
 /** Loads a Markdown document through an injected desktop boundary. */
 export async function loadWorkspaceDocument(
   api: WorkspaceDocumentApi,
@@ -49,10 +44,6 @@ export async function saveWorkspaceDocument(
   } catch (error) {
     return fileOperationFailure(error, "The Markdown document could not be updated.");
   }
-}
-
-export function workspaceDocumentErrorMessage(error: unknown): string {
-  return normalizeNativeError(error).message.trim() || "The Markdown document could not be updated.";
 }
 
 /** Loads a non-Markdown text file through the text file API. */

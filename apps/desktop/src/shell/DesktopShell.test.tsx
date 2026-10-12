@@ -49,7 +49,7 @@ describe("DesktopShell composition", () => {
     expect(markup).toContain('aria-label="Workspace sections"');
     // Active buttons emit aria-current between aria-label and title, so assert
     // each attribute independently rather than as a contiguous substring.
-    const leftPanels = desktopPanelRegistry.entriesBySide("left");
+    const leftPanels = desktopPanelRegistry.entries().filter((panel) => panel.side === "left");
     for (const action of leftPanels) {
       expect(markup).toContain(`aria-label="${action.label}"`);
       expect(markup).toContain(`title="${action.label}"`);
@@ -71,8 +71,8 @@ describe("DesktopShell composition", () => {
     // alone; the rest live in the ⋯ menu until pinned or notified.
     expect(markup).toContain('aria-label="Outline"');
     const unpinned = desktopPanelRegistry
-      .entriesBySide("right")
-      .filter((action) => action.id !== "outline");
+      .entries()
+      .filter((action) => action.side === "right" && action.id !== "outline");
     for (const action of unpinned) {
       expect(markup).not.toContain(`aria-label="${action.label}"`);
     }

@@ -368,7 +368,6 @@ export function useWorkspaceTreeDrag({
     if (!ok) return;
     // Land focus on the moved row's drag handle once the refresh renders it.
     requestAnimationFrame(() => {
-      if (session.cancelled) return;
       const rows = document.querySelectorAll(`[${WORKSPACE_TREE_ROW_ATTR}]`);
       for (const row of rows) {
         if (row.getAttribute(WORKSPACE_TREE_ROW_ATTR) !== destination) continue;

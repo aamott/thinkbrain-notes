@@ -100,7 +100,7 @@ export function remapExpandedFolders(
 // ---- Drag-session effects shared by the pointer and HTML5 controllers ----
 
 /** Hover time before a collapsed folder target expands. */
-export const DRAG_AUTO_EXPAND_MS = 600;
+const DRAG_AUTO_EXPAND_MS = 600;
 const AUTOSCROLL_EDGE_PX = 28;
 const AUTOSCROLL_STEP_PX = 14;
 

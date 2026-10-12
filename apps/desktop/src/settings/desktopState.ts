@@ -366,7 +366,7 @@ function normalizeWorkspacePaths(value: unknown, fallback?: string | null): read
   return promoteRecentWorkspace(paths, fallback);
 }
 
-export function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
+function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
   const unique = [...new Set(path ? [path, ...paths] : paths)];
   return unique.slice(0, MAX_RECENT_WORKSPACES);
 }

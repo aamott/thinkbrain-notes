@@ -82,7 +82,7 @@ export function buildNoteIndexEntry(input: WikiLinkIndexInput): NoteIndexEntry {
   const { relativePath, parsedNote } = input;
   return {
     relativePath,
-    fileName: relativePath.split("/").pop() ?? relativePath,
+    fileName: relativePath.split("/").pop()!,
     title: parsedNote.metadata.title,
     aliases: parsedNote.aliases
   };

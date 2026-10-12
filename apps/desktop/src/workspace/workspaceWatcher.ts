@@ -27,14 +27,23 @@ const WORKSPACE_CHANGED_EVENT = "workspace://changed";
  */
 const MAX_INDIVIDUAL_CHANGES = 50;
 
-/** One reportable change, mirroring the native `WorkspaceChange`. */
-export interface WorkspaceChange {
-  readonly kind: "created" | "modified" | "deleted" | "renamed" | "rescan";
-  /** Workspace-relative, forward slashes. Empty for a rescan. */
-  readonly path: string;
-  /** Where a renamed note came from. */
-  readonly oldPath?: string;
-}
+/**
+ * One reportable change, mirroring the native `WorkspaceChange`. The native
+ * classifier always pairs a rename with its origin — an unresolvable end
+ * becomes a rescan instead — so `oldPath` is a required field here.
+ */
+export type WorkspaceChange =
+  | {
+      readonly kind: "created" | "modified" | "deleted" | "rescan";
+      /** Workspace-relative, forward slashes. Empty for a rescan. */
+      readonly path: string;
+    }
+  | {
+      readonly kind: "renamed";
+      readonly path: string;
+      /** Where a renamed note came from. */
+      readonly oldPath: string;
+    };
 
 interface WorkspaceChangedPayload {
   readonly rootPath: string;
@@ -83,12 +92,6 @@ export function applyWorkspaceChanges(
         appEvents.emit("note.deleted", { rootPath, relativePath: change.path, origin });
         break;
       case "renamed":
-        if (change.oldPath === undefined) {
-          // Without an origin there is no entry to move, but the file is real
-          // and unindexed; treating it as new beats dropping it.
-          appEvents.emit("note.created", { rootPath, relativePath: change.path, origin });
-          break;
-        }
         appEvents.emit("note.renamed", {
           rootPath,
           oldRelativePath: change.oldPath,

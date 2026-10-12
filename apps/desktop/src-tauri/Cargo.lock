@@ -169,7 +169,6 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "windows-sys 0.60.2",
- "wl-clipboard-rs",
  "x11rb",
 ]
 
