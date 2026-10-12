@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": [".agents/**", "examples/**"],
+  "workspaces": {
+    ".": {
+      "ignoreBinaries": ["rustfmt", "where.exe"]
+    },
+    "apps/desktop": {
+      "entry": ["index.html", "demo/main.tsx", "e2e/**/*.spec.ts"],
+      "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "demo/**/*.{ts,tsx}", "*.ts"],
+      "paths": { "@/*": ["./src/*"] }
+    },
+    "packages/core": {},
+    "packages/ui": {}
+  }
+}
