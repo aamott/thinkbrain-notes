@@ -11,7 +11,7 @@
 export type ConflictKind = "text" | "binary";
 
 /** One side of a conflict, as a card or a column header shows it. */
-export interface ConflictVersion {
+interface ConflictVersion {
   /** Workspace-relative, forward slashes. */
   readonly path: string;
   /** Whose version this is, in the user's terms: "This computer", "OneDrive". */
@@ -27,7 +27,7 @@ export interface ConflictVersion {
 }
 
 /** Whether this is two versions of a note, or keep-versus-delete. */
-export type ConflictDecision = "versions" | "keepOrDelete";
+type ConflictDecision = "versions" | "keepOrDelete";
 
 /**
  * A conflict as the triage list shows it.
@@ -50,7 +50,7 @@ export interface ConflictSummary {
  * `current` is this computer's version as the user sees it: the open editor's
  * buffer when there is one, else what is on disk.
  */
-export interface ConflictText {
+interface ConflictText {
   readonly incoming: string;
   readonly current: string;
 }

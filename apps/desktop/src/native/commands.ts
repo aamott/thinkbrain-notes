@@ -569,7 +569,7 @@ export interface NativeWorkspaceSnapshot {
  * back to the filename stem when the file is unparseable); `path` is the
  * absolute filesystem path to the file.
  */
-export interface NativeThemeEntry {
+interface NativeThemeEntry {
   readonly name: string;
   readonly path: string;
 }

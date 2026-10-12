@@ -30,7 +30,7 @@ export type JournalStatus =
   | "loading"
   | "ready";
 
-export type JournalViewState =
+type JournalViewState =
   | "no-workspace"
   | "invalid-root"
   | "unreadable"
@@ -39,7 +39,7 @@ export type JournalViewState =
   | "no-matches"
   | "list";
 
-export type JournalRowKind = "undated" | "undated-entry" | "year" | "month" | "entry";
+type JournalRowKind = "undated" | "undated-entry" | "year" | "month" | "entry";
 
 export interface JournalRow {
   readonly kind: JournalRowKind;

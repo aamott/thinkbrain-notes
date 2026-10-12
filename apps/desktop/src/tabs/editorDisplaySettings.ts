@@ -12,9 +12,9 @@ import type { Extension } from "@codemirror/state";
 export const EDITOR_FONT_SIZE_KEY = "editor.fontSize";
 export const EDITOR_LINE_WRAPPING_KEY = "editor.lineWrapping";
 
-export const EDITOR_FONT_SIZE_MIN = 10;
-export const EDITOR_FONT_SIZE_MAX = 32;
-export const EDITOR_FONT_SIZE_DEFAULT = 16;
+const EDITOR_FONT_SIZE_MIN = 10;
+const EDITOR_FONT_SIZE_MAX = 32;
+const EDITOR_FONT_SIZE_DEFAULT = 16;
 
 /**
  * Resolves a stored/staged `editor.fontSize` to a usable integer px value.

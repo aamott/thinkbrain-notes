@@ -27,7 +27,7 @@ export interface ExtensionPanelState {
 }
 
 /** The handle a mounted panel receives alongside its element. */
-export interface ExtensionPanelMountContext {
+interface ExtensionPanelMountContext {
   /** State at mount time. Later values arrive through {@link onDidChange}. */
   readonly state: ExtensionPanelState;
   /**

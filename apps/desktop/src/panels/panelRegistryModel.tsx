@@ -70,7 +70,7 @@ export interface RightPanelContext {
 export interface DesktopPanelContext extends LeftPanelContext, RightPanelContext {}
 
 /** Stable identifiers for first-party desktop sidebar panels. */
-export type BuiltInDesktopPanelId =
+type BuiltInDesktopPanelId =
   | "explorer"
   | "search"
   | "conflicts"
@@ -125,7 +125,7 @@ export type DesktopPanelId = BuiltInDesktopPanelId | (string & {});
  * hatch, this rejects a plain typo (`"exlorer"` has no dot) at compile time
  * while still admitting any id an extension actually registers.
  */
-export type ExtensionPanelId = `${string}.${string}`;
+type ExtensionPanelId = `${string}.${string}`;
 
 /**
  * Activity-bar panel id selected on the left side of the shell.
@@ -182,7 +182,7 @@ export interface PanelAction {
  * the form an action takes when it needs a shell callback like
  * `onOpenSyncSettings`, which a static literal cannot name.
  */
-export type PanelActions<Ctx> =
+type PanelActions<Ctx> =
   | readonly PanelAction[]
   | ((context: Ctx) => readonly PanelAction[]);
 

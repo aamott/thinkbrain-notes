@@ -45,7 +45,7 @@ import {
 import { effectiveSettingValue } from "../settings/settingsHelpers";
 
 /** A command definition whose identifier is relative to the owning extension. */
-export type DesktopExtensionCommand = Omit<DesktopCommand, "id"> & { readonly id: string };
+type DesktopExtensionCommand = Omit<DesktopCommand, "id"> & { readonly id: string };
 
 /**
  * A panel definition whose identifier is relative to the owning extension.
@@ -55,7 +55,7 @@ export type DesktopExtensionCommand = Omit<DesktopCommand, "id"> & { readonly id
  * a pre-bundled module with no access to that instance, so it contributes a
  * framework-neutral `mount` and owns the DOM inside the element it is given.
  */
-export type DesktopExtensionPanel =
+type DesktopExtensionPanel =
   | (Omit<DesktopPanelContribution, "id"> & {
       readonly id: string;
       readonly mount?: undefined;
@@ -67,24 +67,24 @@ export type DesktopExtensionPanel =
     });
 
 /** A Markdown editor hook whose identifier is relative to the owning extension. */
-export type DesktopExtensionEditorHook = Omit<
+type DesktopExtensionEditorHook = Omit<
   DesktopEditorHookContribution<MarkdownEditorHookPayload, undefined>,
   "id"
 > & { readonly id: string };
 
 /** A tab view whose kind is relative to the owning extension. */
-export type DesktopExtensionTab = Omit<DesktopTabView, "kind"> & { readonly kind: string };
+type DesktopExtensionTab = Omit<DesktopTabView, "kind"> & { readonly kind: string };
 
 /** An extension schema receives its own module and section namespaces automatically. */
 export type DesktopExtensionSettingsSchema = Omit<SettingsModule, "id">;
 
-export type DesktopSettingChangeListener = (
+type DesktopSettingChangeListener = (
   value: unknown,
   previousValue: unknown
 ) => void;
 
 /** The settings surface exposed to one desktop extension. */
-export interface DesktopExtensionSettings {
+interface DesktopExtensionSettings {
   registerSchema(schema: DesktopExtensionSettingsSchema): Disposable;
   get<T = unknown>(key: string): T | undefined;
   /**
@@ -100,16 +100,16 @@ export interface DesktopExtensionSettings {
 }
 
 /** Scoped contribution registration API exposed to one desktop extension. */
-export interface Registrar<T> {
+interface Registrar<T> {
   register(item: T): Disposable;
 }
 
-export type DesktopExtensionEditorHeader = Omit<
+type DesktopExtensionEditorHeader = Omit<
   DesktopEditorHeaderContribution,
   "id"
 > & { readonly id: string };
 
-export interface DesktopExtensionTabContributions extends Registrar<DesktopExtensionTab> {
+interface DesktopExtensionTabContributions extends Registrar<DesktopExtensionTab> {
   /**
    * Opens a tab of a kind this extension registered.
    *
@@ -126,7 +126,7 @@ export interface DesktopExtensionTabContributions extends Registrar<DesktopExten
  * which owns each returned disposable in the activation's subscription store,
  * so deactivation removes the listener.
  */
-export type DesktopExtensionEvents = EventSubscriber<AppEvents>;
+type DesktopExtensionEvents = EventSubscriber<AppEvents>;
 
 /** The desktop context layered over the platform-neutral core context. */
 export interface DesktopExtensionContext extends ExtensionContext {
