@@ -15,6 +15,9 @@ large amount of dead weight found in a full-repo audit.
 - **Sideways page drag fixed** — root `overscroll-behavior: none` stops the
   whole page rubber-banding on horizontal finger drags; intentional
   horizontal scrolling inside code blocks and the tab strip is unchanged.
+- **Wiki links follow only when concealed** — clicking a `[[link]]` whose
+  markdown syntax is showing (cursor inside it) now edits instead of
+  navigating; Ctrl/Cmd+click follows either way.
 - **Dead code cleanup** — ~1,700 more lines removed after a top-to-bottom
   audit: unused exports, write-only fields, guards for states that can't
   occur, inert capability grants, and the unused `codemirror` dependency.
