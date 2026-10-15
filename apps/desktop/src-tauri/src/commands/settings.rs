@@ -100,10 +100,6 @@ pub struct DesktopStateUpdate {
     #[serde(default)]
     pub development_extension_directories: Option<Vec<String>>,
     #[serde(default)]
-    pub open_tabs: Option<Vec<PersistedTab>>,
-    #[serde(default)]
-    pub active_tab_id: Option<Option<String>>,
-    #[serde(default)]
     pub collapsed_groups: Option<CollapsedGroupsUpdate>,
     #[serde(default)]
     pub workspace_tabs: Option<WorkspaceTabsUpdate>,
@@ -129,15 +125,13 @@ pub struct DesktopState {
     right_panel_width: f64,
     bottom_panel_open: bool,
     development_extension_directories: Vec<String>,
-    open_tabs: Vec<PersistedTab>,
-    active_tab_id: Option<String>,
     /// Workspace path -> view id -> the group keys collapsed in it (D53).
     workspace_views: WorkspaceViews,
     /// Workspace path -> what that workspace had open.
     ///
-    /// `open_tabs` above is the flat list this replaced. It is still read and
-    /// written so a downgrade keeps working, and so an existing user's tabs
-    /// survive the upgrade — see `apply_workspace_tabs`.
+    /// Keyed rather than one flat list: two windows on two vaults write this
+    /// without knowing about each other, and a flat list made each overwrite
+    /// the other's tabs — see `apply_workspace_tabs`.
     workspace_tabs: WorkspaceTabs,
     /// Whatever a newer build wrote here that this one has no name for.
     ///
@@ -150,7 +144,7 @@ pub struct DesktopState {
 
 /// The keys this build writes itself; everything else in a stored document is
 /// somebody else's and travels in `unknown_fields`.
-const DESKTOP_STATE_KEYS: [&str; 12] = [
+const DESKTOP_STATE_KEYS: [&str; 10] = [
     "version",
     "lastWorkspacePath",
     "recentWorkspacePaths",
@@ -159,8 +153,6 @@ const DESKTOP_STATE_KEYS: [&str; 12] = [
     "rightPanelWidth",
     "bottomPanelOpen",
     "developmentExtensionDirectories",
-    "openTabs",
-    "activeTabId",
     "workspaceViews",
     "workspaceTabs",
 ];
@@ -462,11 +454,6 @@ pub fn apply_desktop_state_update(
             .development_extension_directories
             .map(normalize_extension_directories)
             .unwrap_or(current.development_extension_directories),
-        open_tabs: update.open_tabs.unwrap_or(current.open_tabs),
-        active_tab_id: match update.active_tab_id {
-            Some(id) => id.filter(|id| !id.is_empty()),
-            None => current.active_tab_id,
-        },
         workspace_views,
         workspace_tabs,
     }
@@ -566,8 +553,6 @@ pub fn create_desktop_state(state: &Map<String, Value>) -> DesktopState {
         )
         .map(normalize_extension_directories)
         .unwrap_or_default(),
-        open_tabs: read_persisted_tabs(state.get("openTabs")),
-        active_tab_id: nonempty_string(state.get("activeTabId")),
         workspace_views: read_workspace_views(state.get("workspaceViews")),
         workspace_tabs: read_workspace_tabs(state.get("workspaceTabs")),
         unknown_fields: state
@@ -645,8 +630,6 @@ pub fn default_desktop_state() -> DesktopState {
         right_panel_width: DEFAULT_RIGHT_PANEL_WIDTH,
         bottom_panel_open: false,
         development_extension_directories: Vec::new(),
-        open_tabs: Vec::new(),
-        active_tab_id: None,
         workspace_views: WorkspaceViews::new(),
         workspace_tabs: WorkspaceTabs::new(),
         unknown_fields: Map::new(),

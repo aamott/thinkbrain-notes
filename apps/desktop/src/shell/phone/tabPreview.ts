@@ -11,9 +11,9 @@ const DEFAULT_LIMIT = 180;
  * collapse to spaces because the card wraps its own lines and a preserved blank
  * line would waste a third of the visible area.
  */
-export function previewText(contents: string, maxChars: number = DEFAULT_LIMIT): string {
+export function previewText(contents: string): string {
   const body = parseFrontmatter(contents).body;
   const flattened = body.replace(/\s+/g, " ").trim();
-  if (flattened.length <= maxChars) return flattened;
-  return `${flattened.slice(0, maxChars)}…`;
+  if (flattened.length <= DEFAULT_LIMIT) return flattened;
+  return `${flattened.slice(0, DEFAULT_LIMIT)}…`;
 }

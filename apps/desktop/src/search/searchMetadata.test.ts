@@ -115,8 +115,7 @@ Body`
             byte_size: 10,
             updated_at: null
           }
-        ],
-        { batchSize: 1 }
+        ]
       )
     ).resolves.toBe(1);
     const indexCall = invoke.mock.calls.find(([command]) => command === "index_documents");

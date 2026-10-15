@@ -11,16 +11,13 @@ import { subscribeExplorerToNoteChanges } from "./workspaceExplorerRefresh";
 import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings, writeWorkspaceSettings } from "./workspaceSettings";
 import { DEFAULT_EXPLORER_SORT, type ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
-export { WorkspaceSelector } from "./WorkspaceSelector";
 import { useWorkspaceSwitchingContext } from "./workspaceSwitchingContext";
 import { useWorkspaceContextMenu } from "./useWorkspaceContextMenu";
 import { useWorkspaceInlineCreate } from "./useWorkspaceInlineCreate";
 import { useWorkspaceTreeNavigation } from "./useWorkspaceTreeNavigation";
 import {
-  isInvalidWorkspaceMove,
   remapExpandedFolders,
   remapMovedPath,
-  WORKSPACE_INVALID_MOVE_MESSAGE,
   workspaceMoveDestination
 } from "./workspaceMove";
 import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
@@ -32,7 +29,7 @@ export interface WorkspaceExplorerProps {
   readonly onWorkspaceOpened?: (rootPath: string, snapshot: NativeWorkspaceSnapshot) => void;
   readonly onWorkspaceUnavailable?: (rootPath: string) => void;
   readonly onMarkdownFileSelected?: (rootPath: string, relativePath: string) => void;
-  /** Fired when any file (Markdown or not) is selected. Falls back to onMarkdownFileSelected. */
+  /** Fired when any file (Markdown or not) is selected. */
   readonly onFileSelected?: (rootPath: string, relativePath: string) => void;
   /** Fired when a new Markdown file is created so the shell can open it. */
   readonly onMarkdownFileCreated?: (rootPath: string, relativePath: string) => void;
@@ -63,7 +60,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   initialWorkspacePath = null,
   onWorkspaceOpened,
   onWorkspaceUnavailable,
-  onMarkdownFileSelected,
   onFileSelected,
   onMarkdownFileCreated,
   newNoteFocusRequest = 0,
@@ -106,14 +102,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const rootPathRef = useRef(workspaceRootPath);
   const apiRef = useRef(api);
   const showHiddenRef = useRef(showHidden);
-  const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected });
+  const callbacksRef = useRef({ onMarkdownFileCreated, onFileSelected });
   // Refs are updated in an effect (not during render) per the react-hooks/refs
   // rule. Async helpers read `*.current` after each `await`.
   useEffect(() => {
     stateRef.current = state;
     apiRef.current = api;
     showHiddenRef.current = showHidden;
-    callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected };
+    callbacksRef.current = { onMarkdownFileCreated, onFileSelected };
   });
 
   // In-flight operation counter so overlapping CRUD calls do not clobber the
@@ -190,7 +186,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setExplorerSort(DEFAULT_EXPLORER_SORT);
   }, [resetCreate, setContextMenu, setExpandedFolders]);
 
-  const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
+  const loadWorkspace = useCallback(async (rootPath: string) => {
     // Invalidate operations and transient UI associated with the previous
     // workspace before the new one begins loading. In particular, this keeps
     // a pending delete from being applied to a same-named entry in the new root.
@@ -225,7 +221,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     } catch (error) {
       if (rootPathRef.current !== rootPath) return;
       dispatch({ type: "failed", message: workspaceErrorMessage(error) });
-      if (restoring) onWorkspaceUnavailable?.(rootPath);
+      onWorkspaceUnavailable?.(rootPath);
     }
   }, [api, clearWorkspaceState, onWorkspaceOpened, onWorkspaceUnavailable]);
 
@@ -294,7 +290,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       // synchronously before the first await so the UI reflects the switch
       // immediately. The set-state-in-effect rule cannot model this lifecycle,
       // so the call is suppressed here rather than restructuring the load.
-      void loadWorkspace(initialWorkspacePath, true);
+      void loadWorkspace(initialWorkspacePath);
     }
   }, [initialWorkspacePath, loadWorkspace]);
 
@@ -330,11 +326,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   const handleFileSelected = useCallback((relativePath: string) => {
     if (!workspaceRootPath) return;
-    // Prefer the general file handler (which infers tab kind); fall back to
-    // the Markdown-only handler for callers that haven't been updated yet.
-    if (onFileSelected) onFileSelected(workspaceRootPath, relativePath);
-    else onMarkdownFileSelected?.(workspaceRootPath, relativePath);
-  }, [onFileSelected, onMarkdownFileSelected, workspaceRootPath]);
+    onFileSelected?.(workspaceRootPath, relativePath);
+  }, [onFileSelected, workspaceRootPath]);
 
   const submitRename = useCallback(async (target: RenameState, newName: string): Promise<boolean> => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
@@ -360,17 +353,12 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
    * Moves an entry into another folder ("" = root) via the rename path, then
    * re-points the lifted tree state — active row and expanded folders — so a
    * moved folder keeps its expansion and the moved row stays the active one.
-   * A drop back on the current parent is a no-op that resolves true; a folder
-   * dropped into itself or a descendant is rejected before any native call.
+   * Callers pre-validate the destination, so nothing invalid reaches the
+   * native call.
    */
   const moveEntry = useCallback(async (source: NativeWorkspaceEntry, parentPath: string): Promise<boolean> => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
     if (!rootPath) return false;
-    if (isInvalidWorkspaceMove(source, parentPath)) {
-      if (parentPath === source.parent_path) return true;
-      setActionError(WORKSPACE_INVALID_MOVE_MESSAGE);
-      return false;
-    }
     const destination = workspaceMoveDestination(source, parentPath);
     const ok = await runWithRefresh(async () => {
       await apiRef.current.renameWorkspaceEntry(rootPath, source.relative_path, destination);

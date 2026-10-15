@@ -21,20 +21,19 @@ export const FALLBACK_WPM = 200;
 /**
  * Counts a document.
  *
- * @param contents Document text, or `null` when no note is open.
+ * @param contents Document text.
  * @param wordsPerMinute Reading speed; non-positive values fall back so a
  *   misconfigured setting cannot produce Infinity or NaN.
  */
-export function computeNoteStats(contents: string | null, wordsPerMinute: number): NoteStats {
-  const text = contents ?? "";
-  const trimmed = text.trim();
+export function computeNoteStats(contents: string, wordsPerMinute: number): NoteStats {
+  const trimmed = contents.trim();
   // A trimmed string split on whitespace runs cannot yield empty tokens.
   const words = trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
   const rate = Number.isFinite(wordsPerMinute) && wordsPerMinute > 0 ? wordsPerMinute : FALLBACK_WPM;
 
   return {
     words,
-    characters: text.length,
+    characters: contents.length,
     readingMinutes: words === 0 ? 0 : Math.ceil(words / rate)
   };
 }

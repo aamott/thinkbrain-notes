@@ -73,8 +73,6 @@
   --tn-radius-medium: 0.5rem;
   --tn-radius-large: 0.75rem;
   --tn-size-activitybar-width: 3rem;
-  --tn-size-sidebar-width: 16rem;
-  --tn-size-right-sidebar-width: 18rem;
   --tn-shadow-soft: 0 18px 50px rgb(0 0 0 / 18%);
   /* Floating dock popout shadow (small screens). Kept as a halo — drawers,
      sheets and bubbles need separation on every visible side — but low-alpha

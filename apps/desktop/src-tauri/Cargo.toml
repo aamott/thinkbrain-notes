@@ -64,7 +64,7 @@ tauri-plugin-updater = "2"
 # in `linux_clipboard.rs` (x11rb + wl-clipboard-rs) so GTK file managers get
 # the `x-special/gnome-copied-files` format they require for paste.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
-arboard = { version = "3.5.2", features = ["wayland-data-control"] }
+arboard = "3.5.2"
 
 # keyring v4 split the API (`keyring-core`) from the backends (one crate per
 # platform) and moved store selection from a compile-time feature to an

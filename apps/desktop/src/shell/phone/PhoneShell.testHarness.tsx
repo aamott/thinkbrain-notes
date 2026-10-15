@@ -208,8 +208,7 @@ export const visibleDialog = (host: HTMLElement, label: string): Element | null 
 export const inspector = (host: HTMLDivElement): Element | null =>
   visibleDialog(host, "Inspector");
 export const actionsMenu = (host: HTMLDivElement): Element | null =>
-  host.querySelector('[role="menu"][aria-label="Action items"][aria-hidden="false"]')
-  ?? host.querySelector('[role="menu"][aria-label="Action items"]:not([aria-hidden="true"])');
+  host.querySelector('[role="menu"][aria-label="Action items"]:not([aria-hidden="true"])');
 
 /** The explorer surface, visible only while its wrapper is not aria-hidden. */
 export const filesPanel = (host: HTMLDivElement): Element | null =>

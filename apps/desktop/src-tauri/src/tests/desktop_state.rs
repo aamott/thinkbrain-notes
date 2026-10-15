@@ -1,5 +1,5 @@
 //! Desktop-state tests: MRU merging, extension directories, schema version
-//! tolerance (newer/older builds), active-tab clearing semantics, and the
+//! tolerance (newer/older builds), unknown-field carry-through, and the
 //! per-workspace `workspaceViews` (collapsed groups) and `workspaceTabs` maps.
 
 use crate::commands::settings::*;
@@ -87,9 +87,7 @@ fn desktop_state_update_merges_concurrent_mrus_and_preserves_app_settings() {
             "leftPanelWidth": 352.0,
             "rightPanelWidth": 480.0,
             "bottomPanelOpen": true,
-            "developmentExtensionDirectories": [],
-            "openTabs": [],
-            "activeTabId": null
+            "developmentExtensionDirectories": []
         })
     );
 }
@@ -226,46 +224,38 @@ fn desktop_state_with_a_version_that_is_not_a_version_falls_back_to_defaults() {
     assert_eq!(settings["desktopState"]["leftPanelWidth"], 288.0);
 }
 
+/// A document written before the flat `openTabs`/`activeTabId` fields were
+/// removed must still parse, and — like anything else this build has no name
+/// for — the stale keys travel in `unknown_fields` rather than being dropped.
 #[test]
-fn desktop_state_active_tab_id_explicit_null_clears_instead_of_restoring_current() {
-    // Mirrors `last_workspace_path`'s `Some(None)`-clears semantics: an
-    // explicit null must clear the active tab rather than keep the old one.
-    let stored = update_desktop_state_contents(
-        None,
+fn flat_tab_fields_from_an_old_document_are_carried_like_any_unknown_field() {
+    let existing = serde_json::json!({
+        "desktopState": {
+            "version": 5,
+            "openTabs": [{ "id": "editor:note", "title": "note", "kind": "editor" }],
+            "activeTabId": "editor:note"
+        }
+    });
+
+    let updated = update_desktop_state_contents(
+        Some(&existing.to_string()),
         DesktopStateUpdate {
-            active_tab_id: Some(Some("tab-1".to_string())),
+            explorer_open: Some(false),
             ..Default::default()
         },
     )
     .expect("desktop-state update succeeds");
 
-    let settings: Value = serde_json::from_str(&stored).expect("serialized settings are valid");
+    let settings: Value = serde_json::from_str(&updated).expect("serialized settings are valid");
+    assert_eq!(
+        settings["desktopState"]["openTabs"],
+        serde_json::json!([{ "id": "editor:note", "title": "note", "kind": "editor" }])
+    );
     assert_eq!(
         settings["desktopState"]["activeTabId"],
-        serde_json::json!("tab-1")
+        serde_json::json!("editor:note")
     );
-
-    let cleared = update_desktop_state_contents(
-        Some(&stored),
-        DesktopStateUpdate {
-            active_tab_id: Some(None),
-            ..Default::default()
-        },
-    )
-    .expect("desktop-state update succeeds");
-
-    let settings: Value = serde_json::from_str(&cleared).expect("serialized settings are valid");
-    assert_eq!(settings["desktopState"]["activeTabId"], Value::Null);
-
-    // An update that omits the field entirely keeps the current value.
-    let restored = update_desktop_state_contents(Some(&stored), DesktopStateUpdate::default())
-        .expect("desktop-state update succeeds");
-
-    let settings: Value = serde_json::from_str(&restored).expect("serialized settings are valid");
-    assert_eq!(
-        settings["desktopState"]["activeTabId"],
-        serde_json::json!("tab-1")
-    );
+    assert_eq!(settings["desktopState"]["explorerOpen"], false);
 }
 
 /// D53: a group the user collapsed stays collapsed, per workspace, in desktop

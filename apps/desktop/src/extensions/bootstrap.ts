@@ -3,7 +3,6 @@ import {
   evaluateCompatibility,
   hasStartupActivation,
   parseExtensionManifest,
-  type CompatibilityHost,
   type Disposable,
   type ExtensionManifest,
   type ManifestDiagnostic
@@ -58,24 +57,12 @@ const toReasons = (diagnostics: readonly ManifestDiagnostic[]): readonly Bootstr
  * which the shell picks up through the registries' subscriptions.
  */
 
-export interface BootstrapOptions {
+interface BootstrapOptions {
   readonly host?: DesktopExtensionHost;
   readonly extensions?: readonly BuiltInExtension[];
   readonly commands?: typeof desktopCommandRegistry;
   readonly panels?: typeof desktopPanelRegistry;
   readonly mobileNewNoteActions?: MobileNewNoteActionRegistry;
-  readonly compatibilityHost?: CompatibilityHost;
-  /**
-   * Whether this bootstrap becomes the app-wide singleton the Extensions
-   * panel reads.
-   *
-   * When omitted, the historical convention holds: only a bootstrap built
-   * entirely from the module defaults (no injected host or registries)
-   * publishes itself. Passing `publish` explicitly opts a partially injected
-   * bootstrap in — or a default-configured one out — without guessing from
-   * which other options happened to be set.
-   */
-  readonly publish?: boolean;
 }
 
 interface EntryState {
@@ -111,7 +98,6 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const commands = options.commands ?? desktopCommandRegistry;
   const panels = options.panels ?? desktopPanelRegistry;
   const newNoteActions = options.mobileNewNoteActions ?? mobileNewNoteActionRegistry;
-  const compatibilityHost = options.compatibilityHost ?? HOST_COMPATIBILITY;
   const extensions = options.extensions ?? builtInExtensions;
 
   const listeners = new Set<() => void>();
@@ -344,7 +330,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       continue;
     }
 
-    const compatibility = evaluateCompatibility(manifest, compatibilityHost);
+    const compatibility = evaluateCompatibility(manifest, HOST_COMPATIBILITY);
     const state = entryState(
       manifest,
       "built-in",
@@ -432,7 +418,7 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
       // The gate lives here, not only in the loader: `addLocalExtension` is
       // the registry boundary, so any future producer of a `LoadedExtension`
       // that skips the loader is still held to the platform/apiVersion check.
-      const compatibility = evaluateCompatibility(extension.manifest, compatibilityHost);
+      const compatibility = evaluateCompatibility(extension.manifest, HOST_COMPATIBILITY);
       // Load diagnostics ride along as reasons so the Extensions panel shows
       // an author why, for example, a declared panel did not appear.
       const state = entryState(
@@ -502,16 +488,8 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
     }
   };
 
-  // Publication is explicit: a bootstrap is the app-wide singleton only when
-  // asked (or, by convention, when built entirely from the module defaults).
-  // An injected-registry bootstrap in a test must not become the one the
-  // Extensions panel reads.
-  const publish =
-    options.publish ??
-    (!options.commands && !options.panels && !options.host && !options.mobileNewNoteActions);
-  if (publish) {
-    setExtensionBootstrap(bootstrap);
-  }
+  // The bootstrap is the app-wide singleton the Extensions panel reads.
+  setExtensionBootstrap(bootstrap);
 
   return bootstrap;
 }

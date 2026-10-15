@@ -108,13 +108,6 @@ export const markdownEditorHookRegistry: MarkdownEditorHookRegistry =
       ]
     },
     {
-      id: "line-wrapping",
-      order: 30,
-      // Wrapping now lives in the shared display compartment
-      // (`editor.lineWrapping`); the hook id stays for ordering/back-compat.
-      extensions: () => []
-    },
-    {
       id: "cursor-theme",
       order: 40,
       extensions: () => [

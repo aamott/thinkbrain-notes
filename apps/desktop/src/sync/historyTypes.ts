@@ -206,11 +206,6 @@ export interface SelectedSignIn extends SignInProfile {
   readonly saved: boolean;
 }
 
-export interface LegacySignIn {
-  readonly host: string;
-  readonly username: string;
-}
-
 export type SignInStorage = "available" | "unavailable" | "unsupported";
 
 export interface SignInStatus {
@@ -220,10 +215,8 @@ export interface SignInStatus {
   readonly selectedId: string | null;
   readonly selected: SelectedSignIn | null;
   readonly profiles: readonly SignInProfile[];
-  readonly legacy: LegacySignIn | null;
 }
 
 export interface SavedSignIn {
   readonly profile: SignInProfile;
-  readonly migrated: boolean;
 }

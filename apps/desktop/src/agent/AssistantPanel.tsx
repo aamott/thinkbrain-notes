@@ -343,7 +343,7 @@ export function AssistantPanel() {
                       {/* MCP rows: status bubble, name, switch */}
                       <div className="flex flex-col gap-2.5">
                         {MCP_SERVERS.map((server) => {
-                          const enabled = serverEnabled[server.id] ?? server.enabled;
+                          const enabled = serverEnabled[server.id]!;
                           return (
                             <div key={server.id} className="flex items-center justify-between">
                               <div className="flex items-center gap-2">

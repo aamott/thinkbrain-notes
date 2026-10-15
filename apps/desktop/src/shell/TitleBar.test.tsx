@@ -53,7 +53,7 @@ const render = async (props: {
   return container;
 };
 
-const rightActions = () => desktopPanelRegistry.entriesBySide("right");
+const rightActions = () => desktopPanelRegistry.entries().filter((panel) => panel.side === "right");
 
 const trigger = (host: HTMLElement): HTMLButtonElement => {
   const button = host.querySelector<HTMLButtonElement>('[aria-label="Action items"]');

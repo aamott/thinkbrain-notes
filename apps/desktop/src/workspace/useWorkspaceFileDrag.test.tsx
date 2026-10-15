@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NativeWorkspaceEntry } from "../native/commands";
 import {
   useWorkspaceFileDrag,
-  WORKSPACE_TREE_DRAG_TYPE,
   type WorkspaceFileDrag
 } from "./useWorkspaceFileDrag";
 
@@ -93,12 +92,11 @@ afterEach(() => {
 });
 
 describe("useWorkspaceFileDrag", () => {
-  it("writes internal + OS payloads on dragstart", () => {
+  it("writes the OS payloads on dragstart", () => {
     const event = dragEvent();
     act(() => {
       latestDrag!.onRowDragStart(event as never, entry("docs/note.md"));
     });
-    expect(event.dataTransfer.setData).toHaveBeenCalledWith(WORKSPACE_TREE_DRAG_TYPE, "docs/note.md");
     expect(event.dataTransfer.setData).toHaveBeenCalledWith(
       "text/uri-list",
       "file:///vault/docs/note.md"

@@ -35,15 +35,14 @@ pub enum StorageKind {
 
 /// Username and password for `destination`, if we have one.
 ///
-/// When a profile ID is bound for this thread, that profile is the only
-/// identity returned — a missing profile does not fall back to another
-/// saved sign-in. With no bound profile, the older per-repository URL key
-/// is still consulted.
-pub fn get(destination: &str) -> Result<Option<(String, String)>, NativeError> {
-    if let Some(id) = bound_profile() {
-        return get_profile(&id);
+/// The bound profile ID is the only identity returned — a missing profile
+/// does not fall back to another saved sign-in, and with no bound profile
+/// there is nothing to offer at all.
+pub fn get(_destination: &str) -> Result<Option<(String, String)>, NativeError> {
+    match bound_profile() {
+        Some(id) => get_profile(&id),
+        None => Ok(None),
     }
-    get_legacy(destination)
 }
 
 /// The currently bound profile ID, if a round trip named one.
@@ -62,11 +61,6 @@ pub fn with_profile<T>(id: Option<&str>, work: impl FnOnce() -> T) -> T {
     let previous = BOUND_PROFILE.with(|slot| slot.replace(id.map(str::to_owned)));
     let _reset = Reset(previous);
     work()
-}
-
-/// The older per-repository URL entry, ignoring any bound profile.
-pub fn get_legacy(destination: &str) -> Result<Option<(String, String)>, NativeError> {
-    read_account(&account(destination))
 }
 
 /// Token stored under an opaque profile ID.
@@ -422,7 +416,9 @@ pub(crate) mod tests {
 
         // Stripping alone would be a silent sign-out. The token has to land in
         // the store as git would send it: as the username, with no password.
-        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        let (user, secret) = read_account(&account(&destination))
+            .expect("readable")
+            .expect("stored");
         assert_eq!(user, "ghp_faketoken123");
         assert_eq!(secret, "");
     }
@@ -434,7 +430,9 @@ pub(crate) mod tests {
 
         assert_eq!(destination, "https://example.test/notes.git");
         assert!(!destination.contains("s3cret"));
-        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        let (user, secret) = read_account(&account(&destination))
+            .expect("readable")
+            .expect("stored");
         assert_eq!(user, "x-access-token");
         assert_eq!(secret, "s3cret");
     }
@@ -447,7 +445,7 @@ pub(crate) mod tests {
             "https://clean.example.test/notes.git"
         );
         assert_eq!(
-            get("https://clean.example.test/notes.git").expect("readable"),
+            read_account(&account("https://clean.example.test/notes.git")).expect("readable"),
             None
         );
     }
@@ -462,7 +460,9 @@ pub(crate) mod tests {
 
         assert_eq!(destination, "https://at-secret.test/notes.git");
         assert!(!destination.contains("p@ss"));
-        let (user, secret) = get(&destination).expect("readable").expect("stored");
+        let (user, secret) = read_account(&account(&destination))
+            .expect("readable")
+            .expect("stored");
         assert_eq!(user, "user");
         assert_eq!(secret, "p@ss");
     }
@@ -478,7 +478,7 @@ pub(crate) mod tests {
             "https://path-only.test/repo@x/notes.git"
         );
         assert_eq!(
-            get("https://path-only.test/repo@x/notes.git").expect("readable"),
+            read_account(&account("https://path-only.test/repo@x/notes.git")).expect("readable"),
             None
         );
     }
@@ -491,23 +491,29 @@ pub(crate) mod tests {
     #[test]
     fn provide_returns_what_was_stored_and_does_not_echo_the_secret_on_miss() {
         with_a_store();
-        store("https://example.test/vault.git", "me", "tok").expect("stored");
+        store_profile("p-provide", "me", "tok").expect("stored");
         let action = gix::protocol::credentials::helper::Action::get_for_url(
             "https://example.test/vault.git",
         );
-        let outcome = provide(action)
-            .expect("the helper answers")
-            .expect("an identity");
+        let outcome = with_profile(Some("p-provide"), || {
+            provide(action).expect("the helper answers")
+        })
+        .expect("an identity");
         assert_eq!(outcome.identity.username, "me");
         assert_eq!(outcome.identity.password, "tok");
 
         let miss =
             gix::protocol::credentials::helper::Action::get_for_url("https://other.test/vault.git");
-        assert!(provide(miss).expect("a miss is not an error").is_none());
+        let answer = with_profile(Some("p-absent"), || {
+            provide(miss).expect("a miss is not an error")
+        });
+        assert!(answer.is_none());
     }
 
+    /// The only identity a round trip may offer is the one bound for it. A
+    /// per-repository URL entry — or another profile — is never read back.
     #[test]
-    fn a_bound_profile_does_not_fall_back_to_a_url_entry() {
+    fn a_url_keyed_entry_is_never_offered() {
         with_a_store();
         store(
             "https://fallback.example.test/notes.git",
@@ -530,8 +536,8 @@ pub(crate) mod tests {
         });
         assert_eq!(missing, None);
         assert_eq!(
-            get_legacy("https://fallback.example.test/notes.git").expect("readable"),
-            Some(("url-user".to_string(), "url-tok".to_string()))
+            get("https://fallback.example.test/notes.git").expect("readable"),
+            None
         );
     }
 

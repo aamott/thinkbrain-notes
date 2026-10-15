@@ -16,9 +16,10 @@
  * - `DownloadURL` — Chromium's "download a copy" drag format; Windows
  *   Explorer (WebView2) accepts it as a file copy. Files only — a directory
  *   is not downloadable.
- * - `WORKSPACE_TREE_DRAG_TYPE` — an app-internal marker carrying the
- *   workspace-relative path, so internal drops distinguish our drags from
- *   files dragged in from the OS (which the tree does not yet import).
+ *
+ * Internal drops are told apart from files dragged in from the OS (which the
+ * tree does not yet import) by the entry stashed in `draggedEntryRef` on
+ * dragstart — no dataTransfer payload is needed for that.
  */
 import {
   useCallback,
@@ -36,9 +37,6 @@ import {
   isInvalidWorkspaceMove,
   runWorkspaceMove
 } from "./workspaceMove";
-
-/** Internal dataTransfer type marking a workspace-tree drag. */
-export const WORKSPACE_TREE_DRAG_TYPE = "application/x-thinkbrain-tree";
 
 /** HTML5 drag handlers + state the tree rows and root surface consume. */
 export interface WorkspaceFileDrag {
@@ -87,10 +85,7 @@ export function useWorkspaceFileDrag({
   const [dropTargetValid, setDropTargetValid] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const draggedEntryRef = useRef<NativeWorkspaceEntry | null>(null);
-  const lastHoverRef = useRef<{ path: string | null; valid: boolean }>({
-    path: null,
-    valid: false
-  });
+  const lastHoverRef = useRef<{ path: string | null }>({ path: null });
   // Latest callbacks for the expand timer, which outlives one render.
   const handlersRef = useRef({ isExpanded, expandFolder, moveEntry });
   useEffect(() => {
@@ -101,7 +96,7 @@ export function useWorkspaceFileDrag({
 
   const clear = useCallback(() => {
     draggedEntryRef.current = null;
-    lastHoverRef.current = { path: null, valid: false };
+    lastHoverRef.current = { path: null };
     setDraggedPath(null);
     setDropTargetPath(null);
     setDropTargetValid(false);
@@ -111,10 +106,10 @@ export function useWorkspaceFileDrag({
   /** Validates + tracks `target` (`""` is the workspace root). */
   const trackTarget = useCallback((
     event: ReactDragEvent,
-    target: string | null
+    target: string
   ) => {
     const dragged = draggedEntryRef.current;
-    if (!dragged || target === null) {
+    if (!dragged) {
       // Not our drag — leave the default not-allowed cursor.
       return;
     }
@@ -126,7 +121,7 @@ export function useWorkspaceFileDrag({
     if (!valid && lastHoverRef.current.path !== target) {
       say(invalidMoveMessage(dragged, target));
     }
-    lastHoverRef.current = { path: target, valid };
+    lastHoverRef.current = { path: target };
     autoExpand.update(target, valid, handlersRef.current);
     edgeAutoScroll(containerRef.current, event.clientY);
     if (valid) {
@@ -142,7 +137,6 @@ export function useWorkspaceFileDrag({
     draggedEntryRef.current = entry;
     setDraggedPath(entry.relative_path);
     const dt = event.dataTransfer;
-    dt.setData(WORKSPACE_TREE_DRAG_TYPE, entry.relative_path);
     if (rootPath) {
       const uri = fileUri(`${rootPath}/${entry.relative_path}`);
       dt.setData("text/uri-list", uri);
@@ -195,7 +189,6 @@ export function useWorkspaceFileDrag({
   }, [clear, say]);
 
   const onRowDrop = useCallback((event: ReactDragEvent, entry: NativeWorkspaceEntry) => {
-    if (entry.kind !== "directory") return;
     event.stopPropagation();
     event.preventDefault();
     finish(entry.relative_path);

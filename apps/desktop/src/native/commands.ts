@@ -19,7 +19,7 @@ import type {
   VersionDiff as NativeVersionDiff
 } from "../sync/historyTypes";
 
-export interface NativeCommandErrorShape {
+interface NativeCommandErrorShape {
   readonly code: string;
   readonly message: string;
   readonly details?: string;
@@ -459,7 +459,7 @@ export interface NativeCommandMap {
   };
 }
 
-export type NativeCommandName = keyof NativeCommandMap;
+type NativeCommandName = keyof NativeCommandMap;
 
 export interface NativeWorkspaceDescriptor {
   readonly root_path: string;
@@ -543,7 +543,7 @@ export interface NativeWorkspaceEntry {
 }
 
 /** One file's path change caused by a rename/move; folders produce one per descendant file. */
-export interface NativeWorkspacePathMove {
+interface NativeWorkspacePathMove {
   readonly old_relative_path: string;
   readonly new_relative_path: string;
   /** Whether the OLD path is Markdown — drives stale search-index removal. */
@@ -627,18 +627,18 @@ export interface NativeSearchHit {
   readonly score: number;
 }
 
-export type NativeMetadataValue = string | number;
+type NativeMetadataValue = string | number;
 
 /** One metadata key and every value it holds — sent in as fields, returned as facets. */
-export interface NativeMetadataField {
+interface NativeMetadataField {
   readonly key: string;
   readonly values: readonly NativeMetadataValue[];
 }
 
 /** The query-result name for `NativeMetadataField`; the shapes are identical. */
-export type NativeMetadataFacet = NativeMetadataField;
+type NativeMetadataFacet = NativeMetadataField;
 
-export interface NativeMetadataPredicate {
+interface NativeMetadataPredicate {
   readonly key: string;
   readonly value: NativeMetadataValue;
 }
@@ -737,7 +737,7 @@ function isNativeErrorShape(error: unknown): error is NativeCommandErrorShape {
  * declared here so this module — and its callers — never import the plugin's
  * types eagerly.
  */
-export interface NativeAppUpdate {
+interface NativeAppUpdate {
   readonly version: string;
   downloadAndInstall(): Promise<void>;
 }

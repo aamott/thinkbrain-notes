@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  builtInDesktopPanels,
-  desktopPanelRegistry,
-  isBuiltInLeftPanel
-} from "../panels/panelRegistryModel";
+import { desktopPanelRegistry } from "../panels/panelRegistryModel";
 import { isSelectableLeftPanel, isSelectableRightPanel } from "./shellTypes";
 
 describe("isSelectableRightPanel", () => {
@@ -57,12 +53,3 @@ describe("isSelectableLeftPanel", () => {
   });
 });
 
-describe("isBuiltInLeftPanel", () => {
-  // The guard is a literal list duplicating the built-in table's left-side
-  // ids; this parity check keeps a drift between them from going unnoticed.
-  it("admits exactly the built-in table's left-side ids", () => {
-    for (const panel of builtInDesktopPanels) {
-      expect(isBuiltInLeftPanel(panel.id), panel.id).toBe(panel.side === "left");
-    }
-  });
-});

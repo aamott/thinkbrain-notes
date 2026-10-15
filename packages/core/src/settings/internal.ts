@@ -28,9 +28,6 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** De-duplicates a list of strings, preserving first-occurrence order. */
-export { uniqueStrings } from "../lib/strings";
-
 /** Compile-time exhaustiveness guard for `SettingType`. Throws on unknown types. */
 export function assertNeverSettingType(def: never): never {
   throw new Error(
@@ -91,7 +88,7 @@ export interface SettingsDiagnostic {
  *
  * The same shape as {@link SettingsDiagnostic}, named for the call site.
  */
-export type SettingsVersionDiagnostic = SettingsDiagnostic;
+type SettingsVersionDiagnostic = SettingsDiagnostic;
 
 /**
  * Reads and validates the `version` field from a raw settings record.
@@ -103,9 +100,9 @@ export type SettingsVersionDiagnostic = SettingsDiagnostic;
  *
  * A version merely *newer* than `CURRENT_SETTINGS_VERSION` is different, and is
  * a warning. The document is intact and was written by a build that only added
- * to it, so every key this build knows is still readable; what it cannot do is
- * run migrations it does not have. Rejecting it outright is how running a newer
- * build and then an older one used to cost the user every setting they had.
+ * to it, so every key this build knows is still readable. Rejecting it
+ * outright is how running a newer build and then an older one used to cost the
+ * user every setting they had.
  */
 export function readSettingsVersion(
   value: Readonly<Record<string, unknown>>

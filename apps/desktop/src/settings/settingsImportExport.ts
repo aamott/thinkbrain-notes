@@ -30,14 +30,14 @@ import {
 } from "@thinkbrain/core";
 
 import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
-import { readPickedFile, writeJsonViaSaveDialog } from "./importExportFiles";
+import { pickAndReadTextFile, saveAndWriteTextFile } from "../native/fs";
 
 // ---------------------------------------------------------------------------
 // Export.
 // ---------------------------------------------------------------------------
 
 /** Result of building the export payload (pure, no side effects). */
-export interface ExportPayload {
+interface ExportPayload {
   /** Pretty-printed JSON string ready to write to a file. */
   readonly json: string;
   /** Non-portable settings with non-default values (for the warning dialog). */
@@ -104,7 +104,7 @@ export function buildExportPayload(): ExportPayload {
  *   Error if a path was chosen and the write failed, so the caller can say so.
  */
 export async function writeExportFile(json: string): Promise<boolean> {
-  return await writeJsonViaSaveDialog("Export settings", "thinkbrain-settings.json", json);
+  return await saveAndWriteTextFile("Export settings", "thinkbrain-settings.json", json);
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +187,7 @@ function extractSettingsMap(parsed: unknown): Record<string, unknown> | null {
  *   the two apart to say anything useful about either.
  */
 export async function importSettings(): Promise<ImportResult | null> {
-  const picked = await readPickedFile("Import settings");
+  const picked = await pickAndReadTextFile("Import settings");
   if (picked === null) return null;
 
   let parsed: unknown;

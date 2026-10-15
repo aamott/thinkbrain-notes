@@ -136,7 +136,7 @@ export function useShellState(): ShellState {
     updatePanelWidth,
     workspaceFiles,
     workspaceName
-  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument, openFileDocument });
+  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument });
 
   // Cancel deferred writes if the shell unmounts. An in-flight drag is the
   // resize hook's own to clean up.
@@ -179,7 +179,6 @@ export function useShellState(): ShellState {
     setLeftPanel,
     setRightPanel,
     toggleRightPanel,
-    updateBottomPanel,
     toggleBottomPanel
   });
 
@@ -334,7 +333,6 @@ export function useShellState(): ShellState {
     toggleRightPanel,
     bottomPanel,
     updateBottomPanel,
-    toggleBottomPanel,
 
     workspaceName,
     restoredWorkspacePath,

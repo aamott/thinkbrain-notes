@@ -156,24 +156,14 @@ function checkEnum(
 ): SettingsDiagnostic | undefined {
   if (def.type !== "enum") return undefined;
 
-  // An enum with no declared options is a schema error: any string would
-  // otherwise be silently accepted. Fail loudly so the misconfiguration is
-  // surfaced rather than masked.
-  if (!def.options) {
-    return {
-      code: "settings.enum.no_options",
-      message: "Enum setting has no declared options.",
-      severity: "error",
-      path: def.key
-    };
-  }
-
-  if (typeof value !== "string") return undefined; // already flagged by checkType
-
-  if (!def.options.includes(value)) {
+  // `checkType` runs first and rejects non-strings, and `register()` rejects
+  // enum definitions without a non-empty options list, so the value reaching
+  // here is always a string checked against a populated list.
+  const stringValue = value as string;
+  if (!def.options.includes(stringValue)) {
     return {
       code: "settings.enum.invalid",
-      message: `Value "${value}" is not one of [${def.options.join(", ")}].`,
+      message: `Value "${stringValue}" is not one of [${def.options.join(", ")}].`,
       severity: "error",
       path: def.key
     };

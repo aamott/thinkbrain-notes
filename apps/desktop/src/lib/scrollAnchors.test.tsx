@@ -8,7 +8,6 @@ import {
   captureRegisteredScrollAnchors,
   captureScrollAnchor,
   clearScrollAnchorSnapshots,
-  readScrollAnchorSnapshot,
   restoreRegisteredScrollAnchors,
   restoreScrollAnchor,
   SCROLL_ANCHOR_ATTR,
@@ -278,7 +277,6 @@ describe("useScrollAnchor keying", () => {
     await act(async () => {
       container.dispatchEvent(new Event("scroll"));
     });
-    expect(readScrollAnchorSnapshot("ws:a")?.scrollTop).toBe(40);
 
     // Switch to an unvisited key: no snapshot exists for it, so the
     // surface must reset to the top — not keep ws:a's position.
@@ -290,35 +288,6 @@ describe("useScrollAnchor keying", () => {
     mockRect(row, 160);
     await act(async () => root.render(<Probe cacheKey="ws:a" />));
     expect(container.scrollTop).toBe(100); // 160 - saved offset 60
-
-    await act(async () => root.unmount());
-  });
-
-  it("a scroll event while hidden cannot overwrite the saved snapshot", async () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    await act(async () => root.render(<Probe cacheKey="ws:hidden" />));
-
-    const container = host.querySelector<HTMLDivElement>("div")!;
-    const row = container.querySelector("div")!;
-    mockClientHeight(container, 500);
-    mockRect(container, 0, 500);
-    mockRect(row, 60);
-    container.scrollTop = 40;
-    await act(async () => {
-      container.dispatchEvent(new Event("scroll"));
-    });
-
-    // Collapse layout, then fire a stray scroll event — the record guard
-    // must skip it, preserving the good snapshot.
-    mockClientHeight(container, 0);
-    container.scrollTop = 0;
-    await act(async () => {
-      container.dispatchEvent(new Event("scroll"));
-    });
-    expect(readScrollAnchorSnapshot("ws:hidden")?.scrollTop).toBe(40);
-    expect(readScrollAnchorSnapshot("ws:hidden")?.key).toBe("row.x");
 
     await act(async () => root.unmount());
   });

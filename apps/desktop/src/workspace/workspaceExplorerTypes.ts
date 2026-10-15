@@ -98,20 +98,20 @@ export interface RenameState {
  * canonical New note command or a generic New file action, because only the
  * note flow pre-fills `.md` and warns before producing a non-Markdown file.
  */
-export interface FolderCreateState {
+interface FolderCreateState {
   readonly parentPath: string;
   readonly kind: "folder";
   readonly focusRequest: number;
 }
 
-export interface NewFileCreateState {
+interface NewFileCreateState {
   readonly parentPath: string;
   readonly kind: "file";
   readonly source: "new-file";
   readonly focusRequest: number;
 }
 
-export interface NewNoteCreateState {
+interface NewNoteCreateState {
   readonly parentPath: string;
   readonly kind: "file";
   readonly source: "new-note";

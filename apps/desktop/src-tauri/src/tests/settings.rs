@@ -199,12 +199,12 @@ fn workspace_settings_write_treats_an_absent_file_as_a_precondition_of_its_own()
 
 #[test]
 fn app_settings_write_is_refused_when_desktop_state_changed_underneath_it() {
-    // `update_desktop_state` landed (a tab opened) between the store's read and
-    // its write, so the document the store revised is no longer the one on disk.
+    // `update_desktop_state` landed (the explorer toggled) between the store's
+    // read and its write, so the document it revised is no longer on disk.
     assert!(
         check_settings_precondition(
-            Some("{\"desktopState\":{\"openTabs\":[\"a\"]}}"),
-            Some("{\"desktopState\":{\"openTabs\":[]}}"),
+            Some("{\"desktopState\":{\"explorerOpen\":true}}"),
+            Some("{\"desktopState\":{\"explorerOpen\":false}}"),
             "settings.app_conflict",
             "The application settings changed while this one was being saved.",
         )

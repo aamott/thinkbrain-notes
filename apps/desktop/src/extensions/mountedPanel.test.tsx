@@ -220,8 +220,9 @@ describe("lazy panel placeholder in the popout", () => {
     }
   });
 
-  // The wide registry context: `entriesBySide` hands the popout contributions
-  // typed over `DesktopPanelContext`, so the harness supplies the full shape.
+  // The wide registry context: an `entries()` side filter hands the popout
+  // contributions typed over `DesktopPanelContext`, so the harness supplies
+  // the full shape.
   const popoutContext: DesktopPanelContext = {
     rootPath: "/vault",
     documentContents: null,
@@ -259,7 +260,7 @@ describe("lazy panel placeholder in the popout", () => {
         side="right"
         panel="sample.stats"
         context={popoutContext}
-        contributions={panels.entriesBySide("right")}
+        contributions={panels.entries().filter((panel) => panel.side === "right")}
       />
     );
   }

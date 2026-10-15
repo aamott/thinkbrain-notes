@@ -25,15 +25,13 @@ export interface TextFileApi {
  * etc.). Unlike `workspaceDocumentAdapter`, there is no Markdown extension
  * check — any UTF-8 text file in the workspace can be read or written.
  */
-export function createTextFileApi(
-  invoker: typeof invokeNativeCommand = invokeNativeCommand
-): TextFileApi {
+function createTextFileApi(): TextFileApi {
   return {
     readTextFile({ rootPath, relativePath }) {
-      return invoker("read_text_file", { rootPath, relativePath });
+      return invokeNativeCommand("read_text_file", { rootPath, relativePath });
     },
     writeTextFile({ rootPath, relativePath, contents, expected }) {
-      return invoker("write_text_file", { rootPath, relativePath, contents, expected });
+      return invokeNativeCommand("write_text_file", { rootPath, relativePath, contents, expected });
     }
   };
 }

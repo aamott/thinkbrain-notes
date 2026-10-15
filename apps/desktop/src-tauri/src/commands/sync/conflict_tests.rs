@@ -296,34 +296,17 @@ fn a_scan_reports_when_the_vault_cannot_be_read() {
     assert_eq!(error.code, "sync.vault_read_failed");
 }
 
-/// Until someone has watched each daemon produce a real file, the table
-/// says so. This fails the moment a row claims evidence it does not have.
-///
-/// One row may: the copies a pull leaves are ours, so there is no daemon to
-/// wait on and [`beside`] is the fixture. It has to prove that here, by
-/// being recognised as what it writes.
+/// The names this app writes for a pull it could not settle must read back
+/// through the same table as a daemon's — a row that stopped recognising its
+/// own output would write copies nothing ever offers to resolve.
 #[test]
-fn every_pattern_records_what_is_actually_known_about_it() {
-    for pattern in PATTERNS {
-        if pattern.evidence == Evidence::Fixture {
-            let ours = if (pattern.match_name)("note (keep or delete).md").is_some() {
-                deletion_beside("note.md", |_| false)
-            } else {
-                beside("note.md", |_| false)
-            };
-            assert_eq!(
-                (pattern.match_name)(&ours).as_deref(),
-                Some("note.md"),
-                "{} claims to have seen its own copies but does not recognise one",
-                pattern.provider
-            );
-            continue;
-        }
-        assert_eq!(
-            pattern.evidence,
-            Evidence::Documented,
-            "{} claims evidence the table has no name for",
-            pattern.provider
-        );
+fn the_names_we_write_are_recognised_as_conflicts() {
+    for ours in [
+        beside("note.md", |_| false),
+        deletion_beside("note.md", |_| false),
+    ] {
+        let found = pair(&ours, always)
+            .unwrap_or_else(|| panic!("a name we write ourselves is not recognised: {ours}"));
+        assert_eq!(found.original, "note.md");
     }
 }

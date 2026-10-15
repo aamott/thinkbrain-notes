@@ -7,13 +7,10 @@
     "iOS"
   ],
   "windows": [
-    "main",
-    "workspace-*"
+    "main"
   ],
   "permissions": [
     "core:default",
-    "dialog:default",
-    "fs:default",
-    "process:allow-restart"
+    "dialog:default"
   ]
 }

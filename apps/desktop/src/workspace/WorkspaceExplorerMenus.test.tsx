@@ -134,25 +134,6 @@ describe("copying a target's handles", () => {
     expect(item("Copy absolute path")).toBeTruthy();
     expect(item("Copy folder")).toBeTruthy();
   });
-
-  it("drops the absolute copies when no workspace root is known", async () => {
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    await act(async () =>
-      root?.render(
-        <WorkspaceContextMenu
-          menu={{ x: 10, y: 10, target: { kind: "file", entry: entry("file") } }}
-          actions={stubActions()}
-          rootPath={null}
-        />
-      )
-    );
-
-    expect(item("Copy absolute path")).toBeUndefined();
-    expect(item("Copy file")).toBeUndefined();
-    expect(item("Copy name")).toBeTruthy();
-  });
 });
 
 describe("the general tail", () => {

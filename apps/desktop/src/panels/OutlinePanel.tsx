@@ -15,9 +15,8 @@ type OutlineNode = {
 /**
  * Read-only heading inspector for the active Markdown document.
  *
- * Native buttons make every heading keyboard reachable. The optional callback
- * lets the owning editor integration navigate without this inspector mutating
- * the document or owning editor state.
+ * Headings render as plain rows, not navigation controls — this inspector
+ * never mutates the document or owning editor state.
  */
 export function OutlinePanel({ contents }: OutlinePanelProps) {
   if (contents === null) {

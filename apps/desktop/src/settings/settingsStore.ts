@@ -244,7 +244,7 @@ export function createSettingsStore(
 
     /**
      * Loads app settings (and workspace settings if rootPath is non-null),
-     * runs migrations, merges with registry defaults, and populates the store.
+     * merges with registry defaults, and populates the store.
      * Clears any prior staged changes and errors. Failures set `loadError`.
      */
     async loadSettings(rootPath: string | null): Promise<void> {
@@ -383,9 +383,11 @@ export function createSettingsStore(
           lastLoadedAppDocument = appSerialized;
         }
         let workspaceSerialized: string | null = null;
-        if (workspaceMerged !== null && state.workspaceRootPath !== null) {
+        // `workspaceMerged` is only non-null when a workspace is open, so a
+        // non-null merged map already guarantees a non-null root path here.
+        if (workspaceMerged !== null) {
           workspaceSerialized = await gateway.writeWorkspaceSettings(
-            state.workspaceRootPath,
+            state.workspaceRootPath!,
             (current) =>
               serializeDynamicWorkspaceSettings(workspaceMerged, registry, current)
           );

@@ -17,11 +17,8 @@ export interface CodeEditorProps {
   readonly value: string;
   readonly isSaving?: boolean;
   readonly error?: string | null;
-  readonly rootPath?: string | null;
   readonly relativePath?: string | null;
   readonly stateKey?: string;
-  /** Whether this editor's surface is visible; hidden editors disarm pinch. */
-  readonly active?: boolean;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
 }
@@ -40,7 +37,6 @@ export function CodeEditor({
   error,
   relativePath = null,
   stateKey,
-  active = true,
   onChange,
   onSave
 }: CodeEditorProps) {
@@ -105,8 +101,7 @@ export function CodeEditor({
     label: "[CodeEditor]",
     onChange,
     onSave,
-    mount: buildView,
-    active
+    mount: buildView
   });
 
   return (

@@ -14,7 +14,7 @@ import {
   type NativeImportStarted
 } from "../native/commands";
 
-export const WORKSPACE_IMPORT_EVENT = "sync://import";
+const WORKSPACE_IMPORT_EVENT = "sync://import";
 
 export type GitLinkPreview = NativeGitLinkPreview;
 export type ImportStarted = NativeImportStarted;

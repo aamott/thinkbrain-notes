@@ -34,8 +34,8 @@ import { PhoneShell } from "./PhoneShell";
 
 // The registry is a module singleton, so this extension panel is live for the
 // whole file. It exists to prove the drawer's rows are actually reachable —
-// `isBuiltInLeftPanel` is a literal list of first-party ids and rejected every
-// one of these, so tapping an extension's panel used to do nothing.
+// the left-panel guard used to be a literal list of first-party ids and
+// rejected every one of these, so tapping an extension's panel did nothing.
 const extensionPanel = desktopPanelRegistry.register({
   id: "hello-notes.notebook",
   label: "Hello notebook",

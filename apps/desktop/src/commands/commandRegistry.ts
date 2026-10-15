@@ -62,9 +62,7 @@ export interface DesktopCommand
 
 /** Platform capabilities a command can declare a dependency on. */
 export type PlatformCapability =
-  | "canSpawnProcess" // terminal, ACP agent host
-  | "hasKeychain" // sync credentials
-  | "opensWorkspaceInNewWindow"; // multi-window workspace
+  | "canSpawnProcess"; // terminal, ACP agent host
 
 export type DesktopCommandRegistry = ContributionRegistry<DesktopCommand>;
 
@@ -103,7 +101,6 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
   available({
     id: "new-note",
     title: "New note",
-    icon: "plus",
     keywords: ["create", "markdown", "file"],
     handler: ({ showExplorer, focusNewNote, closePalette }) => {
       showExplorer();

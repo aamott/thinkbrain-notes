@@ -13,6 +13,7 @@
  */
 
 import { isTauri } from "@tauri-apps/api/core";
+import { getErrorMessage } from "@thinkbrain/core";
 
 import { useNotificationStore } from "../notifications/notificationStore";
 import {
@@ -100,6 +101,6 @@ export function reportDesktopStateReadFailure(error: unknown): void {
 
 /** Reduces an unknown error to a single diagnostic line for the notification. */
 function describeError(error: unknown): string {
-  if (error instanceof Error) return error.message || error.name;
-  return String(error);
+  // An `Error` with an empty `message` still has a `name` worth reporting.
+  return getErrorMessage(error) || (error instanceof Error ? error.name : "");
 }
