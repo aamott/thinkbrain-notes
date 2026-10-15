@@ -1,12 +1,36 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { ModalDialog } from "../shell/ModalDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
+import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
 import { WorkspaceManagerDialog } from "./WorkspaceManagerDialog";
 import { WorkspaceSelector } from "./WorkspaceSelector";
+import { WorkspaceSessionContext, type WorkspaceSession } from "./workspaceSession";
 import {
+  WorkspaceSwitchingContext,
   useWorkspaceSwitchingContext,
   type WorkspaceSelectorVariant
 } from "./workspaceSwitchingContext";
+
+/**
+ * Publishes the shell's one workspace session and one switching controller to
+ * whichever chrome is mounted. Both are built once in shell state, so a chrome
+ * change swaps the layout without rebuilding either.
+ */
+export function WorkspaceProviders({
+  session,
+  switching,
+  children
+}: {
+  readonly session: WorkspaceSession;
+  readonly switching: WorkspaceSwitchingController;
+  readonly children: ReactNode;
+}) {
+  return (
+    <WorkspaceSessionContext.Provider value={session}>
+      <WorkspaceSwitchingContext.Provider value={switching}>{children}</WorkspaceSwitchingContext.Provider>
+    </WorkspaceSessionContext.Provider>
+  );
+}
 
 /**
  * The selector bound to the shell's shared switching controller. Every

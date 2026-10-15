@@ -44,8 +44,8 @@ pub use classify::{classify_event, is_in_watched_area, workspace_relative_path};
 #[allow(unused_imports)]
 pub use lifecycle::{
     __cmd__unwatch_workspace, __cmd__watch_workspace, __tauri_command_name_unwatch_workspace,
-    __tauri_command_name_watch_workspace, WatchInterest, attach_window_destroy_cleanup,
-    release_window_watchers, unwatch_workspace, watch_workspace,
+    __tauri_command_name_watch_workspace, WatchInterest, WorkspaceDebouncer,
+    attach_window_destroy_cleanup, unwatch_workspace, watch_workspace,
 };
 pub(crate) use self_write::take_self_write;
 #[allow(unused_imports)]

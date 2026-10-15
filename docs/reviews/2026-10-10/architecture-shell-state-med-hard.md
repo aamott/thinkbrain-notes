@@ -6,7 +6,6 @@ Reviewed the renderer application architecture around `shell/`, `tabs/`, `panels
 
 ## Summary: top 5 recommendations
 
-1. **Make one workspace-session owner above both chromes.** It should own root selection and loading, and instantiate the workspace-switching controller once; the explorer should consume the session rather than confirm state back to the shell.
 2. **Replace the flat `ShellState` mega-bag with explicit domain facets.** Prefer memoized `tabs`, `workspace`, `panels`, `commands`, and `documents` view models over either the current unstable object or a wholesale move to Zustand.
 3. **Extract shared shell composition from DesktopShell and PhoneShell.** In particular, build landing-tab actions and workspace switching once; keep only routing/layout differences in each chrome.
 4. **Remove the module-global command-surface override.** Inject the active chrome's command target explicitly so commands are deterministic, instance-scoped, and testable.
@@ -16,7 +15,6 @@ Reviewed the renderer application architecture around `shell/`, `tabs/`, `panels
 
 | # | Finding | Urgency | Difficulty | Payoff |
 |---|---|---|---|---|
-| 1 | One owner for workspace session and switching | high | hard | very high |
 | 2 | Split the unstable `ShellState` mega-bag into domain facets | med | hard | high |
 | 3 | Deduplicate cross-chrome application composition | med | med | high |
 | 4 | Inject command surfaces; remove the global mutable slot | med | med | high |
@@ -24,16 +22,6 @@ Reviewed the renderer application architecture around `shell/`, `tabs/`, `panels
 | 6 | Restore dependency direction between shell, workspace, panels, and tabs | med | med | medium-high |
 | 7 | Split the largest production renderer files by responsibility | low | med | medium |
 | 8 | Keep the existing contribution-registry primitive; do not invent one universal registry | low | low | medium |
-
-## 1. One owner for workspace session and switching
-
-**Current decision.** `useWorkspaceLifecycle` owns `restoredWorkspacePath`, but changing it does not load a workspace. It passes the path through `explorerProps.initialWorkspacePath`; `WorkspaceExplorer` then owns the async open/list sequence and calls `onWorkspaceOpened` back into the shell to set the same path, name, files, and indexes (`apps/desktop/src/shell/useWorkspaceLifecycle.ts:77-80`, `:176-197`; `apps/desktop/src/workspace/WorkspaceExplorer.tsx:89-106`, `:193-230`, `:290-299`). Meanwhile each chrome separately constructs `useWorkspaceSwitching` (`apps/desktop/src/shell/DesktopShell.tsx:99-110`; `apps/desktop/src/shell/phone/PhoneShell.tsx:161-168`).
-
-**Cost.** Workspace identity has two authorities: shell state and explorer reducer/ref state. The callback handshake makes load ordering implicit, enables transient disagreement during a switch, and forces unrelated consumers (settings, indexes, tabs, extension bridge) to wait on explorer behavior. `onWorkspaceLaunched` is especially revealing: it is declared as an explorer prop but documented as being read by the shell, and `WorkspaceExplorer` does not destructure it (`apps/desktop/src/workspace/WorkspaceExplorer.tsx:42-46`, `:60-73`). Duplicate switching controllers also duplicate capability/list fetches, window-focus listeners, and dialog state whenever chrome changes.
-
-**Change.** Introduce `useWorkspaceSession` at `ShellRoot`/`useShellState`. It should own `{phase, rootPath, snapshot, files}`, perform open/list/restore through an injected `WorkspaceDesktopApi`, update indexes/settings, and expose explicit `open`, `close`, and `launch` actions. Instantiate `useWorkspaceSwitching` once beside it and provide the controller above the chrome choice. Make `WorkspaceExplorer` a consumer of the loaded session plus explorer-local UI state (expansion, selection, CRUD transients), not the loader/authority.
-
-**Effort/risk/payoff.** Hard (roughly 1–2 weeks including race tests). Migration risk is high around startup restore, multi-window persistence, and stale async work; preserve the current root-token cancellation tests. Payoff is very high: one state machine, one switching controller, simpler explorer props, and clearer workspace/tab/index lifecycle.
 
 ## 2. Split the unstable `ShellState` mega-bag into domain facets
 

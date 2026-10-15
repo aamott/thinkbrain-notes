@@ -62,6 +62,11 @@ const answerNativeCommands = (): void => {
     if (command === "sync_conflict_rate") return { decisions: 0, settled: 0, recorded: 0 };
     if (command === "list_conflicts") return [];
     if (command === "quarantined_settings") return [];
+    if (command === "open_workspace") {
+      const rootPath = String(args?.rootPath);
+      return { workspace: { root_path: rootPath, name: rootPath.split("/").at(-1) ?? rootPath }, files: [] };
+    }
+    if (command === "list_workspace_entries") return [];
     return null;
   });
 };
@@ -109,16 +114,11 @@ async function renderShellState(): Promise<() => ShellState> {
   };
 }
 
-/** Pretends the explorer just opened `rootPath` — the only supported way a root path lands in shell state. */
+/** Opens `rootPath` through the workspace session — the one way a root path lands in shell state. */
 const openWorkspace = async (state: () => ShellState, rootPath = "/vault"): Promise<void> => {
-  const onWorkspaceOpened = state().explorerProps.onWorkspaceOpened;
-  if (!onWorkspaceOpened) throw new Error("explorerProps.onWorkspaceOpened is not wired");
-  await act(async () =>
-    onWorkspaceOpened(rootPath, {
-      workspace: { root_path: rootPath, name: rootPath.split("/").at(-1) ?? rootPath },
-      files: []
-    })
-  );
+  await act(async () => {
+    await state().openWorkspaceInWindow(rootPath);
+  });
 };
 
 describe("useShellState", () => {

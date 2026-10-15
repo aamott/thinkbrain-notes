@@ -31,10 +31,7 @@ import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "..
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
-import { useWorkspaceSwitching } from "../workspace/useWorkspaceSwitching";
-import { WorkspaceSwitchingContext } from "../workspace/workspaceSwitchingContext";
-import { WorkspaceSwitchingDialogs } from "../workspace/WorkspaceSwitching";
-import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
+import { WorkspaceProviders, WorkspaceSwitchingDialogs } from "../workspace/WorkspaceSwitching";
 import type { ShellState } from "./useShellState";
 
 export function DesktopShell({ shell }: { readonly shell: ShellState }) {
@@ -99,15 +96,10 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   // The new-tab page's entry points, wired to the desktop's own surfaces:
   // commands run through the palette's context, files through the palette's
   // quick-open. The phone chrome supplies the same three routed its own way.
-  const { paletteCommands, runCommand, openPalette, workspaceName } = shell;
+  const { paletteCommands, runCommand, openPalette, workspaceName, switching } = shell;
   // With no workspace open, the landing tab's job is direction — the same
   // create/open entry points the explorer's empty state offers, run through
   // the shell-level switching controller whose dialogs live here too.
-  const switching = useWorkspaceSwitching({
-    api: workspaceDesktopApi,
-    openWorkspaceInWindow: shell.openWorkspaceInWindow,
-    onWorkspaceLaunched: shell.explorerProps.onWorkspaceLaunched
-  });
   const newTab = useMemo(() => {
     if (workspaceName === null) {
       const actions: NewTabAction[] = [];
@@ -160,7 +152,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   }, [leftWidth, leftPanel, effectiveRightPanel, rightWidth]);
 
   return (
-    <WorkspaceSwitchingContext.Provider value={switching}>
+    <WorkspaceProviders session={shell.workspaceSession} switching={switching}>
       <main
         className="grid grid-rows-[2.25rem_auto_minmax(0,1fr)_1.5rem] grid-cols-[minmax(0,1fr)] w-full max-w-full h-full min-w-0 overflow-hidden bg-background text-foreground"
         ref={rootRef}
@@ -320,6 +312,6 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
             never hidden by the panel that opened it. */}
         <WorkspaceSwitchingDialogs currentPath={shell.restoredWorkspacePath ?? undefined} />
       </main>
-    </WorkspaceSwitchingContext.Provider>
+    </WorkspaceProviders>
   );
 }

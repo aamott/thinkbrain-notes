@@ -1,22 +1,16 @@
 //! Workspace window lifecycle and shell commands.
 //!
-//! Maps window labels to roots, creates windows off the main thread, grants
-//! vault asset scope, and cleans up roots/watchers on destroy.
+//! Creates windows off the main thread, records the root each was launched
+//! for in the workspace session table, and grants vault asset scope.
 
 use crate::commands::markdown::{MarkdownFileEntry, list_markdown_file_entries};
-use crate::error::{NativeError, failed, lock_or_recover};
+use crate::commands::workspace_session;
+use crate::error::{NativeError, failed};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{
-    Mutex,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::Manager;
 
 use super::workspace_paths::{WorkspaceDescriptor, describe_workspace, resolve_workspace_root};
-
-#[derive(Default)]
-pub struct WorkspaceWindowRoots(Mutex<HashMap<String, String>>);
 
 static WORKSPACE_WINDOW_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -25,22 +19,6 @@ pub fn next_workspace_window_label() -> String {
         "workspace-{}",
         WORKSPACE_WINDOW_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     )
-}
-
-pub fn register_workspace_window_root(
-    roots: &WorkspaceWindowRoots,
-    label: String,
-    root_path: String,
-) {
-    lock_or_recover(&roots.0).insert(label, root_path);
-}
-
-pub fn workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) -> Option<String> {
-    lock_or_recover(&roots.0).get(label).cloned()
-}
-
-pub fn unregister_workspace_window_root(roots: &WorkspaceWindowRoots, label: &str) {
-    lock_or_recover(&roots.0).remove(label);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -85,38 +63,22 @@ pub(crate) fn create_workspace_window_off_main_thread(
     let root_path = root.to_string_lossy().into_owned();
     // Register the root before build so the frontend's first
     // `window_workspace_root` call cannot race past registration.
-    register_workspace_window_root(
-        &app.state::<WorkspaceWindowRoots>(),
-        label.clone(),
-        root_path,
-    );
+    workspace_session::register_launch(label.clone(), root_path);
     let window =
         tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App("index.html".into()))
             .title(describe_workspace(&root).name)
             .build()
             .map_err(|error| {
-                unregister_workspace_window_root(&app.state::<WorkspaceWindowRoots>(), &label);
+                workspace_session::unregister_launch(&label);
                 failed(
                     "workspace.window_failed",
                     "Failed to create a workspace window.",
                     error,
                 )
             })?;
-    let app_for_cleanup = app.clone();
-    let label_for_cleanup = label.clone();
-    // Workspace windows need both their `WorkspaceWindowRoots` entry and their
-    // file watchers cleaned up on destroy. The watcher module owns the destroy
-    // policy; the extra closure handles the workspace-specific half.
-    crate::commands::watcher::attach_window_destroy_cleanup(
-        &window,
-        label,
-        Some(move || {
-            unregister_workspace_window_root(
-                &app_for_cleanup.state::<WorkspaceWindowRoots>(),
-                &label_for_cleanup,
-            );
-        }),
-    );
+    // Releasing the window's session holdings on destroy also drops this
+    // launch record.
+    crate::commands::watcher::attach_window_destroy_cleanup(&window, label);
     Ok(())
 }
 
@@ -129,9 +91,6 @@ pub async fn open_workspace_window(
 }
 
 #[tauri::command]
-pub fn window_workspace_root(
-    window: tauri::WebviewWindow,
-    roots: tauri::State<WorkspaceWindowRoots>,
-) -> Option<String> {
-    workspace_window_root(&roots, window.label())
+pub fn window_workspace_root(window: tauri::WebviewWindow) -> Option<String> {
+    workspace_session::launched_root(window.label())
 }

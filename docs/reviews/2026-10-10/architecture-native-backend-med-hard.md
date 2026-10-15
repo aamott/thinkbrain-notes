@@ -4,7 +4,6 @@ Scope: `apps/desktop/src-tauri` — `lib.rs` setup, `commands/` (workspace*, sea
 
 ## Summary — top 5
 
-1. **Make per-workspace resources owned by one workspace session, not four subsystem maps.** `WATCHERS`, `ENGINES`, `SEARCH_CONNECTIONS`, and `WorkspaceWindowRoots` each track the vault independently with different keys and lifetimes; the search pool has no release path at all except managed delete (`search.rs:23`, `workspace_managed.rs:163`). A canonical-root-keyed `WorkspaceSession` in managed state would make delete/close/switch a single decision.
 2. **Close the attach/release race in the background sync bootstrap.** `watch_workspace` acquires watcher interest, then spawns a thread that later calls `registry::attach` (`watcher/lifecycle.rs:132-165`). A window destroyed during bootstrap leaves `adopt()` holding interest for a dead label (`sync/registry.rs:76-80`) — a leaked engine that keeps recording a vault nobody has open, and can resurrect metadata after delete. Same root cause as the known `detach_engine_on_delete` story; fix them together.
 3. **All commands are synchronous `fn`s, so heavy work runs on the IPC/main path.** `index_documents` (SQLite batch), `sync_now` (network round trip), `list_workspace_entries` (10k-entry walk) are all `pub fn` (`search.rs:95`, `sync/round.rs:704`, `workspace_entries.rs:38`). The codebase already knows the cost — bootstrap was moved off-thread citing Windows AppHang (`watcher/lifecycle.rs:140-145`) — but the fix was applied only where it hurt first.
 4. **The TS↔Rust command contract is hand-mirrored with no mechanical check.** `app_command_list!` names each command once in Rust (`commands/mod.rs:58`), while `NativeCommandMap` in `commands.ts` re-declares names, args, and results by hand. Arg-name/casing drift fails only at runtime. Either generate bindings (tauri-specta/ts-rs) or add a CI check comparing `APP_COMMAND_PATHS` against the map's keys.
@@ -14,7 +13,6 @@ Scope: `apps/desktop/src-tauri` — `lib.rs` setup, `commands/` (workspace*, sea
 
 | # | Title | Urgency | Difficulty | Payoff |
 |---:|---|---|---|---|
-| 1 | Unify per-workspace resources under one session owner | Med | Hard | High |
 | 2 | Fix attach/release race in background sync bootstrap | Med | Med | High |
 | 3 | Move blocking commands off the synchronous IPC path | Med | Med | High |
 | 4 | Mechanically verify the TS command map against Rust | Med | Easy | High |
@@ -22,16 +20,6 @@ Scope: `apps/desktop/src-tauri` — `lib.rs` setup, `commands/` (workspace*, sea
 | 6 | Oversized modules drift past the <500-line guideline | Low | Med | Med |
 | 7 | `eprintln!` is the only logging channel | Low | Easy | Med |
 | 8 | ipc_hardening story scope is right; fold in search + asset-grant revocation | Low | Med | Med-high |
-
-## 1. Unify per-workspace resources under one session owner
-
-**Current decision.** Each subsystem owns its own table: `WATCHERS` (static `Mutex<Option<WatchState>>`, `watcher/lifecycle.rs:101`), `ENGINES` (static registry, `sync/registry.rs:115`), `SEARCH_CONNECTIONS` (`search.rs:23`), and `WorkspaceWindowRoots` (Tauri managed state keyed by *window label*, `workspace_windows.rs:19`). Watcher and engine deliberately share `WatchInterest` (root → label → count), which is the one coordinated pair.
-
-**Cost.** "What lives for this vault?" has no single answer. Cleanup is reassembled per event: `release_window_watchers` calls `sync::registry::release_window` then drops debouncers (`watcher/lifecycle.rs:206-216`); `delete_managed_workspace_in` knows to release the search connection but not the engine or watcher (`workspace_managed.rs:162-163`). The main window's root is not in `WorkspaceWindowRoots` at all (comment at `lib.rs:93-94`), so even window→root is partial. Every new per-vault resource repeats the keying and the leak surface.
-
-**Alternative.** A `WorkspaceSession { watcher, engine, search_conn, asset_grant, interest }` map keyed by canonical root, held in managed state; subsystem modules borrow from it rather than owning statics. Keep `WatchInterest` as the refcount inside the session.
-
-**Effort/risk/payoff.** Hard — it crosses the watcher/sync/search boundary and every test that pokes the statics; payoff is that delete, close, and switch become one transition instead of N coordinated ones. Do it incrementally: session object first, migrate search pool and asset grants before touching the watcher/engine pair.
 
 ## 2. Attach/release race in the background sync bootstrap
 

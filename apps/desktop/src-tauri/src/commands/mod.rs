@@ -43,6 +43,7 @@ pub mod themes;
 pub mod watcher;
 pub mod workspace;
 pub mod workspace_known;
+pub mod workspace_session;
 
 /// Every command this app registers, named exactly once.
 ///

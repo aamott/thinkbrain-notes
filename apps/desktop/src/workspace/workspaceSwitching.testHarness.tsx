@@ -1,15 +1,16 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
+import { useWorkspaceSession } from "./useWorkspaceSession";
 import { useWorkspaceSwitching } from "./useWorkspaceSwitching";
-import { WorkspaceSwitchingContext } from "./workspaceSwitchingContext";
-import { WorkspaceSwitchingDialogs } from "./WorkspaceSwitching";
+import { WorkspaceProviders, WorkspaceSwitchingDialogs } from "./WorkspaceSwitching";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 
 /**
- * Minimal stand-in for the shell around the switching controller: owns one
- * `useWorkspaceSwitching`, wires `openWorkspaceInWindow` to a state the
- * render prop can feed an explorer's `initialWorkspacePath`, and mounts the
- * shell-level dialogs so create/manage/import actions have somewhere to land.
+ * Minimal stand-in for the shell around the workspace session: owns one
+ * `useWorkspaceSession` and one `useWorkspaceSwitching` wired to it, opens
+ * `initialWorkspacePath` whenever it changes (a rerender with another path is
+ * an in-window switch), and mounts the shell-level dialogs so
+ * create/manage/import actions have somewhere to land.
  */
 export function WorkspaceSwitchingHarness({
   api = workspaceDesktopApi,
@@ -22,16 +23,20 @@ export function WorkspaceSwitchingHarness({
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
   readonly children: (workspacePath: string | null) => ReactNode;
 }) {
-  const [workspacePath, setWorkspacePath] = useState<string | null>(initialWorkspacePath);
+  const session = useWorkspaceSession({ api });
+  const { open } = session;
+  useEffect(() => {
+    if (initialWorkspacePath) void open(initialWorkspacePath);
+  }, [initialWorkspacePath, open]);
   const switching = useWorkspaceSwitching({
     api,
-    openWorkspaceInWindow: setWorkspacePath,
+    openWorkspaceInWindow: open,
     onWorkspaceLaunched
   });
   return (
-    <WorkspaceSwitchingContext.Provider value={switching}>
-      {children(workspacePath)}
-      <WorkspaceSwitchingDialogs currentPath={workspacePath ?? undefined} />
-    </WorkspaceSwitchingContext.Provider>
+    <WorkspaceProviders session={session} switching={switching}>
+      {children(session.rootPath)}
+      <WorkspaceSwitchingDialogs currentPath={session.rootPath ?? undefined} />
+    </WorkspaceProviders>
   );
 }

@@ -36,7 +36,9 @@ import {
   initialDesktopTabState
 } from "../tabs/tabModel";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
+import { useWorkspaceSwitching } from "../workspace/useWorkspaceSwitching";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
+import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { checkForUpdate, relaunchApp } from "./appUpdater";
 import type { ShellState } from "./shellStateTypes";
 import type { RightPanel } from "./shellTypes";
@@ -115,8 +117,6 @@ export function useShellState(): ShellState {
     cancelDeferredPersistence,
     handleMarkdownFileCreated,
     handleWorkspaceLaunched,
-    handleWorkspaceOpened,
-    handleWorkspaceUnavailable,
     leftPanel,
     leftWidth,
     leftWidthRef,
@@ -135,8 +135,19 @@ export function useShellState(): ShellState {
     updateBottomPanel,
     updatePanelWidth,
     workspaceFiles,
-    workspaceName
+    workspaceName,
+    workspaceSession
   } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument, openFileDocument });
+
+  // The one switching controller for this window, shared by every chrome and
+  // every placement of the selector. Built here, above the chrome choice, so a
+  // chrome change does not rebuild it — its capability probe, known-workspace
+  // list and open dialogs survive the swap.
+  const switching = useWorkspaceSwitching({
+    api: workspaceDesktopApi,
+    openWorkspaceInWindow,
+    onWorkspaceLaunched: handleWorkspaceLaunched
+  });
 
   // Cancel deferred writes if the shell unmounts. An in-flight drag is the
   // resize hook's own to clean up.
@@ -263,9 +274,6 @@ export function useShellState(): ShellState {
    */
   const explorerProps = useMemo<WorkspaceExplorerProps>(
     () => ({
-      initialWorkspacePath: stateRestored ? restoredWorkspacePath : null,
-      onWorkspaceOpened: handleWorkspaceOpened,
-      onWorkspaceUnavailable: handleWorkspaceUnavailable,
       // Explorer clicks browse provisionally: each one takes over the
       // preview tab until an edit makes it permanent. The phone chrome
       // overrides these with its own always-replace wrappers.
@@ -276,20 +284,14 @@ export function useShellState(): ShellState {
       onMarkdownFileCreated: handleMarkdownFileCreated,
       onNewNoteFocusHandled: acknowledgeNewNoteFocus,
       newNoteFocusRequest,
-      onWorkspaceLaunched: handleWorkspaceLaunched,
       onShowVersions: showVersionsOf
     }),
     [
-      stateRestored,
-      restoredWorkspacePath,
-      handleWorkspaceOpened,
-      handleWorkspaceUnavailable,
       openMarkdownDocument,
       openFileDocument,
       handleMarkdownFileCreated,
       acknowledgeNewNoteFocus,
       newNoteFocusRequest,
-      handleWorkspaceLaunched,
       showVersionsOf
     ]
   );
@@ -341,6 +343,8 @@ export function useShellState(): ShellState {
     workspaceFiles,
     stateRestored,
     openWorkspaceInWindow,
+    workspaceSession,
+    switching,
     explorerProps,
     showVersionsOf,
     openSyncPanel,

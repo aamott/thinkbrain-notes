@@ -18,8 +18,8 @@ search pool releasable only via managed delete.
 
 ## Acceptance
 
-- [ ] `useWorkspaceSession` (or equivalent) owns open/list/restore phase,
+- [x] `useWorkspaceSession` (or equivalent) owns open/list/restore phase,
       rootPath, snapshot; explorer consumes it. One switching controller.
-- [ ] Native per-workspace resources keyed by one session/root record so
+- [x] Native per-workspace resources keyed by one session/root record so
       "release everything for root X" is one call, not four.
-- [ ] No regression in restore, multi-window, in-window switch races.
+- [x] No regression in restore, multi-window, in-window switch races.

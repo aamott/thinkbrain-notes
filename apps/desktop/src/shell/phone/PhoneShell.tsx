@@ -1,5 +1,4 @@
 import { BottomSheet, FloatingBubbles } from "@thinkbrain/ui";
-import { EllipsisVertical, FilePlus2, Folder, FolderCog, FolderOpen, FolderPlus, House, Link, Plus, Search } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
@@ -8,13 +7,11 @@ import {
   useRightPanelContributions,
   type RightPanelContext
 } from "../../panels/panelRegistryModel";
-import type { DesktopCommandContext } from "../../commands/commandRegistry";
 import { usePanelNotificationCounts } from "../../notifications/usePanelNotificationCounts";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { inspectableRelativePath, isNoteTab } from "../../tabs/tabModel";
-import { isSelectableLeftPanel, isSelectableRightPanel, type RightPanel } from "../shellTypes";
+import { isSelectableLeftPanel, type RightPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
-import { useCommandSurface } from "../useShellCommands";
 import { useNoteTitle } from "../useNoteTitle";
 import { TabContent } from "../TabContent";
 import { useEditorCommands } from "../../tabs/editorCommands";
@@ -37,12 +34,10 @@ import { phoneBreadcrumbs } from "./phoneBreadcrumbs";
 import { usePhoneOpeners } from "./usePhoneOpeners";
 import { usePhoneRouteSync } from "./usePhoneRouteSync";
 import { useRecentNote } from "./useRecentNote";
-import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../../workspace/gitLinkImportCopy";
-import { useWorkspaceSwitching } from "../../workspace/useWorkspaceSwitching";
-import { WorkspaceSwitchingContext } from "../../workspace/workspaceSwitchingContext";
-import { WorkspaceSwitchingDialogs } from "../../workspace/WorkspaceSwitching";
-import { workspaceDesktopApi } from "../../workspace/workspaceAdapter";
-import type { NewTabAction } from "../../tabs/NewTabView";
+import { usePhoneBubbleItems } from "./usePhoneBubbleItems";
+import { usePhoneCommandSurface } from "./usePhoneCommandSurface";
+import { usePhoneNewTab } from "./usePhoneNewTab";
+import { WorkspaceProviders, WorkspaceSwitchingDialogs } from "../../workspace/WorkspaceSwitching";
 
 /**
  * Phone chrome over the shared shell state.
@@ -161,53 +156,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // The shell-level switching controller shared by the drawer selector, the
   // explorer's empty state and the landing tab — its dialogs mount at shell
   // level, so nothing has to surface Files for them to be visible.
-  const switching = useWorkspaceSwitching({
-    api: workspaceDesktopApi,
-    openWorkspaceInWindow: shell.openWorkspaceInWindow,
-    onWorkspaceLaunched: shell.explorerProps.onWorkspaceLaunched
-  });
+  const { switching } = shell;
 
-  // Command effects rerouted to this chrome's surfaces. The shared
-  // `runCommand` would otherwise write dock state nothing here renders —
-  // `shell.rightPanel` is desktop-only and `shell.leftPanel` is *derived
-  // from* the route, never the reverse (plus a stray `explorerOpen` persist a
-  // phone action had no business writing). Left reveals become panel routes —
-  // explorer is the Files home, not a "panel" route — and right reveals open
-  // the inspector, the same mapping the ⋮ menu and `showVersions` use.
-  // Effects the phone already honours (theme, bottom sheet, new-note focus)
-  // are not listed, so they keep the shared implementation.
-  const commandSurface = useMemo<Partial<DesktopCommandContext>>(() => {
-    const revealLeft = (panelId: string) => {
-      if (!isSelectableLeftPanel(panelId)) return;
-      navigation.push(panelId === "explorer" ? { kind: "files" } : { kind: "panel", panel: panelId });
-    };
-    const toggleInspector = (panel: RightPanel) => {
-      const current = navigation.overlay;
-      if (current?.kind === "inspector" && current.panel === panel) {
-        navigation.dismissOverlay();
-      } else {
-        navigation.showOverlay({ kind: "inspector", panel, parent: "content" });
-      }
-    };
-    return {
-      showExplorer: () => navigation.push({ kind: "files" }),
-      openSearch: () => navigation.push({ kind: "panel", panel: "search" }),
-      // There is no collapsible left dock to toggle back to — Files is the
-      // base route — so a toggle degrades to a reveal (a no-op on Files).
-      toggleExplorer: () => navigation.push({ kind: "files" }),
-      toggleOutline: () => toggleInspector("outline"),
-      toggleAssistant: () => toggleInspector("assistant"),
-      revealPanel: (panelId) => {
-        if (isSelectableRightPanel(panelId)) {
-          navigation.showOverlay({ kind: "inspector", panel: panelId, parent: "content" });
-        } else {
-          revealLeft(panelId);
-        }
-      },
-      revealLeftPanel: revealLeft
-    };
-  }, [navigation]);
-  useCommandSurface(commandSurface);
+  usePhoneCommandSurface(navigation);
 
   const runCommand = useCallback(
     (commandId: string) => {
@@ -229,32 +180,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
 
   // The new-tab page's entry points, run through the same shell-level
   // switching controller the drawer selector uses.
-  const newTab = useMemo(() => {
-    if (shell.workspaceName === null) {
-      const actions: NewTabAction[] = [];
-      if (switching.accessCapabilities?.canCreateManagedWorkspace) {
-        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: () => switching.setCreateManagedWorkspaceOpen(true) });
-      }
-      if (switching.accessCapabilities?.canOpenFolder) {
-        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => void switching.openWorkspace() });
-      }
-      actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: switching.openGitLinkImport });
-      for (const workspace of switching.knownWorkspaces) {
-        if (workspace.missing) continue;
-        actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => void switching.launchWorkspace(workspace.rootPath) });
-      }
-      actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: switching.openManageWorkspaces });
-      return { workspaceName: shell.workspaceName, actions };
-    }
-    return {
-      workspaceName: shell.workspaceName,
-      actions: [
-        { id: "new-note", label: "New note", icon: <FilePlus2 aria-hidden="true" className="size-4" />, onSelect: createNewNote },
-        { id: "files", label: "Browse files", icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "files" }) },
-        { id: "search", label: "Search", icon: <Search aria-hidden="true" className="size-4" />, onSelect: () => navigation.push({ kind: "panel", panel: "search" }) }
-      ]
-    };
-  }, [shell.workspaceName, createNewNote, navigation, switching]);
+  const newTab = usePhoneNewTab({ workspaceName: shell.workspaceName, switching, createNewNote, navigation });
 
   // The panel LeftPopout renders: the route's panel, or explorer underneath
   // every tab route so Files is the base surface, not a blank space.
@@ -354,44 +280,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     shell.bottomPanel === null &&
     (overlay === null || overlay.kind === "actions" || overlay.kind === "new-note");
 
-  const bubbleItems = useMemo(() => {
-    const byId = {
-      home: {
-        key: "home",
-        label: "Home",
-        icon: <House aria-hidden="true" className="size-5" />,
-        badge: conflictCount > 0 ? conflictCount : undefined,
-        badgeLabel: "conflicts",
-        // Push, not toggle: Back returns to the note the user came from.
-        onSelect: () => navigation.push({ kind: "files" })
-      },
-      "new-note": {
-        key: "new-note",
-        label: "New note",
-        icon: <Plus aria-hidden="true" className="size-5" />,
-        variant: "primary" as const,
-        hasPopup: true,
-        active: newNoteOpen,
-        onSelect: () =>
-          newNoteOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "new-note" })
-      },
-      actions: {
-        key: "actions",
-        label: "Actions",
-        icon: <EllipsisVertical aria-hidden="true" className="size-5" />,
-        hasPopup: true,
-        active: actionsOpen,
-        badge: actionsBadge > 0 ? actionsBadge : undefined,
-        badgeLabel: "notifications",
-        onSelect: () =>
-          actionsOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "actions" })
-      }
-    };
-    return {
-      left: bubbleLayout.left.map((id) => byId[id]),
-      right: bubbleLayout.right.map((id) => byId[id])
-    };
-  }, [bubbleLayout, conflictCount, newNoteOpen, actionsOpen, actionsBadge, navigation]);
+  const bubbleItems = usePhoneBubbleItems({ bubbleLayout, conflictCount, newNoteOpen, actionsOpen, actionsBadge, navigation });
 
   return (
     // `overflow-clip`, not `overflow-hidden`: closed always-mounted sheets
@@ -399,7 +288,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     // and `hidden` leaves it programmatically scrollable — Android/WebView
     // focus-scroll can shift the whole shell and strand it (header off-screen,
     // black gap below). `clip` clips identically but cannot scroll.
-    <WorkspaceSwitchingContext.Provider value={switching}>
+    <WorkspaceProviders session={shell.workspaceSession} switching={switching}>
       <main
         data-phone-shell
         className="relative flex h-full min-w-0 flex-col overflow-clip bg-background text-foreground [--tn-shell-popout-left:0px] [--tn-phone-bubble-clearance:calc(4.5rem+env(safe-area-inset-bottom))]"
@@ -597,6 +486,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             empty state, landing tab — at shell level above every route. */}
         <WorkspaceSwitchingDialogs currentPath={shell.restoredWorkspacePath ?? undefined} />
       </main>
-    </WorkspaceSwitchingContext.Provider>
+    </WorkspaceProviders>
   );
 }

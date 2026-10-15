@@ -56,7 +56,9 @@ vi.mock("../settings/desktopState", async (importOriginal) => {
 vi.mock("../workspace/workspaceAdapter", () => ({
   workspaceDesktopApi: {
     windowWorkspaceRoot: () => Promise.resolve(windowRoot),
-    openWorkspace: () => Promise.resolve({ name: "vault", files: [] })
+    openWorkspace: (rootPath: string) =>
+      Promise.resolve({ workspace: { root_path: rootPath, name: "vault" }, files: [] }),
+    listWorkspaceEntries: () => Promise.resolve([])
   }
 }));
 
@@ -332,10 +334,7 @@ describe("what a window persists", () => {
 
     await openWindow();
     await act(async () => {
-      lifecycle?.handleWorkspaceOpened("/vault-b", {
-        workspace: { root_path: "/vault-b", name: "b" },
-        files: []
-      });
+      await lifecycle?.openWorkspaceInWindow("/vault-b");
     });
 
     // A window that had never heard of another window's recents must not send

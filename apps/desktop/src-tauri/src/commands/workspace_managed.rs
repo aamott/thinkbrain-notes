@@ -159,8 +159,10 @@ pub(crate) fn delete_managed_workspace_in(
     let hidden_repo = crate::commands::sync::bootstrap::hidden_repo_path(app_data, &canonical);
     let backups = crate::commands::backup::workspace_backups_dir(app_data, &target);
 
-    // The pooled connection must go first: it holds the index file open.
-    crate::commands::search::release_search_connection(&canonical);
+    // Everything the host holds for this root goes first, in one call: the
+    // pooled index connection holds the index file open, and a live watcher
+    // and sync engine would keep recording into history about to be wiped.
+    crate::commands::workspace_session::release_workspace(&canonical);
 
     // The vault is deleted before its metadata, deliberately: if a later
     // removal fails we would rather leave orphaned history than a workspace

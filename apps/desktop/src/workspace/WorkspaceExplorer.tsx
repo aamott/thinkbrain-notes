@@ -1,16 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
-import {
-  buildWorkspaceTree,
-  initialWorkspaceExplorerState,
-  workspaceErrorMessage,
-  workspaceExplorerReducer
-} from "./workspaceExplorerModel";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { NativeWorkspaceEntry } from "../native/commands";
+import { buildWorkspaceTree, workspaceErrorMessage } from "./workspaceExplorerModel";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 import { subscribeExplorerToNoteChanges } from "./workspaceExplorerRefresh";
-import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings, writeWorkspaceSettings } from "./workspaceSettings";
-import { DEFAULT_EXPLORER_SORT, type ExplorerSortOrder } from "./explorerSort";
+import { writeWorkspaceSettings } from "./workspaceSettings";
+import type { ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
+import { useWorkspaceSessionContext } from "./workspaceSession";
 export { WorkspaceSelector } from "./WorkspaceSelector";
 import { useWorkspaceSwitchingContext } from "./workspaceSwitchingContext";
 import { useWorkspaceContextMenu } from "./useWorkspaceContextMenu";
@@ -28,9 +24,6 @@ import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
   readonly className?: string;
-  readonly initialWorkspacePath?: string | null;
-  readonly onWorkspaceOpened?: (rootPath: string, snapshot: NativeWorkspaceSnapshot) => void;
-  readonly onWorkspaceUnavailable?: (rootPath: string) => void;
   readonly onMarkdownFileSelected?: (rootPath: string, relativePath: string) => void;
   /** Fired when any file (Markdown or not) is selected. Falls back to onMarkdownFileSelected. */
   readonly onFileSelected?: (rootPath: string, relativePath: string) => void;
@@ -39,11 +32,6 @@ export interface WorkspaceExplorerProps {
   /** Request that the explorer begin creating a note at the workspace root. */
   readonly newNoteFocusRequest?: number;
   readonly onNewNoteFocusHandled?: () => void;
-  /**
-   * Read by the shell for its switching controller's `onWorkspaceLaunched`;
-   * the explorer itself no longer owns launching.
-   */
-  readonly onWorkspaceLaunched?: (rootPath: string) => void;
   /** Asked for one file's earlier versions from the right-click menu. */
   readonly onShowVersions?: (rootPath: string, relativePath: string) => void;
   /**
@@ -56,13 +44,15 @@ export interface WorkspaceExplorerProps {
 /**
  * Workspace explorer with folder-open, file/folder CRUD, and a right-click
  * context menu. All filesystem operations stay in the supplied desktop adapter.
+ *
+ * A consumer of the shell's workspace session, not its loader: which root is
+ * open, its entries and its per-workspace view settings all come from the
+ * session. Only explorer-local UI — expansion, selection, CRUD transients —
+ * lives here.
  */
 export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   api = workspaceDesktopApi,
   className,
-  initialWorkspacePath = null,
-  onWorkspaceOpened,
-  onWorkspaceUnavailable,
   onMarkdownFileSelected,
   onFileSelected,
   onMarkdownFileCreated,
@@ -71,18 +61,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   onShowVersions,
   workspaceSelectorInPanel = false
 }: WorkspaceExplorerProps) {
-  const [state, dispatch] = useReducer(workspaceExplorerReducer, initialWorkspaceExplorerState);
+  const session = useWorkspaceSessionContext();
+  const state = session;
+  const { showHidden, explorerSort } = session;
   const { contextMenu, setContextMenu, showContextMenu, showContextMenuAt, closeContextMenu } = useWorkspaceContextMenu();
   const [renaming, setRenaming] = useState<RenameState | null>(null);
   const [pendingDelete, setPendingDelete] = useState<NativeWorkspaceEntry | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Whether dot-prefixed entries (`.git`, `.obsidian`, …) are listed in the
-  // tree. Persisted per-workspace via `readWorkspaceSettings`/`writeWorkspaceSettings`
-  // and restored when a workspace opens.
-  const [showHidden, setShowHidden] = useState<boolean>(DEFAULT_WORKSPACE_SETTINGS.showHidden);
-  // The tree's ordering, restored per-workspace alongside `showHidden`.
-  const [explorerSort, setExplorerSort] = useState<ExplorerSortOrder>(DEFAULT_EXPLORER_SORT);
   // Open state for the header "..." (more actions) dropdown popover.
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const tree = useMemo(() => buildWorkspaceTree(state.entries, explorerSort), [state.entries, explorerSort]);
@@ -100,19 +86,19 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   // Refs holding the latest state/props so async helpers never read stale
   // closures after an `await`. The workspace root captured before an operation
-  // is compared to the current one after each `await`; if it changed (workspace
-  // switched/closed), the in-flight refresh is aborted.
+  // is compared to the session's current one after each `await`; if it changed
+  // (workspace switched/closed), the in-flight refresh is aborted.
   const stateRef = useRef(state);
-  const rootPathRef = useRef(workspaceRootPath);
+  const rootPathRef = session.rootRef;
   const apiRef = useRef(api);
-  const showHiddenRef = useRef(showHidden);
+  const sessionRef = useRef(session);
   const callbacksRef = useRef({ onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected });
   // Refs are updated in an effect (not during render) per the react-hooks/refs
   // rule. Async helpers read `*.current` after each `await`.
   useEffect(() => {
     stateRef.current = state;
     apiRef.current = api;
-    showHiddenRef.current = showHidden;
+    sessionRef.current = session;
     callbacksRef.current = { onMarkdownFileCreated, onMarkdownFileSelected, onFileSelected };
   });
 
@@ -148,9 +134,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     try {
       await operation();
       if (rootPathRef.current !== rootPath) return true;
-      const entries = await apiRef.current.listWorkspaceEntries(rootPath, showHiddenRef.current);
-      if (rootPathRef.current !== rootPath) return true;
-      dispatch({ type: "opened", snapshot, entries });
+      if (!(await sessionRef.current.refreshEntries(rootPath))) return true;
       if (options?.selectMarkdown) {
         callbacksRef.current.onMarkdownFileCreated?.(rootPath, options.selectMarkdown);
         callbacksRef.current.onFileSelected?.(rootPath, options.selectMarkdown);
@@ -162,7 +146,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     } finally {
       endOperation();
     }
-  }, [endOperation, startOperation]);
+  }, [endOperation, rootPathRef, startOperation]);
 
   const {
     creating,
@@ -186,62 +170,30 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     setPendingDelete(null);
     setActionError(null);
     setExpandedFolders(new Set());
-    setShowHidden(DEFAULT_WORKSPACE_SETTINGS.showHidden);
-    setExplorerSort(DEFAULT_EXPLORER_SORT);
   }, [resetCreate, setContextMenu, setExpandedFolders]);
 
-  const loadWorkspace = useCallback(async (rootPath: string, restoring = false) => {
-    // Invalidate operations and transient UI associated with the previous
-    // workspace before the new one begins loading. In particular, this keeps
-    // a pending delete from being applied to a same-named entry in the new root.
-    const isWorkspaceSwitch = rootPathRef.current !== rootPath;
-    rootPathRef.current = rootPath;
-    if (isWorkspaceSwitch) clearWorkspaceState();
-    dispatch({ type: "open" });
-    try {
-      // Restore the per-workspace "show hidden" preference before listing so
-      // the first tree build already reflects the persisted value. A failed
-      // read falls back to defaults rather than blocking workspace opening.
-      let includeHidden = showHiddenRef.current;
-      try {
-        const settings = await readWorkspaceSettings(rootPath);
-        if (rootPathRef.current !== rootPath) return;
-        includeHidden = settings.showHidden;
-        setShowHidden(settings.showHidden);
-        showHiddenRef.current = settings.showHidden;
-        // Mocked or older settings documents may carry no order at all; the
-        // state setter's parameter type hides that, so fall back explicitly.
-        setExplorerSort(settings.explorerSort ?? DEFAULT_EXPLORER_SORT);
-      } catch {
-        if (rootPathRef.current !== rootPath) return;
-        // Keep the in-memory default; the toggle still works for this session.
-      }
-      const snapshot = await api.openWorkspace(rootPath);
-      if (rootPathRef.current !== rootPath) return;
-      const entries = await api.listWorkspaceEntries(rootPath, includeHidden);
-      if (rootPathRef.current !== rootPath) return;
-      dispatch({ type: "opened", snapshot, entries });
-      onWorkspaceOpened?.(rootPath, snapshot);
-    } catch (error) {
-      if (rootPathRef.current !== rootPath) return;
-      dispatch({ type: "failed", message: workspaceErrorMessage(error) });
-      if (restoring) onWorkspaceUnavailable?.(rootPath);
-    }
-  }, [api, clearWorkspaceState, onWorkspaceOpened, onWorkspaceUnavailable]);
+  // Invalidate operations and transient UI associated with the previous
+  // workspace once the session moves to another root. In particular, this
+  // keeps a pending delete from being applied to a same-named entry in the
+  // new root.
+  const seenRootRef = useRef(session.rootPath);
+  useEffect(() => {
+    if (seenRootRef.current === session.rootPath) return;
+    seenRootRef.current = session.rootPath;
+    clearWorkspaceState();
+  }, [session.rootPath, clearWorkspaceState]);
 
   const refreshEntries = useCallback(async () => {
     const rootPath = rootPathRef.current;
     const snapshot = stateRef.current.snapshot;
     if (!rootPath || !snapshot) return;
     try {
-      const entries = await apiRef.current.listWorkspaceEntries(rootPath, showHiddenRef.current);
-      // Abort if the workspace changed while listing.
-      if (rootPathRef.current !== rootPath) return;
-      dispatch({ type: "opened", snapshot, entries });
+      // The session drops a listing that lands after the workspace changed.
+      await sessionRef.current.refreshEntries(rootPath);
     } catch (error) {
       setActionError(workspaceErrorMessage(error));
     }
-  }, []);
+  }, [rootPathRef]);
 
   // The switching controller lives at shell level: the selector in the
   // explorer's chrome, the open-workspace menu item and the empty state's
@@ -257,9 +209,8 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
    */
   const toggleShowHidden = useCallback(async () => {
     const rootPath = rootPathRef.current;
-    const next = !showHiddenRef.current;
-    setShowHidden(next);
-    showHiddenRef.current = next;
+    const next = !sessionRef.current.showHidden;
+    sessionRef.current.setShowHidden(next);
     if (rootPath) {
       try {
         await writeWorkspaceSettings(rootPath, { showHidden: next });
@@ -268,7 +219,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       }
     }
     await refreshEntries();
-  }, [refreshEntries]);
+  }, [refreshEntries, rootPathRef]);
 
   /**
    * Applies a new tree ordering and persists it for the current workspace.
@@ -277,7 +228,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
    * without reverting the visible order.
    */
   const applyExplorerSort = useCallback(async (order: ExplorerSortOrder): Promise<void> => {
-    setExplorerSort(order);
+    sessionRef.current.setExplorerSort(order);
     const rootPath = rootPathRef.current;
     if (!rootPath) return;
     try {
@@ -285,18 +236,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     } catch (error) {
       setActionError(workspaceErrorMessage(error));
     }
-  }, []);
-
-  useEffect(() => {
-    if (initialWorkspacePath) {
-      // Legitimate "load workspace when the path prop changes" effect: the
-      // async loader intentionally flips the explorer into its "opening" phase
-      // synchronously before the first await so the UI reflects the switch
-      // immediately. The set-state-in-effect rule cannot model this lifecycle,
-      // so the call is suppressed here rather than restructuring the load.
-      void loadWorkspace(initialWorkspacePath, true);
-    }
-  }, [initialWorkspacePath, loadWorkspace]);
+  }, [rootPathRef]);
 
   // Follow the folder, not just this window's own edits. A `git pull`, a sync
   // client or another editor changes what the workspace holds without the
@@ -310,7 +250,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
         () => rootPathRef.current,
         () => void refreshEntries()
       ),
-    [refreshEntries]
+    [refreshEntries, rootPathRef]
   );
 
   // Command palette "New note" focuses a create-file input at the workspace
@@ -386,7 +326,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       );
     }
     return ok;
-  }, [runWithRefresh, setActivePath, setExpandedFolders]);
+  }, [rootPathRef, runWithRefresh, setActivePath, setExpandedFolders]);
 
   const confirmDelete = useCallback(async () => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
@@ -408,14 +348,14 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     closeContextMenu();
     const root = rootPathRef.current;
     if (root) onShowVersions?.(root, entry.relative_path);
-  }, [closeContextMenu, onShowVersions]);
+  }, [closeContextMenu, onShowVersions, rootPathRef]);
 
   const requestDelete = useCallback((entry: NativeWorkspaceEntry) => {
     closeContextMenu();
     setPendingDelete(entry);
   }, [closeContextMenu]);
 
-  const dismissError = useCallback(() => dispatch({ type: "dismiss" }), []);
+  const dismissError = session.dismissError;
 
   // Memoized, and every member is already a stable callback or state setter.
   // That is load-bearing rather than tidy: `WorkspaceTreeItem` is memoized, and

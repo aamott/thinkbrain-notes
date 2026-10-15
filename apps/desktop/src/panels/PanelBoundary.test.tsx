@@ -10,14 +10,10 @@ import type { LeftPanelContext } from "./panelRegistryModel";
 const context: LeftPanelContext = {
   rootPath: "/notes",
   explorerProps: {
-    initialWorkspacePath: null,
-    onWorkspaceOpened: () => undefined,
-    onWorkspaceUnavailable: () => undefined,
     onMarkdownFileSelected: () => undefined,
     onMarkdownFileCreated: () => undefined,
     onNewNoteFocusHandled: () => undefined,
-    newNoteFocusRequest: 0,
-    onWorkspaceLaunched: () => undefined
+    newNoteFocusRequest: 0
   },
   onOpenSearchResult: () => undefined,
   onReviewConflict: () => undefined,

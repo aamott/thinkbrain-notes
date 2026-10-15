@@ -13,7 +13,9 @@ import type { NativeMarkdownFileEntry } from "../native/commands";
 import type { SyncStatus } from "../sync/historyTypes";
 import type { DesktopTab, DesktopTabAction, DesktopTabState, TabOpenPlacement } from "../tabs/tabModel";
 import type { NoteIndexEntry } from "@thinkbrain/core";
+import type { WorkspaceSwitchingController } from "../workspace/useWorkspaceSwitching";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
+import type { WorkspaceSession } from "../workspace/workspaceSession";
 import type { AppUpdate } from "./useAppUpdate";
 import type { PanelResize } from "./usePanelResize";
 import type {
@@ -65,12 +67,15 @@ export interface ShellState {
   readonly restoredWorkspacePath: string | null;
   readonly workspaceFiles: readonly NativeMarkdownFileEntry[];
   readonly stateRestored: boolean;
+  /** Opens a workspace in this window through the workspace session. */
+  readonly openWorkspaceInWindow: (rootPath: string) => Promise<void>;
   /**
-   * Opens a workspace in this window by pointing `restoredWorkspacePath` —
-   * and so the explorer's `initialWorkspacePath` — at the new root; the
-   * explorer's own load path does the rest.
+   * The window's one workspace session — open root, phase, snapshot, entries.
+   * Chromes publish it to the explorer; nothing else loads a workspace.
    */
-  readonly openWorkspaceInWindow: (rootPath: string) => void;
+  readonly workspaceSession: WorkspaceSession;
+  /** The one switching controller, shared by every chrome. */
+  readonly switching: WorkspaceSwitchingController;
   /** The explorer's whole prop bag, assembled once so both chromes agree. */
   readonly explorerProps: WorkspaceExplorerProps;
   /**

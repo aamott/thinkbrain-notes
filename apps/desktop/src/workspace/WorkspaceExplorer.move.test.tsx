@@ -10,8 +10,8 @@ import { WorkspaceSwitchingHarness } from "./workspaceSwitching.testHarness";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 
 /** The switching controller lives at shell level; bare explorer mounts borrow one. */
-const inShell = (api: WorkspaceDesktopApi, node: React.ReactNode) => (
-  <WorkspaceSwitchingHarness api={api}>{() => node}</WorkspaceSwitchingHarness>
+const inShell = (api: WorkspaceDesktopApi, workspacePath: string, node: React.ReactNode) => (
+  <WorkspaceSwitchingHarness api={api} initialWorkspacePath={workspacePath}>{() => node}</WorkspaceSwitchingHarness>
 );
 import {
   WORKSPACE_DRAG_HANDLE_ATTR,
@@ -91,7 +91,7 @@ async function renderExplorer(fixture: Fixture, props: Record<string, unknown> =
   root = createRoot(container);
   await act(async () => {
     root?.render(
-      inShell(fixture.api, <WorkspaceExplorer api={fixture.api} initialWorkspacePath="/vault" {...props} />)
+      inShell(fixture.api, "/vault", <WorkspaceExplorer api={fixture.api} {...props} />)
     );
   });
   await act(async () => undefined);
@@ -354,7 +354,7 @@ describe("workspace explorer moves", () => {
     // Switch workspaces while the rename is still pending.
     await act(async () => {
       root?.render(
-        inShell(fixture.api, <WorkspaceExplorer api={fixture.api} initialWorkspacePath="/vault2" />)
+        inShell(fixture.api, "/vault2", <WorkspaceExplorer api={fixture.api} />)
       );
     });
     expect(container?.textContent).toContain("other.md");
