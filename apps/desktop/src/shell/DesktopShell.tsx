@@ -253,7 +253,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               {/* One boundary per tab: a crash shows the failed tab's state,
                   not a white shell, and the next tab mounts a fresh boundary. */}
               <TabBoundary key={activeTab?.id ?? "no-tab"}>
-                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenNote={shell.onOpenNote} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} newTab={newTab} />
+                <TabContent tab={activeTab} document={activeDocument} onChange={shell.updateDocument} onSave={shell.saveDocument} noteIndex={shell.noteIndex} onOpenLink={shell.onOpenLink} onReopenNote={shell.loadDocumentIntoView} unsavedNoteContents={shell.unsavedNoteContents} onRestoreVersion={shell.restoreVersionSafely} newTab={newTab} />
               </TabBoundary>
             </article>
             {shell.bottomPanel && (

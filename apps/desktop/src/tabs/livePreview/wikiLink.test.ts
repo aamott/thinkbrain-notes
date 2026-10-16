@@ -77,7 +77,10 @@ describe("wiki link live preview", () => {
 
 describe("wiki link resolution styling", () => {
   it("adds cm-link-resolved when the target matches a note", () => {
-    preview = mountPreview("see [[My Note]] now", 0, { noteIndex: NOTE_INDEX });
+    preview = mountPreview("see [[My Note]] now", 0, {
+      noteIndex: NOTE_INDEX,
+      onOpenLink: vi.fn()
+    });
     expect(preview.view.dom.querySelector(".cm-link-resolved")).not.toBeNull();
     expect(preview.view.dom.querySelector(".cm-link-broken")).toBeNull();
   });
@@ -95,17 +98,26 @@ describe("wiki link resolution styling", () => {
   });
 
   it("resolves a link by alias", () => {
-    preview = mountPreview("see [[alias-note]] now", 0, { noteIndex: NOTE_INDEX });
+    preview = mountPreview("see [[alias-note]] now", 0, {
+      noteIndex: NOTE_INDEX,
+      onOpenLink: vi.fn()
+    });
     expect(preview.view.dom.querySelector(".cm-link-resolved")).not.toBeNull();
   });
 
   it("resolves a link by title", () => {
-    preview = mountPreview("see [[Other Title]] now", 0, { noteIndex: NOTE_INDEX });
+    preview = mountPreview("see [[Other Title]] now", 0, {
+      noteIndex: NOTE_INDEX,
+      onOpenLink: vi.fn()
+    });
     expect(preview.view.dom.querySelector(".cm-link-resolved")).not.toBeNull();
   });
 
   it("marks a resolved link with alias display text", () => {
-    preview = mountPreview("see [[My Note|display]] now", 0, { noteIndex: NOTE_INDEX });
+    preview = mountPreview("see [[My Note|display]] now", 0, {
+      noteIndex: NOTE_INDEX,
+      onOpenLink: vi.fn()
+    });
     expect(preview.view.dom.querySelector(".cm-link-resolved")).not.toBeNull();
     expect(preview.lineText(1)).toBe("see display now");
   });
@@ -118,83 +130,84 @@ function pressLink(el: HTMLElement, init: MouseEventInit = {}): void {
 }
 
 describe("wiki link click navigation", () => {
-  it("calls onOpenNote when a resolved wiki link is clicked", () => {
-    const onOpenNote = vi.fn();
+  it("calls onOpenLink when a resolved wiki link is clicked", () => {
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[My Note]] now", 0, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
     pressLink(linkEl);
-    expect(onOpenNote).toHaveBeenCalledTimes(1);
-    expect(onOpenNote).toHaveBeenCalledWith("My Note.md");
+    expect(onOpenLink).toHaveBeenCalledTimes(1);
+    expect(onOpenLink).toHaveBeenCalledWith({ kind: "internal", relativePath: "My Note.md" });
   });
 
-  it("does not call onOpenNote when an unresolved wiki link is clicked", () => {
-    const onOpenNote = vi.fn();
+  it("does not call onOpenLink when an unresolved wiki link is clicked", () => {
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[Nonexistent]] now", 0, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-broken") as HTMLElement;
     expect(linkEl).not.toBeNull();
     pressLink(linkEl);
-    expect(onOpenNote).not.toHaveBeenCalled();
+    expect(onOpenLink).not.toHaveBeenCalled();
   });
 
-  it("does not call onOpenNote when no callback is provided", () => {
-    // Even with a resolved link, no callback means no navigation.
+  it("does not style a resolved link as clickable when no callback exists", () => {
+    // A pointer that lies is worse than no styling: the link resolves, but
+    // with nothing to follow it with it stays a plain edit target.
     preview = mountPreview("see [[My Note]] now", 0, { noteIndex: NOTE_INDEX });
-    const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
+    expect(preview.view.dom.querySelector(".cm-link-resolved")).toBeNull();
+    const linkEl = preview.view.dom.querySelector(".cm-link-text") as HTMLElement;
     expect(linkEl).not.toBeNull();
-    // Should not throw — just a no-op.
     expect(() => pressLink(linkEl)).not.toThrow();
   });
 
-  it("calls onOpenNote with the correct path for an aliased link", () => {
-    const onOpenNote = vi.fn();
+  it("calls onOpenLink with the correct path for an aliased link", () => {
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[Other|display text]] now", 0, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
     pressLink(linkEl);
-    expect(onOpenNote).toHaveBeenCalledWith("folder/Other.md");
+    expect(onOpenLink).toHaveBeenCalledWith({ kind: "internal", relativePath: "folder/Other.md" });
   });
 
   it("does not follow a revealed link on a plain click", () => {
-    const onOpenNote = vi.fn();
+    const onOpenLink = vi.fn();
     // Cursor at 8 sits inside [[My Note]], so the syntax is already revealed —
     // a plain click is an edit, not a follow.
     preview = mountPreview("see [[My Note]] now", 8, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
     pressLink(linkEl);
-    expect(onOpenNote).not.toHaveBeenCalled();
+    expect(onOpenLink).not.toHaveBeenCalled();
   });
 
   it("follows a revealed link on Mod+click", () => {
-    const onOpenNote = vi.fn();
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[My Note]] now", 8, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
     pressLink(linkEl, { ctrlKey: true });
-    expect(onOpenNote).toHaveBeenCalledWith("My Note.md");
+    expect(onOpenLink).toHaveBeenCalledWith({ kind: "internal", relativePath: "My Note.md" });
   });
 
   it("does not follow when the press started outside the link", () => {
-    const onOpenNote = vi.fn();
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[My Note]] now", 0, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     const line = linkEl.closest(".cm-line") as HTMLElement;
@@ -202,41 +215,41 @@ describe("wiki link click navigation", () => {
     // gesture, not a follow — only the click leg fires on the link.
     line.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
     linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(onOpenNote).not.toHaveBeenCalled();
+    expect(onOpenLink).not.toHaveBeenCalled();
   });
 });
 
 describe("wiki link keyboard navigation", () => {
-  it("calls onOpenNote on Mod-Enter when the cursor is inside a resolved wiki link", () => {
-    const onOpenNote = vi.fn();
+  it("calls onOpenLink on Mod-Enter when the cursor is inside a resolved wiki link", () => {
+    const onOpenLink = vi.fn();
     // Cursor inside [[My Note]] — "My Note" spans positions 5..12.
     preview = mountPreview("see [[My Note]] now", 8, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     expect(runKeymap(preview.view, "Mod-Enter")).toBe(true);
-    expect(onOpenNote).toHaveBeenCalledTimes(1);
-    expect(onOpenNote).toHaveBeenCalledWith("My Note.md");
+    expect(onOpenLink).toHaveBeenCalledTimes(1);
+    expect(onOpenLink).toHaveBeenCalledWith({ kind: "internal", relativePath: "My Note.md" });
   });
 
-  it("does not call onOpenNote on Mod-Enter when the cursor is not inside a wiki link", () => {
-    const onOpenNote = vi.fn();
+  it("does not call onOpenLink on Mod-Enter when the cursor is not inside a wiki link", () => {
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[My Note]] now", 0, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     expect(runKeymap(preview.view, "Mod-Enter")).toBe(false);
-    expect(onOpenNote).not.toHaveBeenCalled();
+    expect(onOpenLink).not.toHaveBeenCalled();
   });
 
-  it("does not call onOpenNote on Mod-Enter for an unresolved wiki link", () => {
-    const onOpenNote = vi.fn();
+  it("does not call onOpenLink on Mod-Enter for an unresolved wiki link", () => {
+    const onOpenLink = vi.fn();
     preview = mountPreview("see [[Nonexistent]] now", 6, {
       noteIndex: NOTE_INDEX,
-      onOpenNote
+      onOpenLink
     });
     expect(runKeymap(preview.view, "Mod-Enter")).toBe(false);
-    expect(onOpenNote).not.toHaveBeenCalled();
+    expect(onOpenLink).not.toHaveBeenCalled();
   });
 
   it("does not register a Mod-Enter binding when no callback is provided", () => {

@@ -26,6 +26,9 @@ import {
   useState
 } from "react";
 
+import type { MarkdownLinkTarget } from "@thinkbrain/core";
+
+import { openUrl } from "../native/opener";
 import { useSettingsQuarantineAdapter } from "../settings/settingsQuarantineAdapter";
 import { selectIsDirty, useSettingsStore } from "../settings/settingsStore";
 import { useTheme } from "../settings/ThemeProvider";
@@ -203,6 +206,23 @@ export function useShellState(): ShellState {
     [restoredWorkspacePath, openMarkdownDocument]
   );
 
+  // A resolved link either leaves the vault — the OS opens it — or lands on a
+  // vault-relative path, where `openFileDocument` infers the tab kind: a `.md`
+  // target reuses the same editor tab a wiki link would. The adapter logs any
+  // URL failure itself; nothing here can surface it better.
+  const onOpenLink = useCallback(
+    (target: MarkdownLinkTarget) => {
+      if (target.kind === "external") {
+        void openUrl(target.url).catch(() => undefined);
+        return;
+      }
+      if (restoredWorkspacePath) {
+        openFileDocument(restoredWorkspacePath, target.relativePath, "preview");
+      }
+    },
+    [restoredWorkspacePath, openFileDocument]
+  );
+
   // Conflict review and version-history actions for the sync surfaces.
   const {
     compareVersion,
@@ -217,7 +237,6 @@ export function useShellState(): ShellState {
     tabStateRef,
     setRightPanel,
     selectLeftPanel,
-    openMarkdownDocument,
     openFileDocument,
     saveDocument,
     loadDocumentIntoView,
@@ -323,6 +342,7 @@ export function useShellState(): ShellState {
     dismissEmptied,
     renameDocument,
     onOpenNote,
+    onOpenLink,
 
     leftPanel,
     rightPanel,

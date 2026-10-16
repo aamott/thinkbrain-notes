@@ -188,6 +188,8 @@ describe("restoring tabs that are not Markdown notes", () => {
 
     const { loads } = await openWindow();
 
+    // The persisted `.md` carries the old `file:` id scheme — restore
+    // recomputes it through `createFileTab`, which lands it on `editor:`.
     expect(loads.map(([tabId]) => tabId)).toEqual([
       documentTabId({ rootPath: "/vault", relativePath: "note.md" }),
       fileTabId({ rootPath: "/vault", relativePath: "config.json" })
