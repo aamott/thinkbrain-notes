@@ -129,10 +129,10 @@ fn two_devices_from_a_shared_baseline_merge_against_that_baseline() {
     assert_eq!(base.risky_hunks, 1);
 }
 
-/// Offline additions on the other device delete nothing from the baseline, so
-/// merging against it cannot lose a line of ours.
+/// Offline additions on the other device still go to a person: against a base
+/// that is too old, a line we deleted has exactly that shape.
 #[test]
-fn offline_additions_against_the_baseline_are_proven_safe() {
+fn offline_additions_against_the_baseline_still_go_to_review() {
     let v = vault("base-offline-adds");
     v.record(BASELINE);
     v.record("ONE\ntwo\nthree\n");
@@ -141,12 +141,13 @@ fn offline_additions_against_the_baseline_are_proven_safe() {
     let base = v.base(COPY).expect("a base is named");
 
     assert_eq!(base.id, blob(BASELINE));
-    assert_eq!(base.confidence, Confidence::Proven);
+    assert_eq!(base.confidence, Confidence::Ambiguous);
 }
 
 /// The daemon writes its winner over the note when the pair arrives, and the
 /// sweeper records it. That snapshot is not a version both sides grew from,
-/// however well it would score.
+/// however well it would score — and here it would score perfectly, since ours
+/// never took their edit.
 #[test]
 fn a_version_recorded_after_the_copy_arrived_is_never_the_base() {
     let v = vault("base-polluted");
@@ -154,12 +155,28 @@ fn a_version_recorded_after_the_copy_arrived_is_never_the_base() {
     after_second(baseline_at);
     let theirs = "one\ntwo\nTHREE\n";
     let polluted_at = v.record(theirs);
-    v.record("ONE\ntwo\nTHREE\n");
-    v.arrive(COPY, theirs, at_second(polluted_at));
+    v.record("ONE\ntwo\nthree\n");
+    v.arrive(COPY, theirs, at_second(polluted_at + ARRIVAL_SKEW_SECS));
 
     let base = v.base(COPY).expect("a base is named");
 
     assert_eq!(base.id, blob(BASELINE), "a post-arrival snapshot was used");
+    assert_eq!(base.risky_hunks, 1);
+}
+
+/// The copy's time is another device's clock. A version recorded a second
+/// before it, inside the skew margin, may really postdate the arrival, so it is
+/// not offered either — and with nothing older, there is no base.
+#[test]
+fn a_version_inside_the_clock_skew_margin_is_not_a_candidate() {
+    let v = vault("base-skew");
+    v.record(BASELINE);
+    let theirs = "one\ntwo\nTHREE\n";
+    let close_at = v.record(theirs);
+    v.record("ONE\ntwo\nthree\n");
+    v.arrive(COPY, theirs, at_second(close_at + 1));
+
+    assert_eq!(v.base(COPY), None, "a version inside the margin was used");
 }
 
 /// Nothing recorded before the copy arrived: there is no base to name, and
@@ -212,17 +229,14 @@ fn a_conflict_found_after_a_restart_gets_the_same_base() {
 }
 
 /// Two other devices each left a copy of one note. Resolving the first changes
-/// our side, and the second's base is worked out again against it — never from
-/// the snapshot that resolution produced.
+/// our side, and the second's base is worked out again against it.
 #[test]
 fn resolving_one_of_several_copies_re_derives_the_next_base() {
     let v = vault("base-several");
     v.record(BASELINE);
-    let ours_at = v.record("ONE\ntwo\nthree\n");
-    after_second(ours_at);
-    let arrived = SystemTime::now();
-    v.arrive(COPY, "one\nTWO\nTHREE\n", arrived);
-    v.arrive(SECOND_COPY, "one\ntwo\nTHREE\n", arrived);
+    v.record("ONE\ntwo\nthree\n");
+    v.arrive(COPY, "one\nTWO\nTHREE\n", much_later());
+    v.arrive(SECOND_COPY, "one\ntwo\nTHREE\n", much_later());
 
     let before = v.base(SECOND_COPY).expect("a base is named");
     assert_eq!(before.id, blob(BASELINE));

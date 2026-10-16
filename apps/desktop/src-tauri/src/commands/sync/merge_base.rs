@@ -38,13 +38,20 @@ use super::snapshot;
 /// options, and a missing option means a question, never a wrong merge.
 const CANDIDATES: usize = 200;
 
+/// How much later than the copy's mtime its arrival may really have been,
+/// because that time can come from another device's clock.
+///
+/// Two minutes covers devices keeping network time with room to spare;
+/// excluding more is the safe direction, since a too-old base only adds
+/// questions and is never proven unless nothing is risky.
+pub(super) const ARRIVAL_SKEW_SECS: i64 = 120;
+
 /// How far a merge against the base can be trusted — a property of what that
 /// merge would do, not of where the base came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Confidence {
-    /// The merge cannot drop a line of ours: no risky hunks, or theirs only
-    /// adds to the base.
+    /// The merge cannot drop a line of ours: no risky hunks.
     Proven,
     /// Somewhere the merge would take theirs where ours never moved. That may
     /// be their real edit or ours being undone; a person has to look.
@@ -178,13 +185,12 @@ pub fn select(ours: &[u8], theirs: &[u8], candidates: &[&[u8]]) -> Option<Choice
 /// How far merging `ours` and `theirs` against `base` can be trusted, and how
 /// many risky hunks — theirs differing where ours equals the base — say so.
 ///
-/// Proven when there are none, or when theirs only adds lines to the base:
-/// taking insertions cannot remove anything of ours.
+/// Proven only when there are none. Theirs only adding lines is no proof:
+/// against a base that already lacks a line we deleted, their copy of that line
+/// looks like an insertion, and taking it would bring our deletion back.
 pub fn judge(ours: &[u8], base: &[u8], theirs: &[u8]) -> (Confidence, usize) {
-    let theirs_hunks = hunks(base, theirs);
-    let risky = count_risky(&hunks(base, ours), &theirs_hunks);
-    let only_adds = theirs_hunks.iter().all(|(before, _)| before.is_empty());
-    let confidence = if risky == 0 || only_adds {
+    let risky = count_risky(&hunks(base, ours), &hunks(base, theirs));
+    let confidence = if risky == 0 {
         Confidence::Proven
     } else {
         Confidence::Ambiguous
@@ -207,6 +213,7 @@ fn hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
 ///
 /// Touching is the text merge's own rule: one hunk starts inside the other, or
 /// both start at the same line (which is how an insertion meets an edit).
+/// Mirrors `left_overlaps_right` in gix-merge's text `take_intersecting`.
 fn count_risky(ours: &[Hunk], theirs: &[Hunk]) -> usize {
     theirs
         .iter()
@@ -225,14 +232,16 @@ fn count_risky(ours: &[Hunk], theirs: &[Hunk]) -> usize {
         .count()
 }
 
-/// When the copy arrived, as whole seconds: its modification time.
+/// The latest second a version may have been recorded in and still predate
+/// the copy: its modification time, less [`ARRIVAL_SKEW_SECS`].
 ///
-/// That clock may be another device's, so this bound is loose. It is only ever
-/// used with a strict `<` on whole seconds, which errs towards excluding a
-/// version — a missing candidate becomes a question, never a lost edit.
+/// That clock may be another device's, so the bound is loose on purpose, and it
+/// is used with a strict `<`. Both err towards excluding a version — a missing
+/// candidate becomes a question, never a lost edit.
 fn arrival(copy: &Path) -> Option<i64> {
     let modified = std::fs::metadata(copy).ok()?.modified().ok()?;
-    i64::try_from(modified.duration_since(UNIX_EPOCH).ok()?.as_secs()).ok()
+    let seconds = i64::try_from(modified.duration_since(UNIX_EPOCH).ok()?.as_secs()).ok()?;
+    Some(seconds - ARRIVAL_SKEW_SECS)
 }
 
 /// The distinct versions of `note` recorded strictly before `arrived`, oldest
@@ -283,8 +292,8 @@ fn recorded_before(
     oldest_first
         .into_iter()
         .map(|id| {
-            let object = repo.find_object(id).map_err(unreadable)?;
-            Ok((id, object.data.clone()))
+            let object = repo.find_object(id).map_err(unreadable)?.detach();
+            Ok((id, object.data))
         })
         .collect()
 }

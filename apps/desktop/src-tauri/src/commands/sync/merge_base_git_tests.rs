@@ -133,6 +133,14 @@ fn after_a_restart_a_pulled_conflict_derives_its_base_from_history() {
         base: None,
         ..synced.conflict_copies[0].clone()
     };
+    // This vault wrote the copy itself, so its time is the merge's own clock;
+    // only the skew margin, kept for other devices' clocks, is set aside here.
+    let merged_at = head_seconds(&two.repo);
+    fs::File::options()
+        .write(true)
+        .open(two.vault.join(&rescanned.copy))
+        .and_then(|file| file.set_modified(at_second(merged_at + ARRIVAL_SKEW_SECS)))
+        .expect("the copy's time is set");
 
     let base = derived(&two, &rescanned).expect("a base is named");
 
@@ -156,11 +164,91 @@ fn seeing_a_pulled_copy_again_keeps_its_base() {
         ..pulled.clone()
     };
 
-    assert!(fixture.engine.note_conflicts([pulled.clone()]));
+    assert!(fixture.engine.note_pulled_conflicts([pulled.clone()]));
     assert!(!fixture.engine.note_conflicts([by_name]));
     fixture
         .engine
         .note_changes([PathBuf::from(NOTE)], Instant::now());
 
     assert_eq!(fixture.engine.conflicts(), [pulled]);
+}
+
+/// A later pull can write a new conflict into the same slot, and its merge may
+/// honestly have no base. That answer replaces the old base rather than
+/// leaving one that belongs to a different pair of versions.
+#[test]
+fn a_later_pull_into_the_same_slot_replaces_the_base() {
+    let fixture = test_support::engine_fixture("base-git-repull");
+    let earlier = ConflictCopy {
+        copy: COPY.to_string(),
+        original: NOTE.to_string(),
+        provider: "git",
+        base: Some(blob("the line\n")),
+    };
+    let later = ConflictCopy {
+        base: None,
+        ..earlier.clone()
+    };
+
+    fixture.engine.note_pulled_conflicts([earlier]);
+    fixture.engine.note_pulled_conflicts([later.clone()]);
+
+    assert_eq!(fixture.engine.conflicts(), [later]);
+}
+
+/// Unrecorded text on disk keeps the arriving version beside it. Both grew
+/// from what this vault last recorded at the path, and the copy names that.
+#[test]
+fn a_version_kept_beside_unrecorded_text_names_the_recorded_one_as_base() {
+    let (two, synced) = beside_unrecorded("base-git-kept", "their wording\n");
+
+    let [copy] = synced.conflict_copies.as_slice() else {
+        panic!("expected one copy, got {:?}", synced.conflict_copies);
+    };
+    assert_eq!(copy.copy, COPY);
+    assert_eq!(copy.base, Some(blob("the line\n")));
+    assert_eq!(
+        fs::read_to_string(two.vault.join(NOTE)).expect("readable"),
+        "still typing\n"
+    );
+}
+
+/// An empty arriving version gives a merge nothing to work with line by line,
+/// so it is left as a plain choice with no base.
+#[test]
+fn an_empty_version_kept_beside_unrecorded_text_has_no_base() {
+    let (_, synced) = beside_unrecorded("base-git-kept-empty", "");
+
+    let [copy] = synced.conflict_copies.as_slice() else {
+        panic!("expected one copy, got {:?}", synced.conflict_copies);
+    };
+    assert_eq!(copy.base, None);
+}
+
+/// Both devices record "the line"; the other then changes it to `theirs` while
+/// this one has unrecorded text on disk, and pulls.
+fn beside_unrecorded(name: &str, theirs: &str) -> (Device, Synced) {
+    let one = device(&format!("{name}-one"));
+    let two = device(&format!("{name}-two"));
+    let there = shared(name);
+    write(&one, "the line\n");
+    trip(&one, &there);
+    trip(&two, &there);
+    write(&one, theirs);
+    trip(&one, &there);
+    fs::write(two.vault.join(NOTE), "still typing\n").expect("the note is written");
+    let synced = trip(&two, &there);
+    (two, synced)
+}
+
+fn head_seconds(repo: &gix::Repository) -> i64 {
+    let head = snapshot::head_commit(repo)
+        .expect("the history is readable")
+        .expect("something was recorded");
+    let commit = repo.find_commit(head).expect("the commit is readable");
+    commit.time().expect("the commit has a time").seconds
+}
+
+fn at_second(seconds: i64) -> SystemTime {
+    UNIX_EPOCH + Duration::from_secs(u64::try_from(seconds).expect("after the epoch"))
 }

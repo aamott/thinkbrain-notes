@@ -144,8 +144,10 @@ pub(super) fn apply(
             }
             kept_back += 1;
             // Both the unrecorded text on disk and the arriving version grew
-            // from what this vault last recorded at the path.
-            copies.push(git_copy(beside, original, expected));
+            // from what this vault last recorded at the path. An empty arriving
+            // version leaves nothing to merge by line, so it names no base.
+            let base = expected.filter(|_| !theirs.is_empty());
+            copies.push(git_copy(beside, original, base));
             continue;
         }
 

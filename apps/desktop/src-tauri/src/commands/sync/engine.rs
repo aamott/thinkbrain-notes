@@ -224,13 +224,24 @@ impl Engine {
     /// The same copy arrives more than once — from the scan and again from the
     /// watcher — and only the first time is worth telling anyone about.
     pub fn note_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) -> bool {
+        self.note_found(found, false)
+    }
+
+    /// The same, for the copies a pull just wrote. A pull knows each copy's
+    /// base — including that there is none — so its answer replaces whatever
+    /// an earlier conflict in the same slot said.
+    pub fn note_pulled_conflicts(&self, found: impl IntoIterator<Item = ConflictCopy>) -> bool {
+        self.note_found(found, true)
+    }
+
+    fn note_found(&self, found: impl IntoIterator<Item = ConflictCopy>, pulled: bool) -> bool {
         let mut conflicts = lock_or_recover(&self.conflicts);
         let mut any_new = false;
         for copy in found {
             match conflicts.get_mut(&copy.copy) {
-                // Seen again by name — the scan or the watcher — after a pull
-                // noted it with the base its merge computed. Keep that base.
-                Some(known) if copy.base.is_none() && known.base.is_some() => {}
+                // Seen again by name — the scan or the watcher — which adds
+                // nothing, and must not forget a base a pull noted.
+                Some(_) if !pulled => {}
                 Some(known) => *known = copy,
                 None => {
                     conflicts.insert(copy.copy.clone(), copy);

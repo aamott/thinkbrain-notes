@@ -10,12 +10,6 @@ fn risky_hunks(ours: &[u8], base: &[u8], theirs: &[u8]) -> usize {
     judge(ours, base, theirs).1
 }
 
-fn deletes_nothing(base: &[u8], theirs: &[u8]) -> bool {
-    // Ours equal to the base makes every hunk of theirs risky, so only the
-    // insertion rule can still call the merge proven.
-    judge(base, base, theirs).0 == Confidence::Proven
-}
-
 /// Against the version both sides grew from, the only risky hunk is the one
 /// they changed where we did not — which is a genuine edit of theirs.
 #[test]
@@ -53,24 +47,27 @@ fn nothing_is_risky_when_theirs_is_the_base() {
     assert_eq!(risky_hunks(OURS, BASE, BASE), 0);
 }
 
-#[test]
-fn a_side_that_only_adds_lines_deletes_nothing() {
-    assert!(deletes_nothing(BASE, b"zero\none\ntwo\nthree\nfour\n"));
-    assert!(deletes_nothing(BASE, BASE));
-    assert!(!deletes_nothing(BASE, b"one\nthree\n"));
-    assert!(!deletes_nothing(BASE, b"one\n2\nthree\n"));
-}
-
-/// Zero risky hunks is proof; so is a theirs that only adds, whatever the
-/// count, because taking insertions cannot remove a line of ours.
+/// Zero risky hunks is the only proof. Anything else may be their genuine
+/// edit or ours being undone, and a person has to look.
 #[test]
 fn confidence_follows_what_the_merge_could_drop() {
     assert_eq!(judge(OURS, BASE, BASE), (Confidence::Proven, 0));
     assert_eq!(
         judge(OURS, BASE, b"one\ntwo\nthree\nfour\n"),
-        (Confidence::Proven, 1)
+        (Confidence::Ambiguous, 1)
     );
     assert_eq!(judge(OURS, BASE, THEIRS), (Confidence::Ambiguous, 1));
+}
+
+/// A line we deleted, against a base that no longer has it, looks exactly like
+/// a line they added. Theirs only adding is therefore no proof: taking that
+/// "insertion" would quietly bring our deletion back.
+#[test]
+fn a_theirs_that_only_adds_can_still_undo_our_deletion() {
+    assert_eq!(
+        judge(b"a\nb\n", b"a\nb\n", b"a\nb\nc\n"),
+        (Confidence::Ambiguous, 1)
+    );
 }
 
 /// The baseline beats the newer version that already holds our edit.

@@ -49,13 +49,16 @@ A conflict is `(ours, theirs, base?, confidence)` regardless of producer.
 - Selection lives in `merge_base.rs`; `judge` is the pure scorer. Risky hunks
   use the text merge's own diff (Myers over byte lines, `gix::diff::blob`) and
   its touching rule; no new dependency.
-- Confidence is `proven` (zero risky hunks, or theirs only adds) or
-  `ambiguous`; no base is `None`. Provenance is a separate `source`
+- Confidence is `proven` only at zero risky hunks, else `ambiguous`; no base
+  is `None`. This narrows "deletes nothing → high confidence": against a base
+  that already lacks a line we deleted, theirs looks like it only adds, and
+  taking it would undo our deletion. Provenance is a separate `source`
   (`merge`/`recorded`). Only `proven` may ever skip review (`mergeIsProven`).
-- Arrival is the copy's mtime in whole seconds with a strict `<`, so a
-  boundary snapshot is excluded rather than risked.
-- A pull's base is held in memory on the engine; a rescan by name never
-  overwrites it. After a restart a git copy falls back to recorded selection.
+- Arrival is the copy's mtime less a 2-minute skew margin, compared in whole
+  seconds with a strict `<`; anything near the boundary is excluded.
+- A pull's base is held in memory on the engine. Sightings by name (scan,
+  watcher) never overwrite an entry; a later pull into the same slot does.
+  After a restart a git copy falls back to recorded selection.
 - A base that cannot be derived is logged and reported as none; the conflict
   still opens.
 

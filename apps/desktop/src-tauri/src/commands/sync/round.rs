@@ -690,7 +690,7 @@ pub(super) fn finish(
 ) -> Synced {
     let copies = std::mem::take(&mut synced.conflict_copies);
     if !copies.is_empty() {
-        let new = engine.note_conflicts(super::settle::obvious(engine, root, copies));
+        let new = engine.note_pulled_conflicts(super::settle::obvious(engine, root, copies));
         if new {
             crate::commands::watcher::announce_conflicts(app, key);
         }
