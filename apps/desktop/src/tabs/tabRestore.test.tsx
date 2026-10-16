@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DesktopState } from "../settings/desktopState";
 import type { DesktopTabAction, DesktopTabState } from "./tabModel";
-import { editorTabId, fileTabId, initialDesktopTabState } from "./tabModel";
+import { documentTabId, fileTabId, initialDesktopTabState } from "./tabModel";
 
 /** What `loadDesktopState` will answer with, set per test. */
 let storedState: DesktopState;
@@ -191,7 +191,7 @@ describe("restoring tabs that are not Markdown notes", () => {
     // The persisted `.md` carries the old `file:` id scheme — restore
     // recomputes it through `createFileTab`, which lands it on `editor:`.
     expect(loads.map(([tabId]) => tabId)).toEqual([
-      editorTabId({ rootPath: "/vault", relativePath: "note.md" }),
+      documentTabId({ rootPath: "/vault", relativePath: "note.md" }),
       fileTabId({ rootPath: "/vault", relativePath: "config.json" })
     ]);
   });

@@ -22,7 +22,6 @@ import {
 } from "./panelRegistryModel";
 
 const explorerProps: DesktopPanelContext["explorerProps"] = {
-  onMarkdownFileSelected: () => undefined,
   onMarkdownFileCreated: () => undefined,
   onNewNoteFocusHandled: () => undefined,
   newNoteFocusRequest: 0

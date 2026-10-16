@@ -23,11 +23,23 @@ fn watch_into(
     label: &str,
     start: impl FnOnce() -> Result<WorkspaceDebouncer, NativeError>,
 ) -> Result<(), NativeError> {
-    if sessions.acquire_watch(root, label) {
-        return Ok(());
+    match sessions.acquire_watch(root, label) {
+        WatchStep::Spawn => {}
+        WatchStep::Join => return Ok(()),
+        WatchStep::TurnedAway => {
+            panic!("{label} was turned away watching {root} — the window is closed")
+        }
     }
-    sessions.adopt_watcher(root, label, start()?);
-    Ok(())
+    match start() {
+        Ok(watcher) => {
+            sessions.adopt_watcher(root, label, watcher);
+            Ok(())
+        }
+        Err(error) => {
+            sessions.cancel_spawn(root, label);
+            Err(error)
+        }
+    }
 }
 
 /// Two windows on one vault share its watcher, and it goes with the last.
@@ -78,6 +90,7 @@ fn the_search_connection_goes_with_the_last_window() {
 #[test]
 fn a_second_search_connection_for_one_vault_is_turned_away() {
     let mut sessions = WorkspaceSessions::default();
+    watch_into(&mut sessions, "/vault", "main", idle_watcher).expect("watching succeeds");
     let first = sessions.pool_search("/vault", index());
     let second = sessions.pool_search("/vault", index());
     assert!(Arc::ptr_eq(&first, &second));
@@ -157,25 +170,112 @@ fn a_launch_is_remembered_independently_of_watching() {
 }
 
 /// Two first watchers racing both spawn; the first to adopt wins and the
-/// loser's is handed back to be dropped.
+/// loser's is handed back to be dropped. The loser still joined — its
+/// interest counts, and it needs a matching release.
 #[test]
 fn a_watcher_that_loses_the_first_watch_race_is_dropped() {
     let mut sessions = WorkspaceSessions::default();
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "main"),
+        WatchStep::Spawn
+    ));
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "second"),
+        WatchStep::Spawn
+    ));
+
+    let first = sessions.adopt_watcher("/vault", "main", idle_watcher().expect("watcher starts"));
     assert!(
-        sessions
-            .adopt_watcher("/vault", "main", idle_watcher().expect("watcher starts"))
-            .is_none(),
+        matches!(first, WatchAdoption::Kept),
         "the first watcher is kept"
     );
+    let second =
+        sessions.adopt_watcher("/vault", "second", idle_watcher().expect("watcher starts"));
     assert!(
-        sessions
-            .adopt_watcher("/vault", "second", idle_watcher().expect("watcher starts"))
-            .is_some(),
+        matches!(second, WatchAdoption::Shared(_)),
         "the losing spawn is handed back"
     );
+
+    // Both interests registered — the vault outlives either window alone.
+    assert!(sessions.unwatch("/vault", "main").is_none());
+    assert!(sessions.unwatch("/vault", "second").is_some());
+    assert!(!sessions.holds("/vault"));
 }
 
-/// A watcher that fails to start leaves nothing claiming it exists.
+/// A window destroyed while its watcher spawned outside the lock leaves
+/// nothing behind: it is turned away at acquire, and even a spawn already
+/// in flight is rejected at adoption, not installed.
+#[test]
+fn a_destroyed_windows_late_watch_registers_nothing() {
+    let mut sessions = WorkspaceSessions::default();
+    sessions.release_window("doomed");
+    assert!(
+        matches!(
+            sessions.acquire_watch("/vault", "doomed"),
+            WatchStep::TurnedAway
+        ),
+        "a destroyed window is turned away before spawning"
+    );
+    let late = sessions.adopt_watcher("/vault", "doomed", idle_watcher().expect("watcher starts"));
+    assert!(
+        matches!(late, WatchAdoption::Rejected(_)),
+        "the late spawn is dropped, not installed"
+    );
+    assert!(!sessions.holds("/vault"));
+}
+
+/// A window destroyed mid-spawn is caught even though its request reserved
+/// the spawn legitimately — the release cleared the reservation.
+#[test]
+fn a_spawn_whose_window_died_mid_flight_is_rejected() {
+    let mut sessions = WorkspaceSessions::default();
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "doomed"),
+        WatchStep::Spawn
+    ));
+    sessions.release_window("doomed");
+    let late = sessions.adopt_watcher("/vault", "doomed", idle_watcher().expect("watcher starts"));
+    assert!(matches!(late, WatchAdoption::Rejected(_)));
+    assert!(!sessions.holds("/vault"));
+}
+
+/// Stopping the watch while its spawn is still in flight cancels the
+/// reservation, so the late spawn lands as a rejection, not a resurrection.
+#[test]
+fn a_spawn_cancelled_by_unwatch_is_rejected() {
+    let mut sessions = WorkspaceSessions::default();
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "main"),
+        WatchStep::Spawn
+    ));
+    assert!(sessions.unwatch("/vault", "main").is_none());
+    let late = sessions.adopt_watcher("/vault", "main", idle_watcher().expect("watcher starts"));
+    assert!(matches!(late, WatchAdoption::Rejected(_)));
+    assert!(!sessions.holds("/vault"));
+}
+
+/// Releasing the whole workspace mid-spawn invalidates the reservation the
+/// same way, so a managed-vault delete cannot be followed by a watcher
+/// landing on the released root.
+#[test]
+fn a_spawn_cancelled_by_workspace_release_is_rejected() {
+    let mut sessions = WorkspaceSessions::default();
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "main"),
+        WatchStep::Spawn
+    ));
+    sessions.release_workspace("/vault");
+    let late = sessions.adopt_watcher("/vault", "main", idle_watcher().expect("watcher starts"));
+    assert!(matches!(late, WatchAdoption::Rejected(_)));
+    assert!(!sessions.holds("/vault"));
+
+    // A watch that arrives after the release is a fresh, legitimate request.
+    watch_into(&mut sessions, "/vault", "main", idle_watcher).expect("watching succeeds");
+    assert!(sessions.holds("/vault"));
+}
+
+/// A watcher that fails to start leaves nothing claiming it exists — and
+/// nothing that would reject the next, successful spawn.
 #[test]
 fn a_watcher_that_fails_to_start_registers_no_interest() {
     let mut sessions = WorkspaceSessions::default();
@@ -185,6 +285,57 @@ fn a_watcher_that_fails_to_start_registers_no_interest() {
     .expect_err("the failure is reported");
     assert_eq!(error.code, "watcher.start_failed");
     assert!(!sessions.holds("/vault"));
+
+    watch_into(&mut sessions, "/vault", "main", idle_watcher)
+        .expect("a retry after a failed spawn still watches");
+}
+
+/// A label can hold a joined interest while its own spawn is still in
+/// flight — another caller's spawn installed the watcher first. One release
+/// cancels the in-flight request, not the joined one.
+#[test]
+fn a_release_with_a_spawn_in_flight_cancels_only_that_spawn() {
+    let mut sessions = WorkspaceSessions::default();
+    // "main" reserves a spawn; "other" beats it to installing the watcher.
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "main"),
+        WatchStep::Spawn
+    ));
+    watch_into(&mut sessions, "/vault", "other", idle_watcher).expect("watching succeeds");
+    // "main" asks again — the watcher exists now, so this one joins.
+    assert!(matches!(
+        sessions.acquire_watch("/vault", "main"),
+        WatchStep::Join
+    ));
+
+    // Releasing once drops the in-flight spawn, not the joined request: the
+    // late adoption is rejected and the watcher stays for the request that
+    // is still live.
+    assert!(sessions.unwatch("/vault", "main").is_none());
+    let late = sessions.adopt_watcher("/vault", "main", idle_watcher().expect("watcher starts"));
+    assert!(matches!(late, WatchAdoption::Rejected(_)));
+    assert!(sessions.holds("/vault"));
+
+    // The joined request still needs its own release.
+    assert!(sessions.unwatch("/vault", "main").is_none());
+    assert!(sessions.unwatch("/vault", "other").is_some());
+    assert!(!sessions.holds("/vault"));
+}
+
+/// An index connection opened while the last holder released is handed back
+/// unpooled rather than stashed where nothing would ever release it.
+#[test]
+fn a_search_connection_opened_after_the_last_release_is_not_pooled() {
+    let mut sessions = WorkspaceSessions::default();
+    let unpooled = sessions.pool_search("/vault", index());
+    assert!(
+        !sessions.holds("/vault"),
+        "nothing may claim the connection"
+    );
+    assert!(
+        Arc::strong_count(&unpooled) == 1,
+        "the caller holds the only reference"
+    );
 }
 
 /// The process-wide entry point releases the sync engine too: one call takes

@@ -37,7 +37,9 @@ function Probe({
 }) {
   const switching = useWorkspaceSwitching({
     api,
-    openWorkspaceInWindow: (rootPath) => openedInWindow.push(rootPath),
+    openWorkspaceInWindow: async (rootPath) => {
+      openedInWindow.push(rootPath);
+    },
     onWorkspaceLaunched
   });
   useEffect(() => {

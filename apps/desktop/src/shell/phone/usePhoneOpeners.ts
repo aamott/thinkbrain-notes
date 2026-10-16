@@ -138,17 +138,16 @@ export function usePhoneOpeners({
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
 
-  // Same bag the desktop dock gets, minus the two open callbacks and
+  // Same bag the desktop dock gets, minus the open callback and
   // `onShowVersions`: file taps and "Previous versions…" must route through
   // the history stack instead of only activating a tab.
   const mergedExplorerProps = useMemo(
     () => ({
       ...explorerProps,
-      onMarkdownFileSelected: openMarkdown,
       onFileSelected: openFile,
       onShowVersions: showVersions
     }),
-    [explorerProps, openMarkdown, openFile, showVersions]
+    [explorerProps, openFile, showVersions]
   );
 
   return {

@@ -11,7 +11,7 @@
 import type { NativeWorkspaceEntry } from "../native/commands";
 
 /** The friendly message for a folder dropped into itself or a subfolder. */
-export const WORKSPACE_INVALID_MOVE_MESSAGE =
+const WORKSPACE_INVALID_MOVE_MESSAGE =
   "A folder cannot be moved into itself or one of its subfolders.";
 
 /** Display name for a drop target's parent — `""` is the workspace root. */
