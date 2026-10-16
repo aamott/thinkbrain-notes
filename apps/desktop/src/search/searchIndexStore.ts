@@ -25,14 +25,6 @@ import {
   type MetadataQueryData
 } from "./searchService";
 
-export type {
-  IndexProgress,
-  MetadataFacet,
-  MetadataPredicate,
-  MetadataQuery,
-  MetadataQueryData
-} from "./searchService";
-
 /** Lifecycle status of the search index for the current workspace. */
 export type SearchIndexStatus =
   | { readonly kind: "no-workspace" }
@@ -109,19 +101,19 @@ export const useSearchIndexStore = create<SearchIndexStore>((set, get) => ({
         // Only forward progress while we're still indexing this workspace; a
         // superseding open/close must not be clobbered by a stale callback.
         onProgress: (progress) => {
-          if (indexingAbortController === controller && get().rootPath === rootPath) {
+          if (indexingAbortController === controller) {
             set({ status: { kind: "indexing", progress } });
           }
         }
       });
       // Guard against a superseding workspace switch overwriting stale success.
-      if (indexingAbortController === controller && get().rootPath === rootPath) {
+      if (indexingAbortController === controller) {
         set({ status: { kind: "ready" } });
       }
     } catch (error) {
       // Abort is expected when a newer indexing operation superseded this one.
       if (error instanceof AbortError) return;
-      if (indexingAbortController === controller && get().rootPath === rootPath) {
+      if (indexingAbortController === controller) {
         const message = getErrorMessage(error);
         console.error("[searchIndexStore] Indexing failed:", error);
         set({ status: { kind: "error", message } });

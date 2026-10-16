@@ -34,9 +34,7 @@ export function useWorkspaceTreeNavigation(tree: readonly WorkspaceTreeNode[]) {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (visiblePaths.length === 0) return;
-      const currentPath = activePath ?? visiblePaths[0];
-      if (!currentPath) return;
-      const currentIndex = visiblePaths.indexOf(currentPath);
+      const currentIndex = activePath === null ? 0 : visiblePaths.indexOf(activePath);
       if (currentIndex === -1) return;
 
       if (event.key === "ArrowDown") {

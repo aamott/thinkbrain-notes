@@ -3,14 +3,13 @@
  *
  * Registration order is stable. Each definition is stored with its full
  * `moduleId.key` key, so consumers can use lookup and section APIs without
- * re-composing keys. Duplicate modules, settings, migrations, and conflicting
+ * re-composing keys. Duplicate modules, settings, and conflicting
  * cross-module section IDs fail loudly during registration.
  */
 
 import type { Disposable } from "../lifecycle";
 import type {
   SettingDefinition,
-  SettingMigration,
   SettingsModule,
   SettingScope,
   SettingSection
@@ -40,10 +39,6 @@ interface RegisteredModule {
 export interface SettingsRegistry {
   /** Registers a module and resolves each relative key into `moduleId.key`. */
   register(module: SettingsModule): Disposable;
-  /** Registers one persistence migration, keyed by its source version. */
-  registerMigration(migration: SettingMigration): void;
-  /** Returns migrations in registration order. */
-  getMigrations(): readonly SettingMigration[];
   /** Looks up a module by its stable namespace ID. */
   getModule(id: string): SettingsModule | undefined;
   /** Returns registered modules in registration order. */
@@ -88,7 +83,6 @@ export function createSettingsRegistry(): SettingsRegistry {
 class SettingsRegistryImpl implements SettingsRegistry {
   private readonly modules = new Map<string, RegisteredModule>();
   private readonly moduleOrder: string[] = [];
-  private readonly migrations: SettingMigration[] = [];
   /**
    * Global index of section id -> module id that registered it. Used to enforce
    * global uniqueness of section ids across modules at registration time.
@@ -163,44 +157,6 @@ class SettingsRegistryImpl implements SettingsRegistry {
         this.changed();
       }
     };
-  }
-
-  registerMigration(migration: SettingMigration): void {
-    // Guard against clearly malformed migration steps at registration time so
-    // they fail loudly instead of silently corrupting the migration chain.
-    if (migration.fromVersion < 0 || migration.toVersion < 0) {
-      throw new Error(
-        `Migration versions must be non-negative: fromVersion=${migration.fromVersion}, toVersion=${migration.toVersion}.`
-      );
-    }
-    if (migration.fromVersion >= migration.toVersion) {
-      throw new Error(
-        `Migration fromVersion (${migration.fromVersion}) must be less than toVersion (${migration.toVersion}).`
-      );
-    }
-    for (const existing of this.migrations) {
-      if (existing.fromVersion === migration.fromVersion) {
-        throw new Error(
-          `A migration from version ${migration.fromVersion} is already registered.`
-        );
-      }
-      // Half-open ranges [from, to) intersect when one starts before the other
-      // ends and vice versa. Reject any overlap so the applier never sees two
-      // migrations covering the same version boundary.
-      if (
-        migration.fromVersion < existing.toVersion &&
-        existing.fromVersion < migration.toVersion
-      ) {
-        throw new Error(
-          `Migration range [${migration.fromVersion}, ${migration.toVersion}) overlaps existing range [${existing.fromVersion}, ${existing.toVersion}).`
-        );
-      }
-    }
-    this.migrations.push(migration);
-  }
-
-  getMigrations(): readonly SettingMigration[] {
-    return [...this.migrations];
   }
 
   getModule(id: string): SettingsModule | undefined {

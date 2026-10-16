@@ -20,11 +20,12 @@ describe("previewText", () => {
   });
 
   it("truncates with an ellipsis at the limit", () => {
-    expect(previewText("abcdefghij", 5)).toBe("abcde…");
+    const prose = "a".repeat(200);
+    expect(previewText(prose)).toBe(`${"a".repeat(180)}…`);
   });
 
   it("does not append an ellipsis when the text already fits", () => {
-    expect(previewText("abc", 5)).toBe("abc");
+    expect(previewText("abc")).toBe("abc");
   });
 
   it("returns an empty string for a document that is only frontmatter", () => {

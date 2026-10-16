@@ -7,7 +7,6 @@ import { writeWorkspaceSettings } from "./workspaceSettings";
 import type { ExplorerSortOrder } from "./explorerSort";
 import { WorkspaceExplorerView } from "./WorkspaceExplorerView";
 import { useWorkspaceSessionContext } from "./workspaceSession";
-export { WorkspaceSelector } from "./WorkspaceSelector";
 import { useWorkspaceSwitchingContext } from "./workspaceSwitchingContext";
 import { useWorkspaceContextMenu } from "./useWorkspaceContextMenu";
 import { useWorkspaceInlineCreate } from "./useWorkspaceInlineCreate";

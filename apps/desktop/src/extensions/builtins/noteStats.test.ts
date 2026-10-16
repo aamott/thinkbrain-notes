@@ -17,9 +17,8 @@ describe("computeNoteStats", () => {
     expect(computeNoteStats("one two three", 200)).toMatchObject({ words: 3, characters: 13 });
   });
 
-  it("treats an empty or missing document as zero", () => {
+  it("treats an empty document as zero", () => {
     expect(computeNoteStats("", 200)).toMatchObject({ words: 0, characters: 0, readingMinutes: 0 });
-    expect(computeNoteStats(null, 200)).toMatchObject({ words: 0, characters: 0 });
   });
 
   it("ignores runs of whitespace rather than counting empty words", () => {

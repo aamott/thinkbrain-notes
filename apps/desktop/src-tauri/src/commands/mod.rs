@@ -5,8 +5,13 @@
 //!
 //! Submodules:
 //! - `atomic_write`: Temp-then-rename file replacement that never deletes the destination first.
+//! - `backup`: Per-note version safety net — lists the copy a save replaced and restores it.
+//! - `clipboard`: Puts workspace *files* on the OS clipboard so a system file manager can paste them.
 //! - `workspace`: Vault/workspace window lifecycle, file and directory hierarchy operations.
+//! - `workspace_known`: The read-only list of workspaces the app knows how to open — recents plus managed vaults.
 //! - `markdown`: Content reading, writing, creation, and listing of markdown files.
+//! - `text_files`: Read/write for non-markdown UTF-8 text files, through the same document core as `markdown`.
+//! - `media`: Binary reads for the audio/video viewers, where the `asset://` protocol cannot reach.
 //! - `search`: Full-text document indexing and search query execution.
 //! - `settings`: Application-level and workspace-level configuration reading and writing.
 //! - `sync`: Auto Sync native layer — the hidden per-workspace repository.

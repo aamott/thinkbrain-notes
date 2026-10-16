@@ -260,8 +260,12 @@ describe("settingsStore", () => {
             leftPanelWidth: 288,
             rightPanelWidth: 320,
             bottomPanelOpen: false,
-            openTabs: [{ id: "a", title: "A", kind: "editor" }],
-            activeTabId: "a"
+            workspaceTabs: {
+              "/notes/test": {
+                openTabs: [{ id: "a", title: "A", kind: "editor" }],
+                activeTabId: "a"
+              }
+            }
           }
         })
       );
@@ -271,8 +275,10 @@ describe("settingsStore", () => {
 
       expect(result.success).toBe(true);
       const written = JSON.parse(gateway.writtenAppSettings.at(-1) as string);
-      expect(written.desktopState.openTabs).toEqual([{ id: "a", title: "A", kind: "editor" }]);
-      expect(written.desktopState.activeTabId).toBe("a");
+      expect(written.desktopState.workspaceTabs["/notes/test"].openTabs).toEqual([
+        { id: "a", title: "A", kind: "editor" }
+      ]);
+      expect(written.desktopState.workspaceTabs["/notes/test"].activeTabId).toBe("a");
     });
   });
 

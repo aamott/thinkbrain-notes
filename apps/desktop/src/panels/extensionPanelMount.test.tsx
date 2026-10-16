@@ -17,6 +17,7 @@ afterEach(async () => {
   container?.remove();
   root = null;
   container = null;
+  vi.restoreAllMocks();
 });
 
 const render = async (element: React.ReactElement): Promise<HTMLDivElement> => {
@@ -92,7 +93,6 @@ describe("ExtensionPanelMountPoint", () => {
 
   it("disposes a Disposable a mount returns instead of a cleanup function", async () => {
     const dispose = vi.fn();
-    const onError = vi.fn();
     // A disk-loaded extension is plain JS: the natural teardown to return is
     // the same { dispose() } every other extension API hands back.
     const mount: ExtensionPanelMount = () => ({ dispose });
@@ -102,14 +102,12 @@ describe("ExtensionPanelMountPoint", () => {
         mount={mount}
         rootPath={null}
         documentContents={null}
-        onError={onError}
       />
     );
     await act(async () => root?.unmount());
     root = null;
 
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(onError).not.toHaveBeenCalled();
   });
 
   it("runs every teardown when a mount returns a list of disposables", async () => {
@@ -126,8 +124,8 @@ describe("ExtensionPanelMountPoint", () => {
   });
 
   it("keeps running the remaining teardowns when one throws", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const second = vi.fn();
-    const onError = vi.fn();
     const mount: ExtensionPanelMount = () => [
       {
         dispose: () => {
@@ -142,14 +140,16 @@ describe("ExtensionPanelMountPoint", () => {
         mount={mount}
         rootPath={null}
         documentContents={null}
-        onError={onError}
       />
     );
     await act(async () => root?.unmount());
     root = null;
 
     expect(second).toHaveBeenCalledTimes(1);
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "teardown boom" }));
+    expect(reported).toHaveBeenCalledWith(
+      "[extensions] A panel failed.",
+      expect.objectContaining({ message: "teardown boom" })
+    );
   });
 
   it("stops notifying a panel once it is unmounted", async () => {
@@ -166,7 +166,7 @@ describe("ExtensionPanelMountPoint", () => {
   });
 
   it("reports a panel that throws while mounting instead of failing the shell", async () => {
-    const onError = vi.fn();
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const mount: ExtensionPanelMount = () => {
       throw new Error("boom");
     };
@@ -176,17 +176,19 @@ describe("ExtensionPanelMountPoint", () => {
         mount={mount}
         rootPath={null}
         documentContents={null}
-        onError={onError}
       />
     );
 
     expect(host.textContent).toContain("failed to render");
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "boom" }));
+    expect(reported).toHaveBeenCalledWith(
+      "[extensions] A panel failed.",
+      expect.objectContaining({ message: "boom" })
+    );
   });
 
   it("isolates one failing state listener from the others", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const second = vi.fn();
-    const onError = vi.fn();
     const mount: ExtensionPanelMount = (_element, context) => {
       context.onDidChange(() => {
         throw new Error("listener boom");
@@ -199,7 +201,6 @@ describe("ExtensionPanelMountPoint", () => {
         mount={mount}
         rootPath={null}
         documentContents="a"
-        onError={onError}
       />
     );
     await rerender(
@@ -207,12 +208,14 @@ describe("ExtensionPanelMountPoint", () => {
         mount={mount}
         rootPath={null}
         documentContents="b"
-        onError={onError}
       />
     );
 
     expect(second).toHaveBeenCalledTimes(1);
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "listener boom" }));
+    expect(reported).toHaveBeenCalledWith(
+      "[extensions] A panel failed.",
+      expect.objectContaining({ message: "listener boom" })
+    );
   });
 
   it("stops notifying a listener that has been disposed", async () => {

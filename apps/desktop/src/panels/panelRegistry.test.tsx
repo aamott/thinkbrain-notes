@@ -9,7 +9,6 @@ import {
   createDesktopPanelRegistry,
   desktopPanelRegistry,
   getDesktopPanelOrUndefined,
-  isBuiltInLeftPanel,
   type BuiltInLeftPanel,
   type BuiltInRightPanel,
   type DesktopPanelContext,
@@ -31,8 +30,8 @@ const explorerProps: DesktopPanelContext["explorerProps"] = {
 
 /**
  * The wide registry-internal context. Kept for the registry-wide API
- * (`isAvailable`, `renderDesktopPanel`); the side-specific popouts and
- * factories use {@link leftContext}/{@link rightContext} instead.
+ * (`isAvailable`) and wide factory/action invocation; the side-specific
+ * popouts and factories use {@link leftContext}/{@link rightContext} instead.
  */
 const context: DesktopPanelContext = {
   rootPath: null,
@@ -103,14 +102,18 @@ describe("desktop panel registry", () => {
       "properties",
       "assistant"
     ]);
-    expect(desktopPanelRegistry.entriesBySide("left").map((panel) => panel.id)).toEqual([
+    expect(
+      desktopPanelRegistry.entries().filter((panel) => panel.side === "left").map((panel) => panel.id)
+    ).toEqual([
       "explorer",
       "search",
       "conflicts",
       "tags",
       "extensions"
     ]);
-    expect(desktopPanelRegistry.entriesBySide("right").map((panel) => panel.id)).toEqual([
+    expect(
+      desktopPanelRegistry.entries().filter((panel) => panel.side === "right").map((panel) => panel.id)
+    ).toEqual([
       "history",
       "outline",
       "backlinks",
@@ -271,17 +274,16 @@ describe("desktop panel registry", () => {
     expect(getDesktopPanelOrUndefined("outline")?.label).toBe("Outline");
   });
 
-  it("filters entriesBySide so each side excludes the other", () => {
+  it("keeps each contribution's side on its entries so a side filter excludes the other", () => {
     const registry = createDesktopPanelRegistry([
       { ...contribution("left-a"), side: "left" },
       { ...contribution("left-b"), side: "left" },
       { ...contribution("right-a"), side: "right" },
       { ...contribution("right-b"), side: "right" }
     ]);
-    expect(registry.entriesBySide("left").map((p) => p.id)).toEqual(["left-a", "left-b"]);
-    expect(registry.entriesBySide("right").map((p) => p.id)).toEqual(["right-a", "right-b"]);
-    expect(registry.entriesBySide("left").every((p) => p.side === "left")).toBe(true);
-    expect(registry.entriesBySide("right").every((p) => p.side === "right")).toBe(true);
+    const entries = registry.entries();
+    expect(entries.filter((p) => p.side === "left").map((p) => p.id)).toEqual(["left-a", "left-b"]);
+    expect(entries.filter((p) => p.side === "right").map((p) => p.id)).toEqual(["right-a", "right-b"]);
   });
 
   it("accepts extension-owned string ids for registration and lookup without making them selectable shell state", () => {
@@ -301,17 +303,6 @@ describe("desktop panel registry", () => {
     // not leak into shell selection state.
     expect(registry.get("extension.calendar")?.label).toBe("Calendar");
     expect(getDesktopPanelOrUndefined("extension.calendar")?.label).toBeUndefined();
-    // The extension id is not a built-in left panel, so it cannot narrow
-    // to selectable shell state.
-    expect(isBuiltInLeftPanel("extension.calendar")).toBe(false);
-  });
-
-  it("narrows built-in left ids via the type guard", () => {
-    for (const id of ["explorer", "search", "conflicts", "tags", "extensions"] as const) {
-      expect(isBuiltInLeftPanel(id)).toBe(true);
-    }
-    expect(isBuiltInLeftPanel("outline")).toBe(false);
-    expect(isBuiltInLeftPanel("history")).toBe(false);
   });
 
   // Type-level fixtures: misspelled built-in ids must be rejected by the

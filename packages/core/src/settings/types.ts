@@ -116,15 +116,3 @@ export interface SettingsModule {
   readonly sections: readonly SettingSection[];
   readonly description?: string;
 }
-
-/**
- * A single version-to-version migration step. The registry collects these
- * centrally; the persistence layer applies them in order during parsing.
- */
-export interface SettingMigration {
-  readonly fromVersion: number;
-  readonly toVersion: number;
-  readonly migrate: (
-    value: Readonly<Record<string, unknown>>
-  ) => Record<string, unknown>;
-}

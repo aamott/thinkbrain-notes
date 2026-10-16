@@ -105,14 +105,6 @@ describe("WorkspaceHeaderBar", () => {
     expect(savingBtn?.disabled).toBe(true);
   });
 
-  it("renders custom children actions alongside the header", async () => {
-    const host = await mount({
-      activeTab: editorTab(),
-      children: <button type="button" data-testid="extra">Extra</button>
-    });
-    expect(host.querySelector('[data-testid="extra"]')).not.toBeNull();
-  });
-
   it("renders undo/redo buttons that drive the active tab's commands", async () => {
     const tab = editorTab("notes.md");
     const undo = vi.fn();

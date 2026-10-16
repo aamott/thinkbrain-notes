@@ -33,7 +33,7 @@ export interface OpenDocument {
 }
 
 /** What an open tab needs doing about a file that changed underneath it. */
-export type DocumentSyncAction =
+type DocumentSyncAction =
   /** Nothing unsaved is at stake, so take what is on disk. */
   | {
       readonly kind: "reload";

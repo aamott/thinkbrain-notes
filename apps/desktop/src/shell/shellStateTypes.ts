@@ -60,7 +60,6 @@ export interface ShellState {
   readonly toggleRightPanel: (panel: RightPanel) => void;
   readonly bottomPanel: BottomPanel | null;
   readonly updateBottomPanel: (panel: BottomPanel | null) => void;
-  readonly toggleBottomPanel: () => void;
 
   // workspace
   readonly workspaceName: string | null;

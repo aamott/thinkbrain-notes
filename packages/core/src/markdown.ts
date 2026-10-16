@@ -144,7 +144,7 @@ export function extractWikiLinks(markdownBody: string): WikiLink[] {
     }
 
     const displayText = match[2]?.trim();
-    const position = match.index ?? 0;
+    const position = match.index;
     const startOffset = position;
     const endOffset = position + match[0].length;
 

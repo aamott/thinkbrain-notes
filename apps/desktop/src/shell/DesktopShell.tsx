@@ -228,7 +228,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               {showNoteTitle && (
                 <NoteTitleRow
                   key={relativePath}
-                  relativePath={relativePath ?? null}
+                  relativePath={relativePath!}
                   onRename={rootPath && relativePath
                     ? (newPath) => shell.renameDocument(rootPath, relativePath, newPath)
                     : undefined}
@@ -260,7 +260,6 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
               <div className="shrink-0 tn-slide-in-bottom">
                 <BottomPanelContent
                   active={shell.bottomPanel}
-                  onChange={shell.updateBottomPanel}
                   onClose={() => shell.updateBottomPanel(null)}
                 />
               </div>

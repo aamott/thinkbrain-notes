@@ -159,11 +159,4 @@ describe("editor display settings wiring", () => {
     expect(liveView(host).contentDOM.classList.contains("cm-lineWrapping")).toBe(true);
   });
 
-  it("pinch policy arms on the scroller of a visible editor", async () => {
-    const host = await mount(
-      <MarkdownEditor value="hi" onChange={() => {}} onSave={() => {}} />
-    );
-    const scroller = host.querySelector<HTMLElement>(".cm-scroller")!;
-    expect(scroller.style.touchAction).toBe("pan-x pan-y");
-  });
 });

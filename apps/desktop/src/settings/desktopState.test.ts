@@ -19,7 +19,10 @@ describe("desktop state persistence", () => {
     expect(parseDesktopState("[]")).toEqual(DEFAULT_DESKTOP_STATE);
   });
 
-  it("reads legacy flat state and missing v0 state safely", () => {
+  it("ignores pre-desktopState top-level fields and reads missing-version state safely", () => {
+    // Documents old enough to keep these at the top level predate the
+    // desktopState record entirely; the keys are gone from the schema, so
+    // the document parses as defaults.
     expect(
       parseDesktopState(
         JSON.stringify({
@@ -27,12 +30,7 @@ describe("desktop state persistence", () => {
           explorerOpen: false
         })
       )
-    ).toEqual({
-      ...DEFAULT_DESKTOP_STATE,
-      lastWorkspacePath: "/notes/legacy",
-      recentWorkspacePaths: ["/notes/legacy"],
-      explorerOpen: false
-    });
+    ).toEqual(DEFAULT_DESKTOP_STATE);
 
     expect(
       parseDesktopState(
@@ -273,8 +271,9 @@ describe("collapsed groups (D53)", () => {
   });
 
   /**
-   * The version bump must not cost the user their open tabs. A document written
-   * by the previous schema is read, not replaced with defaults.
+   * A version bump must not cost the user their layout. A document written by
+   * the previous schema is read, not replaced with defaults — while fields the
+   * schema has since dropped (the old flat tab list) are simply ignored.
    */
   it("keeps what the previous schema stored", () => {
     const state = parseDesktopState(
@@ -288,7 +287,8 @@ describe("collapsed groups (D53)", () => {
     );
 
     expect(state.leftPanelWidth).toBe(300);
-    expect(state.openTabs).toHaveLength(1);
+    // The pre-v5 flat `openTabs` pair is no longer read at all.
+    expect(state.workspaceTabs).toEqual({});
     expect(state.workspaceViews).toEqual({});
   });
 });
@@ -333,11 +333,11 @@ describe("per-workspace tabs", () => {
   });
 
   /**
-   * An existing user upgrading has tabs only in the old flat field. Those belong
-   * to whatever workspace was last open, so that workspace — and only that one —
-   * inherits them.
+   * The pre-v5 flat `openTabs`/`activeTabId` pair is gone from the schema.
+   * A document still carrying it — old enough to predate the keyed map —
+   * restores nothing from it; only `workspaceTabs` is read.
    */
-  it("gives the legacy flat tab list to the workspace that was last open", () => {
+  it("ignores the legacy flat tab list entirely", () => {
     const state = parseDesktopState(
       JSON.stringify({
         desktopState: {
@@ -351,12 +351,11 @@ describe("per-workspace tabs", () => {
       })
     );
 
-    expect(workspaceTabs(state, "/vault").openTabs[0]?.relativePath).toBe("one.md");
-    expect(workspaceTabs(state, "/vault").activeTabId).toBe("a");
-    expect(workspaceTabs(state, "/other").openTabs).toEqual([]);
+    expect(workspaceTabs(state, "/vault").openTabs).toEqual([]);
+    expect(workspaceTabs(state, "/vault").activeTabId).toBeNull();
   });
 
-  it("prefers the keyed tabs over the legacy list for the same workspace", () => {
+  it("reads the keyed tabs while ignoring a lingering flat list", () => {
     const state = parseDesktopState(
       JSON.stringify({
         desktopState: {

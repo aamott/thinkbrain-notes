@@ -24,8 +24,7 @@ import {
 // Mock the native dialogs/fs modules so rendering theme-related controls does
 // not attempt to call Tauri when these tests run under happy-dom.
 vi.mock("../native/dialogs", () => ({
-  saveFilePath: vi.fn<(title: string, defaultName: string) => Promise<string | null>>(),
-  pickFilePath: vi.fn<(title?: string) => Promise<string | null>>()
+  pickFilePath: vi.fn<() => Promise<string | null>>()
 }));
 vi.mock("../native/fs", () => ({
   saveAndWriteTextFile: vi.fn<

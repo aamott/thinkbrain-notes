@@ -112,19 +112,6 @@ describe("translating outside edits into the app's own note events", () => {
   });
 
   /**
-   * A rename with no origin cannot be turned into `note.renamed`, whose whole
-   * point is the pair of paths. Treating it as a creation keeps the new file
-   * indexed rather than dropping the change on the floor.
-   */
-  it("falls back to a creation when a rename arrives without its origin", () => {
-    const { emitted } = apply([{ kind: "renamed", path: "notes/new.md" }]);
-
-    expect(emitted).toEqual([
-      { event: "note.created", payload: { rootPath: "/vault", relativePath: "notes/new.md", origin: "external" } }
-    ]);
-  });
-
-  /**
    * Each change costs a read, a parse and an index write, per derived index,
    * with nothing throttling them. A checkout or a sync client can settle
    * thousands at once. The full-index path already batches, yields and can be
@@ -176,7 +163,8 @@ describe("translating outside edits into the app's own note events", () => {
 
   it("ignores a change kind it does not recognise rather than throwing", () => {
     const { emitted, onRescan } = apply([
-      { kind: "teleported" as WorkspaceChange["kind"], path: "a.md" },
+      // A kind added after this build's contract — deliberately untypable.
+      { kind: "teleported", path: "a.md" } as unknown as WorkspaceChange,
       { kind: "created", path: "b.md" }
     ]);
 

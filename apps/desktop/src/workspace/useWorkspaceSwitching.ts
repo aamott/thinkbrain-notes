@@ -110,25 +110,16 @@ export function useWorkspaceSwitching({
   });
 
   const refreshKnownWorkspaces = useCallback(() => {
-    if (typeof apiRef.current.listKnownWorkspaces !== "function") return;
     void apiRef.current
       .listKnownWorkspaces()
-      // Guard the shape: an older host or a stubbed bridge may resolve null.
-      .then((workspaces) => setKnownWorkspaces(Array.isArray(workspaces) ? workspaces : []))
       // The manager is the only surface this list backs, so its failure goes
       // there — an empty list with no error reads as "your vaults are gone".
+      .then(setKnownWorkspaces)
       .catch((error: unknown) => setManageWorkspacesError(workspaceErrorMessage(error)));
   }, []);
 
   useEffect(() => {
     let active = true;
-    if (typeof api.workspaceAccessCapabilities !== "function") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- A host with no capability command gets the desktop answer at once; there is nothing to wait for.
-      setAccessCapabilities(DESKTOP_WORKSPACE_ACCESS);
-      return () => {
-        active = false;
-      };
-    }
     void api.workspaceAccessCapabilities()
       .then((capabilities) => {
         if (active) setAccessCapabilities(capabilities);
@@ -136,14 +127,12 @@ export function useWorkspaceSwitching({
       .catch((error: unknown) => {
         if (!active) return;
         notifyWorkspaceError(workspaceErrorMessage(error));
-        // Fall back to the same answer the absent-method branch gives. A
-        // rejection used to leave `accessCapabilities` null forever, which is
-        // not "we don't know yet" to the view — it renders "Checking workspace
-        // access…" and keeps "Choose workspace" disabled, so a host whose
-        // command is missing or merely failed locks the user out of opening a
-        // vault at all. Saying "desktop rules" and showing the error is worse
-        // only if the host really had stricter rules to report, and it could
-        // not report them.
+        // A rejection must not leave `accessCapabilities` null forever: the
+        // view reads null as "still checking" and keeps "Choose workspace"
+        // disabled, so a host whose command fails would lock the user out of
+        // opening a vault at all. Saying "desktop rules" and showing the
+        // error is worse only if the host really had stricter rules to
+        // report, and it could not report them.
         setAccessCapabilities(DESKTOP_WORKSPACE_ACCESS);
       });
     return () => {

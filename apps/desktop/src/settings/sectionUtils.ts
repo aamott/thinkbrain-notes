@@ -20,19 +20,13 @@ export function qualifiedSectionId(scope: SettingScope, sectionId: string): stri
 }
 
 /**
- * Splits a `scope:sectionId` id back apart. An id with no scope prefix —
- * produced before scopes existed, or in tests — parses as `{ scope: null }`.
+ * Strips the `scope:` prefix off a qualified section id, returning the bare
+ * section id. An id with no scope prefix — produced before scopes existed, or
+ * in tests — comes back unchanged.
  */
-export function parseQualifiedSectionId(qualifiedId: string): {
-  scope: SettingScope | null;
-  sectionId: string;
-} {
+export function parseQualifiedSectionId(qualifiedId: string): string {
   const separator = qualifiedId.indexOf(":");
-  if (separator < 0) return { scope: null, sectionId: qualifiedId };
-  return {
-    scope: qualifiedId.slice(0, separator) as SettingScope,
-    sectionId: qualifiedId.slice(separator + 1)
-  };
+  return separator < 0 ? qualifiedId : qualifiedId.slice(separator + 1);
 }
 
 /** The DOM anchor id a rendered section scrolls to. */

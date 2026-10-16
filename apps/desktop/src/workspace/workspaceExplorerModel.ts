@@ -1,7 +1,7 @@
 import type { NativeWorkspaceEntry, NativeWorkspaceSnapshot } from "../native/commands";
 import { sortWorkspaceTree, type ExplorerSortOrder } from "./explorerSort";
 
-export type ExplorerPhase = "empty" | "opening" | "ready" | "error";
+type ExplorerPhase = "empty" | "opening" | "ready" | "error";
 
 export interface WorkspaceExplorerState {
   readonly phase: ExplorerPhase;
@@ -10,7 +10,7 @@ export interface WorkspaceExplorerState {
   readonly error: string | null;
 }
 
-export type WorkspaceExplorerAction =
+type WorkspaceExplorerAction =
   | { readonly type: "open" }
   | {
       readonly type: "opened";

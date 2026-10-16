@@ -244,30 +244,6 @@ describe("what a window restores", () => {
     ]);
   });
 
-  it("gives an upgrading user's legacy tabs to the workspace that was last open", async () => {
-    storedState = {
-      ...DEFAULT_DESKTOP_STATE,
-      lastWorkspacePath: "/vault-a",
-      openTabs: [tab("/vault-a", "a.md")],
-      activeTabId: "editor:/vault-a:a.md"
-    };
-    windowRoot = "/vault-a";
-
-    expect(openedNotes(await openWindow())).toEqual(["a.md"]);
-  });
-
-  it("does not hand the legacy tabs to a different workspace", async () => {
-    storedState = {
-      ...DEFAULT_DESKTOP_STATE,
-      lastWorkspacePath: "/vault-a",
-      openTabs: [tab("/vault-a", "a.md")],
-      activeTabId: "editor:/vault-a:a.md"
-    };
-    windowRoot = "/vault-b";
-
-    expect(openedNotes(await openWindow())).toEqual([]);
-  });
-
   it("falls back to the last workspace when the window has no root of its own", async () => {
     storedState = {
       ...DEFAULT_DESKTOP_STATE,

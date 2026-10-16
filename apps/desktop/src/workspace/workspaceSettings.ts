@@ -55,7 +55,7 @@ export async function readWorkspaceSettings(rootPath: string): Promise<Workspace
 /**
  * Checks whether the given workspace settings document contains a non-empty `sync.destination`.
  */
-export function hasGitSyncDestination(raw: string | null | undefined): boolean {
+function hasGitSyncDestination(raw: string | null | undefined): boolean {
   if (!raw) return false;
   try {
     const value: unknown = JSON.parse(raw);

@@ -3,9 +3,8 @@
  *
  * `editor.fontSize` (absolute CSS px, 10–32) and `editor.lineWrapping`
  * (boolean) are ordinary app-scope settings. Both editors render through a
- * shared `Compartment` owned by `useCodeMirrorView`, so a preference change —
- * settings screen, config file, or a pinch gesture's commit — reconfigures
- * the live view instead of remounting it.
+ * shared `Compartment` owned by `useCodeMirrorView`, so a preference change
+ * reconfigures the live view instead of remounting it.
  */
 import { EditorView } from "@codemirror/view";
 import type { Extension } from "@codemirror/state";
@@ -45,8 +44,7 @@ export function resolveEditorLineWrapping(value: unknown): boolean {
 /**
  * The extension a display compartment carries: the `&` theme rule pins the
  * editor's own font size in absolute px — independent of the interface
- * scale's root font size — plus line wrapping when enabled. Previewing a
- * gesture may pass a fractional size; only integers are ever persisted.
+ * scale's root font size — plus line wrapping when enabled.
  */
 export function displaySettingsExtension(
   fontSize: number,

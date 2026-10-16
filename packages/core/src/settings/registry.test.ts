@@ -5,10 +5,7 @@ import {
   createSettingsRegistry,
   type SettingsRegistry
 } from "./registry";
-import type {
-  SettingsModule,
-  SettingMigration
-} from "./types";
+import type { SettingsModule } from "./types";
 import { validateSettings } from "./validation";
 import { appearanceModule, editorModule, settingsModule, syncModule } from "./modules";
 
@@ -336,19 +333,6 @@ describe("settings registry", () => {
     ]);
   });
 
-  it("collects migrations via registerMigration/getMigrations", () => {
-    const registry = createSettingsRegistry();
-    const migration: SettingMigration = {
-      fromVersion: 0,
-      toVersion: 1,
-      migrate: (value) => ({ ...value, version: 1 })
-    };
-
-    registry.registerMigration(migration);
-
-    expect(registry.getMigrations()).toEqual([migration]);
-  });
-
   it("throws when two modules register the same section id", () => {
     const registry = createSettingsRegistry();
     const moduleA: SettingsModule = {
@@ -403,78 +387,6 @@ describe("settings registry", () => {
     };
 
     expect(() => registry.register(module)).toThrow("Duplicate setting key");
-  });
-
-  it("rejects migrations with negative fromVersion or toVersion", () => {
-    const registry = createSettingsRegistry();
-
-    expect(() =>
-      registry.registerMigration({
-        fromVersion: -1,
-        toVersion: 1,
-        migrate: (value) => value
-      })
-    ).toThrow("non-negative");
-    expect(() =>
-      registry.registerMigration({
-        fromVersion: 0,
-        toVersion: -1,
-        migrate: (value) => value
-      })
-    ).toThrow("non-negative");
-  });
-
-  it("rejects migrations where fromVersion >= toVersion", () => {
-    const registry = createSettingsRegistry();
-
-    expect(() =>
-      registry.registerMigration({
-        fromVersion: 2,
-        toVersion: 2,
-        migrate: (value) => value
-      })
-    ).toThrow("must be less than");
-    expect(() =>
-      registry.registerMigration({
-        fromVersion: 3,
-        toVersion: 1,
-        migrate: (value) => value
-      })
-    ).toThrow("must be less than");
-  });
-
-  it("rejects migrations with a duplicate fromVersion", () => {
-    const registry = createSettingsRegistry();
-    registry.registerMigration({
-      fromVersion: 0,
-      toVersion: 1,
-      migrate: (value) => value
-    });
-
-    expect(() =>
-      registry.registerMigration({
-        fromVersion: 0,
-        toVersion: 2,
-        migrate: (value) => value
-      })
-    ).toThrow("already registered");
-  });
-
-  it("rejects migrations whose range overlaps an existing migration range", () => {
-    const registry = createSettingsRegistry();
-    registry.registerMigration({
-      fromVersion: 0,
-      toVersion: 2,
-      migrate: (value) => value
-    });
-
-    expect(() =>
-      registry.registerMigration({
-        fromVersion: 1,
-        toVersion: 3,
-        migrate: (value) => value
-      })
-    ).toThrow("overlaps existing range [0, 2)");
   });
 
   it("notifies subscribers once per registration and once per disposal", () => {

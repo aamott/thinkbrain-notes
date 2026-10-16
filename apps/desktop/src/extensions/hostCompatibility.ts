@@ -15,7 +15,7 @@ import type { CompatibilityHost, ExtensionContext } from "@thinkbrain/core";
 import type { DesktopExtensionContext } from "./desktopExtensionHost";
 
 /** The extension API version this host implements. */
-export const HOST_API_VERSION = "1.0.0";
+const HOST_API_VERSION = "1.0.0";
 
 /**
  * The contribution surfaces `DesktopExtensionContext` layers over the core

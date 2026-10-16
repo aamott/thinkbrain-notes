@@ -145,30 +145,11 @@ export type LeftPanel = BuiltInLeftPanel | ExtensionPanelId;
  */
 export type RightPanel = BuiltInRightPanel | ExtensionPanelId;
 
-/**
- * Runtime guard narrowing an arbitrary id to a built-in left panel id.
- *
- * `LeftPanel` itself now admits extension ids via {@link ExtensionPanelId}, so
- * this guard is for call sites that specifically need "is this one of the
- * fixed first-party panels" (e.g. distinguishing a built-in from an extension
- * panel), not for gating extension ids out of shell state.
- */
-export function isBuiltInLeftPanel(id: string): id is BuiltInLeftPanel {
-  return id === "explorer"
-    || id === "search"
-    || id === "conflicts"
-    || id === "tags"
-    || id === "extensions";
-}
-
 /** One item inside the dropdown a menu-shaped panel action opens. */
 export interface PanelMenuItem {
   readonly label: string;
   /** PanelIcon identifier (or a literal glyph, via PanelIcon's fallback). */
   readonly icon?: string;
-  /** Renders as an on/off checkbox item when present. */
-  readonly checked?: boolean;
-  readonly danger?: boolean;
   readonly disabled?: boolean;
   /** Muted trailing annotation (e.g. "Soon"). */
   readonly note?: string;
@@ -182,7 +163,7 @@ export interface PanelMenuItem {
  *
  * Data rather than markup, so an extension that mounted plain DOM contributes
  * one exactly as a first-party React panel does. Supply `menu` instead of
- * `run` for a ⋯-style dropdown — plain buttons cannot express a checkbox item.
+ * `run` for a ⋯-style dropdown.
  */
 export interface PanelAction {
   /** Unique within the panel; used as the React key and in failure reports. */
@@ -395,10 +376,6 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
 
 /** Registry contract exposed to the desktop shell and panel extension points. */
 export interface DesktopPanelRegistry extends ContributionRegistry<DesktopPanelContribution> {
-  /** Returns panels on one side, preserving registration order. */
-  entriesBySide<Side extends "left" | "right">(
-    side: Side
-  ): readonly (DesktopPanelContribution & { readonly side: Side })[];
   /** Returns whether a panel can be used for the supplied desktop context. */
   isAvailable(id: string, context: DesktopPanelContext): boolean;
 }
@@ -454,8 +431,6 @@ export function createDesktopPanelRegistry(
     get: coreRegistry.get,
     entries: coreRegistry.entries,
     subscribe: coreRegistry.subscribe,
-    entriesBySide: (side) =>
-      coreRegistry.entries().filter((panel) => isPanelOnSide(panel, side)),
     isAvailable: (id, context) => {
       const panel = coreRegistry.get(id);
       return panel ? panel.availability?.(context) ?? true : false;

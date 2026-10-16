@@ -133,12 +133,10 @@ pub fn resolve_workspace_entry_path(
     // `fs::write` will create those components inside the verified ancestor.
     let mut ancestor = path.clone();
     while !ancestor.exists() {
-        if !ancestor.pop() {
-            return Err(NativeError::new(
-                "workspace.invalid_path",
-                "File path must stay inside the workspace.",
-            ));
-        }
+        // `path` is the absolute `root` plus at least one normalized segment,
+        // so the walk always reaches the filesystem root — which exists —
+        // before `pop` could run out of components.
+        ancestor.pop();
     }
     let canonical_ancestor = ancestor.canonicalize().map_err(|error| {
         failed(

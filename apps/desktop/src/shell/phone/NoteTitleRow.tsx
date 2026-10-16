@@ -11,17 +11,16 @@ export function NoteTitleRow({
   relativePath,
   onRename
 }: {
-  readonly relativePath: string | null;
+  readonly relativePath: string;
   readonly onRename?: (newRelativePath: string) => Promise<void>;
 }) {
-  const filename = relativePath?.split("/").filter(Boolean).at(-1) ?? "";
+  const filename = relativePath.split("/").filter(Boolean).at(-1) ?? "";
   const dot = filename.lastIndexOf(".");
   const title = dot > 0 ? filename.slice(0, dot) : filename;
   const ext = filename.slice(title.length);
   const [edit, setEdit] = useState<string | null>(null);
   const cancelledRef = useRef(false);
 
-  if (!relativePath) return null;
   const draft = edit ?? title;
 
   const commit = () => {

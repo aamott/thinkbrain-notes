@@ -47,12 +47,14 @@ export function parseJournalFilename(path: string): JournalFilenameResult {
   const date: JournalDate = { year: Number(year), month: Number(month), day: Number(day) };
   if (!isRealDate(date)) return UNDATED;
 
-  if (hours === undefined || minutes === undefined) {
+  // `minutes` sits in the same optional group as `hours`, so they are absent
+  // and present together.
+  if (hours === undefined) {
     return { date, minuteOfDay: null, counter: null };
   }
 
   const hour = Number(hours);
-  const minute = Number(minutes);
+  const minute = Number(minutes!);
   if (hour > 23 || minute > 59) return UNDATED;
 
   // A counter of 0 or 1 is not a form the writer ever emits, so accepting one

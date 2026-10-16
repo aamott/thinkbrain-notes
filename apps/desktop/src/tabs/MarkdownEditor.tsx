@@ -42,8 +42,6 @@ export interface MarkdownEditorProps {
    * come back to, and then nothing is remembered.
    */
   readonly stateKey?: string;
-  /** Whether this editor's surface is visible; hidden editors disarm pinch. */
-  readonly active?: boolean;
   readonly onChange: (value: string) => void;
   readonly onSave: () => void;
 }
@@ -66,7 +64,6 @@ export function MarkdownEditor({
   noteIndex,
   onOpenNote,
   stateKey,
-  active = true,
   onChange,
   onSave
 }: MarkdownEditorProps) {
@@ -143,8 +140,7 @@ export function MarkdownEditor({
     label: "[MarkdownEditor]",
     onChange,
     onSave,
-    mount: buildView,
-    active
+    mount: buildView
   });
 
   // Reconfigure both compartmented extensions (live preview + wiki-link

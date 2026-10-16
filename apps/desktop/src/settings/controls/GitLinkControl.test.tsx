@@ -52,8 +52,7 @@ const emptyStatus: SignInStatus = {
   host: "github.com",
   selectedId: null,
   selected: null,
-  profiles: [],
-  legacy: null
+  profiles: []
 };
 
 const savedProfile = {
@@ -64,11 +63,8 @@ const savedProfile = {
 };
 
 beforeEach(() => {
-  saveSyncCredentials.mockReset().mockResolvedValue({
-    profile: savedProfile,
-    migrated: false
-  });
-  saveSyncLink.mockReset().mockResolvedValue({ profile: savedProfile, migrated: false });
+  saveSyncCredentials.mockReset().mockResolvedValue({ profile: savedProfile });
+  saveSyncLink.mockReset().mockResolvedValue({ profile: savedProfile });
   readSignInStatus.mockReset().mockResolvedValue(emptyStatus);
   forgetSignIn.mockReset().mockResolvedValue(undefined);
   saveSettings.mockReset().mockResolvedValue({ success: true, diagnostics: [] });

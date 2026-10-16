@@ -28,7 +28,8 @@
     "android:dev": "pnpm desktop:tauri android dev",
     "android:build": "pnpm desktop:tauri android build --debug",
     "android:build:release": "pnpm desktop:tauri android build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "knip": "knip"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -43,6 +44,7 @@
     "eslint-plugin-tailwindcss": "4.2.0",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
+    "knip": "6.39.0",
     "lint-staged": "^17.2.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",

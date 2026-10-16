@@ -1,5 +1,5 @@
 use super::*;
-use crate::commands::sync::credentials::{get_legacy, get_profile, store};
+use crate::commands::sync::credentials::get_profile;
 
 #[test]
 fn host_of_reads_an_https_host_and_ignores_userinfo() {
@@ -132,25 +132,6 @@ fn a_profile_cannot_be_moved_to_another_host() {
             .expect_err("wrong host")
             .code,
         "sync.sign_in_wrong_host"
-    );
-}
-
-#[test]
-fn legacy_migration_copies_into_a_profile_and_keeps_the_url_entry() {
-    let destination = "https://legacy.example.test/notes.git";
-    store(destination, "old-me", "old-tok").expect("legacy stored");
-
-    let profile = migrate_legacy(destination, "old-me", "old-tok").expect("migrated");
-
-    assert_eq!(profile.username, "old-me");
-    assert_eq!(profile.host, "legacy.example.test");
-    assert_eq!(
-        get_profile(&profile.id).expect("readable"),
-        Some(("old-me".to_string(), "old-tok".to_string()))
-    );
-    assert_eq!(
-        get_legacy(destination).expect("legacy still there"),
-        Some(("old-me".to_string(), "old-tok".to_string()))
     );
 }
 

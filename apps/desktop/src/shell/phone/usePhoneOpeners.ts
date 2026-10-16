@@ -24,11 +24,8 @@ export interface UsePhoneOpenersParams {
 
 /** The open callbacks and the explorer prop bag the phone chrome publishes. */
 export interface PhoneOpeners {
-  readonly openMarkdown: (rootPath: string, relativePath: string) => void;
-  readonly openFile: (rootPath: string, relativePath: string) => void;
   readonly openNewTab: () => void;
   readonly openNote: (relativePath: string) => void;
-  readonly showVersions: (rootPath: string, relativePath: string) => void;
   readonly createNewNote: () => void;
   readonly explorerProps: WorkspaceExplorerProps;
 }
@@ -137,11 +134,8 @@ export function usePhoneOpeners({
   );
 
   return {
-    openMarkdown,
-    openFile,
     openNewTab,
     openNote,
-    showVersions,
     createNewNote,
     explorerProps: mergedExplorerProps
   };

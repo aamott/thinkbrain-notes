@@ -26,20 +26,17 @@ const DESKTOP_DEFAULTS: NativePlatformCapabilities = {
 
 interface PlatformCapabilitiesState {
   readonly capabilities: NativePlatformCapabilities;
-  readonly loaded: boolean;
   load(): Promise<void>;
 }
 
 export const usePlatformCapabilities = create<PlatformCapabilitiesState>((set) => ({
   capabilities: DESKTOP_DEFAULTS,
-  loaded: false,
   async load() {
     try {
       const capabilities = await invokeNativeCommand("platform_capabilities");
-      set({ capabilities, loaded: true });
+      set({ capabilities });
     } catch {
       // Non-Tauri (dev server, tests) — keep desktop defaults.
-      set({ loaded: true });
     }
   }
 }));

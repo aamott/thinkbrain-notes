@@ -101,7 +101,7 @@ function SectionTreeItem({
           type="button"
           disabled={!hasSettings}
           aria-current={isActive ? "true" : undefined}
-          onClick={() => hasSettings && onSelect(qualifiedId)}
+          onClick={() => onSelect(qualifiedId)}
           className={cn(
             "min-w-0 flex-1 cursor-pointer truncate rounded-small px-1.5 py-1 text-left text-xs leading-relaxed text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-ring max-[760px]:min-h-11",
             isActive && "bg-surface font-medium text-foreground",

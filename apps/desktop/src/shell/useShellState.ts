@@ -137,7 +137,7 @@ export function useShellState(): ShellState {
     workspaceFiles,
     workspaceName,
     workspaceSession
-  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument, openFileDocument });
+  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument });
 
   // The one switching controller for this window, shared by every chrome and
   // every placement of the selector. Built here, above the chrome choice, so a
@@ -190,7 +190,6 @@ export function useShellState(): ShellState {
     setLeftPanel,
     setRightPanel,
     toggleRightPanel,
-    updateBottomPanel,
     toggleBottomPanel
   });
 
@@ -336,7 +335,6 @@ export function useShellState(): ShellState {
     toggleRightPanel,
     bottomPanel,
     updateBottomPanel,
-    toggleBottomPanel,
 
     workspaceName,
     restoredWorkspacePath,

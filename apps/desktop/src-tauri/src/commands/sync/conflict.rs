@@ -13,30 +13,15 @@ use std::path::Path;
 
 use crate::NativeError;
 
-/// How much we actually know about a pattern.
-///
-/// Recorded per row because it changes what the row is allowed to do. Every
-/// provider documents its conflict naming somewhere, and the documentation is
-/// not reliably what ships — so a row nobody has seen produce a real file is
-/// marked as such rather than quietly trusted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Evidence {
-    /// A real file in this shape has been seen — because a daemon produced one,
-    /// or because this app writes them itself.
-    Fixture,
-    /// Taken from documentation or reports. Believed, not witnessed.
-    Documented,
-}
-
 /// One provider's way of naming a conflict copy.
+///
+/// Every provider documents its conflict naming somewhere, and the
+/// documentation is not reliably what ships — so a pattern earns its place by
+/// matching a real name shape, anchored (date, marker) tightly enough that an
+/// ordinary note cannot trip it.
 pub struct ConflictPattern {
     /// Shown to the user: "Keep OneDrive's".
     pub provider: &'static str,
-    #[allow(
-        dead_code,
-        reason = "read by the test that holds each row honest, and by story 4's UI"
-    )]
-    pub evidence: Evidence,
     /// Recovers the original file name from a conflict copy's name.
     match_name: fn(&str) -> Option<String>,
 }
@@ -287,28 +272,24 @@ fn nextcloud(name: &str) -> Option<String> {
 pub const PATTERNS: &[ConflictPattern] = &[
     ConflictPattern {
         provider: "Syncthing",
-        evidence: Evidence::Documented,
         match_name: syncthing,
     },
     ConflictPattern {
         provider: "Nextcloud",
-        evidence: Evidence::Documented,
         match_name: nextcloud,
     },
     ConflictPattern {
         provider: "Dropbox",
-        evidence: Evidence::Documented,
         match_name: dropbox,
     },
+    // The git rows recognise the shapes this app writes itself on a pull it
+    // could not settle, so the panel treats them like any daemon's copies.
     ConflictPattern {
         provider: "git",
-        // The one row that has earned it: we write these ourselves.
-        evidence: Evidence::Fixture,
         match_name: another_device,
     },
     ConflictPattern {
         provider: "git",
-        evidence: Evidence::Fixture,
         match_name: keep_or_delete,
     },
 ];

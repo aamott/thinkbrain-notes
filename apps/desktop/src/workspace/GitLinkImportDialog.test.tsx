@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
-import type { SignInStatus } from "../sync/historyTypes";
+import type { SavedSignIn, SignInStatus } from "../sync/historyTypes";
 import type { GitLinkPreview, ImportStarted, WorkspaceImportProgress } from "./gitLinkImport";
 
 const previewWorkspaceFromGitLink = vi.fn<(destination: string, parentPath: string) => Promise<GitLinkPreview>>();
@@ -25,7 +25,7 @@ const saveSyncCredentials = vi.fn<
     token: string,
     profileId?: string | null,
     label?: string | null
-  ) => Promise<{ readonly profile: { readonly id: string; readonly label: string; readonly host: string; readonly username: string }; readonly migrated: boolean }>
+  ) => Promise<SavedSignIn>
 >();
 const pickDirectoryPath = vi.fn<(title: string) => Promise<string | null>>();
 
@@ -71,8 +71,7 @@ const emptyStatus: SignInStatus = {
   host: "github.com",
   selectedId: null,
   selected: null,
-  profiles: [],
-  legacy: null
+  profiles: []
 };
 
 async function renderDialog(
@@ -431,8 +430,7 @@ describe("GitLinkImportDialog", () => {
         label: "adam@github.com",
         host: "github.com",
         username: "adam"
-      },
-      migrated: false
+      }
     });
     await renderDialog();
     await typeInto(

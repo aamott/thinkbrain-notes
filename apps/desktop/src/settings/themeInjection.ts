@@ -16,9 +16,7 @@
  * through its diagnostics, since this module has no diagnostics channel of
  * its own. `buildThemeCss` below trusts that guarantee rather than
  * re-validating; it is the reason values can be inserted as plain string
- * interpolation. SSR/test safety is provided by a
- * `typeof document === "undefined"` guard, though this is a desktop app and
- * the guard is purely defensive.
+ * interpolation.
  */
 
 import type { ThemeFile } from "@thinkbrain/core";
@@ -71,11 +69,6 @@ function buildThemeCss(theme: ThemeFile): string {
  *   theme: The parsed theme document whose tokens should be injected.
  */
 export function injectThemeOverrides(theme: ThemeFile): void {
-  // Defensive guard for SSR/test contexts without a DOM. This is a desktop
-  // app so `document` is normally always defined, but the guard keeps unit
-  // tests that run in a bare Node env from crashing.
-  if (typeof document === "undefined") return;
-
   let style = document.getElementById(
     STYLE_ELEMENT_ID
   ) as HTMLStyleElement | null;
@@ -95,6 +88,5 @@ export function injectThemeOverrides(theme: ThemeFile): void {
  * to parse, so the UI reverts to the base palette.
  */
 export function removeThemeOverrides(): void {
-  if (typeof document === "undefined") return;
   document.getElementById(STYLE_ELEMENT_ID)?.remove();
 }

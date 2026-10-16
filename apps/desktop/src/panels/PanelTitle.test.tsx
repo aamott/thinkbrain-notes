@@ -127,9 +127,8 @@ describe("PanelTitle", () => {
     expect(host.querySelector('[aria-label="Back from Outline"]')).toBeNull();
   });
 
-  it("renders a menu action as a dropdown with checkbox and button items", async () => {
+  it("renders a menu action as a dropdown with button and disabled items", async () => {
     const onSettings = vi.fn();
-    const onToggle = vi.fn();
     const host = await render(
       <PanelTitle
         title="Sync conflicts"
@@ -139,7 +138,6 @@ describe("PanelTitle", () => {
             label: "Conflict options",
             icon: "more-horizontal",
             menu: [
-              { label: "Show hidden files", checked: true, run: onToggle },
               { label: "Sync settings", icon: "settings", run: onSettings, separatorBefore: true },
               { label: "Sign in with GitHub", disabled: true, note: "Soon" }
             ]
@@ -151,13 +149,6 @@ describe("PanelTitle", () => {
     const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Conflict options"]');
     expect(trigger?.getAttribute("aria-haspopup")).toBe("menu");
     await click(trigger);
-
-    const checkbox = host.querySelector('[role="menuitemcheckbox"]');
-    expect(checkbox?.getAttribute("aria-checked")).toBe("true");
-    // Toggling keeps the menu open so the flipped state is visible.
-    await click(checkbox);
-    expect(onToggle).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('[role="menu"]')).not.toBeNull();
 
     const disabled = host.querySelector('[role="menuitem"][aria-disabled="true"]');
     expect(disabled?.textContent).toContain("Sign in with GitHub");

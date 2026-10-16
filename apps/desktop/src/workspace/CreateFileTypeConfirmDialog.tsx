@@ -1,4 +1,3 @@
-import { useId } from "react";
 import { ModalDialog } from "../shell/ModalDialog";
 
 const DESCRIPTION =
@@ -23,7 +22,6 @@ export function CreateFileTypeConfirmDialog({
   readonly onKeepEditing: () => void;
   readonly onCreateAnyway: () => void;
 }) {
-  const fileNameId = useId();
   const dismiss = () => {
     if (!busy) onKeepEditing();
   };
@@ -34,7 +32,7 @@ export function CreateFileTypeConfirmDialog({
       description={
         <>
           {DESCRIPTION}
-          <span id={fileNameId} className="mt-1 block truncate" title={fileName}>
+          <span className="mt-1 block truncate" title={fileName}>
             File name: {fileName}
           </span>
         </>

@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
 import type { PanelAction, PanelMenuItem } from "./panelRegistryModel";
-import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
+import { Menu, MenuButton, MenuSeparator } from "../shell/Menu";
 import { PanelIcon } from "../shell/panelIcons";
 
 const ACTION_BUTTON_CLASSES =
@@ -36,8 +36,7 @@ function runPanelAction(actionId: string, run?: () => void | Promise<void>): voi
  * keeping the row a single line of chrome either way.
  *
  * Actions are data, not markup: a panel supplies a label, a glyph, and a
- * callback — or a `menu` item list for ⋯-style dropdowns, the only shape
- * that can express a checkbox item like "Show hidden files". Data keeps
+ * callback — or a `menu` item list for ⋯-style dropdowns. Data keeps
  * the header identical whether the panel behind it is a first-party React
  * panel or an extension that mounted its own DOM.
  *
@@ -134,8 +133,8 @@ function PanelMenuAction({ action }: { readonly action: PanelAction }) {
               // Index in the key: extension-contributed menus may repeat a label.
               key={`${index}-${item.label}`}
               item={item}
-              onRun={(close) => {
-                if (close) setOpen(false);
+              onRun={() => {
+                setOpen(false);
                 runPanelAction(action.id, item.run);
               }}
             />
@@ -146,34 +145,14 @@ function PanelMenuAction({ action }: { readonly action: PanelAction }) {
   );
 }
 
-/**
- * One row inside a panel action's menu. Plain buttons close the menu before
- * running; checkbox items stay open so a toggle's new state stays visible.
- */
+/** One row inside a panel action's menu. */
 function PanelMenuEntry({
   item,
   onRun
 }: {
   readonly item: PanelMenuItem;
-  readonly onRun: (close: boolean) => void;
+  readonly onRun: () => void;
 }) {
-  /**
-   * A checkbox item keeps the menu open after a toggle, but `item.checked` is
-   * static contribution data — without a local copy the still-open menu would
-   * keep announcing the pre-toggle state until the contribution re-resolved.
-   * The optimistic copy wins until a genuinely different `checked` arrives,
-   * at which point the prop takes over again.
-   */
-  const [optimistic, setOptimistic] = useState<boolean | undefined>(undefined);
-  const [seenChecked, setSeenChecked] = useState(item.checked);
-  if (seenChecked !== item.checked) {
-    // Render-phase adjustment: the contribution produced a new value, so the
-    // optimistic copy has done its job.
-    setSeenChecked(item.checked);
-    setOptimistic(undefined);
-  }
-  const checked = optimistic ?? item.checked;
-
   const separator = item.separatorBefore && <MenuSeparator />;
   if (item.disabled) {
     return (
@@ -190,29 +169,13 @@ function PanelMenuEntry({
       </>
     );
   }
-  if (item.checked !== undefined) {
-    return (
-      <>
-        {separator}
-        <MenuCheckbox
-          label={item.label}
-          checked={checked ?? false}
-          onClick={() => {
-            setOptimistic(!checked);
-            onRun(false);
-          }}
-        />
-      </>
-    );
-  }
   return (
     <>
       {separator}
       <MenuButton
         label={item.label}
         icon={item.icon ? <PanelIcon name={item.icon} /> : undefined}
-        danger={item.danger}
-        onClick={() => onRun(true)}
+        onClick={onRun}
       />
     </>
   );

@@ -17,8 +17,7 @@ use crate::NativeError;
 use crate::error::lock_or_recover;
 
 use super::credentials::{
-    StorageKind, delete_profile, get_legacy, get_profile, is_clean_https_url, storage_status,
-    store_profile,
+    StorageKind, delete_profile, get_profile, is_clean_https_url, storage_status, store_profile,
 };
 
 /// Workspace setting naming which saved sign-in this folder uses.
@@ -60,7 +59,6 @@ pub struct SignInStatus {
     pub selected_id: Option<String>,
     pub selected: Option<SelectedSignIn>,
     pub profiles: Vec<SignInProfile>,
-    pub legacy: Option<LegacySignIn>,
 }
 
 /// The workspace's chosen profile, plus whether its secret is still there.
@@ -72,20 +70,11 @@ pub struct SelectedSignIn {
     pub saved: bool,
 }
 
-/// A leftover per-repository keychain entry from before labeled profiles.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LegacySignIn {
-    pub host: String,
-    pub username: String,
-}
-
 /// Result of creating or updating a profile, or of Save link.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedSignIn {
     pub profile: SignInProfile,
-    pub migrated: bool,
 }
 
 /// Host of an HTTPS git link, lowercased, without a path.
@@ -163,12 +152,6 @@ pub fn sync_sign_in_status(
         .into_iter()
         .filter(|profile| host.as_ref().map_or(true, |host| &profile.host == host))
         .collect();
-    let legacy = match kind {
-        StorageKind::Available if is_clean_https_url(destination.trim()) => {
-            legacy_for(destination.trim())?
-        }
-        _ => None,
-    };
     Ok(SignInStatus {
         storage,
         storage_message,
@@ -176,7 +159,6 @@ pub fn sync_sign_in_status(
         selected_id,
         selected,
         profiles: host_profiles,
-        legacy,
     })
 }
 
@@ -194,10 +176,7 @@ pub fn save_sync_credentials(
     let username = username.trim().to_string();
     let profile = upsert_profile(&destination, &username, &token, profile_id, label)?;
     schedule_setup(&app, &root_path, &destination, Some(profile.id.clone()));
-    Ok(SavedSignIn {
-        profile,
-        migrated: false,
-    })
+    Ok(SavedSignIn { profile })
 }
 
 /// Writes one profile secret and catalog row. Does not start a round trip.
@@ -287,19 +266,15 @@ pub fn save_sync_link(
         .as_deref()
         .map(str::trim)
         .filter(|id| !id.is_empty());
-    let (profile, migrated) = if let Some(id) = requested {
-        (require_saved_profile(id, destination)?, false)
-    } else {
-        let Some(legacy) = get_legacy(destination)? else {
-            return Err(NativeError::new(
-                "sync.sign_in_needed",
-                "Choose a saved sign-in or add a username and access token.",
-            ));
-        };
-        (migrate_legacy(destination, &legacy.0, &legacy.1)?, true)
+    let Some(id) = requested else {
+        return Err(NativeError::new(
+            "sync.sign_in_needed",
+            "Choose a saved sign-in or add a username and access token.",
+        ));
     };
+    let profile = require_saved_profile(id, destination)?;
     schedule_setup(&app, &root_path, destination, Some(profile.id.clone()));
-    Ok(SavedSignIn { profile, migrated })
+    Ok(SavedSignIn { profile })
 }
 
 /// Confirms the named profile still exists and still has a secret.
@@ -378,43 +353,6 @@ fn describe_selected(
             username: String::new(),
         });
     Ok(SelectedSignIn { profile, saved })
-}
-
-fn legacy_for(destination: &str) -> Result<Option<LegacySignIn>, NativeError> {
-    let Some((username, _)) = get_legacy(destination)? else {
-        return Ok(None);
-    };
-    let Some(host) = host_of(destination) else {
-        return Ok(None);
-    };
-    Ok(Some(LegacySignIn { host, username }))
-}
-
-fn migrate_legacy(
-    destination: &str,
-    username: &str,
-    secret: &str,
-) -> Result<SignInProfile, NativeError> {
-    let host = host_of(destination).ok_or_else(credentials_need_https)?;
-    let _update = lock_or_recover(&CATALOG_UPDATE);
-    let mut catalog = load_catalog()?;
-    let id = new_profile_id();
-    store_profile(&id, username, secret)?;
-    if get_profile(&id)?.is_none() {
-        return Err(NativeError::new(
-            "sync.credentials_unavailable",
-            "Could not copy the saved sign-in into a named profile.",
-        ));
-    }
-    let profile = SignInProfile {
-        id,
-        label: next_label(&catalog, &format!("{username}@{host}")),
-        host,
-        username: username.to_string(),
-    };
-    catalog.push(profile.clone());
-    save_catalog(catalog)?;
-    Ok(profile)
 }
 
 fn schedule_setup(

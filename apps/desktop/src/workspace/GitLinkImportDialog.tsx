@@ -49,7 +49,6 @@ export function GitLinkImportDialog({ managedDestination = false, onClose, onImp
   const requestRef = useRef<string | null>(null);
   const earlyProgress = useRef(new Map<string, WorkspaceImportProgress>());
   const titleId = useId();
-  const previewId = useId();
   const [destination, setDestination] = useState("");
   const [parentPath, setParentPath] = useState("");
   const [profileId, setProfileId] = useState("");
@@ -308,7 +307,7 @@ export function GitLinkImportDialog({ managedDestination = false, onClose, onImp
             </div>
           </div>
         )}
-        <p id={previewId} className="m-0 text-xs text-muted-foreground">
+        <p className="m-0 text-xs text-muted-foreground">
           {preview
             ? `New folder: ${preview.childName}`
             : managedDestination

@@ -346,7 +346,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             {showNoteTitle && (
               <NoteTitleRow
                 key={activePath}
-                relativePath={activePath}
+                relativePath={activePath!}
                 onRename={shell.restoredWorkspacePath
                   ? (newPath) => shell.renameDocument(shell.restoredWorkspacePath!, activePath!, newPath)
                   : undefined}
@@ -416,7 +416,6 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               Only `terminal` exists today; keep the last id if more arrive. */}
           <BottomPanel
             active={shell.bottomPanel ?? "terminal"}
-            onChange={shell.updateBottomPanel}
             onClose={() => shell.updateBottomPanel(null)}
           />
         </BottomSheet>

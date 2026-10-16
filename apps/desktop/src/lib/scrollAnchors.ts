@@ -48,11 +48,6 @@ function saveSnapshot(key: string, snapshot: ScrollAnchorSnapshot): void {
   }
 }
 
-/** Reads a saved snapshot — exposed for tests and diagnostics. */
-export function readScrollAnchorSnapshot(key: string): ScrollAnchorSnapshot | undefined {
-  return savedSnapshots.get(key);
-}
-
 /** Drops every saved snapshot — test isolation. */
 export function clearScrollAnchorSnapshots(): void {
   savedSnapshots.clear();

@@ -8,7 +8,7 @@ export interface TransientStatus {
   /** The current status message, or null when no message is showing. */
   readonly message: string | null;
   /** Shows a transient status message that auto-clears after the delay. */
-  readonly show: (message: string, delayMs?: number) => void;
+  readonly show: (message: string) => void;
   /** Immediately clears the current status message (cancels any pending timeout). */
   readonly clear: () => void;
 }
@@ -21,16 +21,11 @@ export interface TransientStatus {
  * cleans it up on unmount so no stale callback fires after the component is
  * gone.
  *
- * Args:
- *   delayMs: Auto-clear delay in milliseconds (defaults to 4000).
- *
  * Returns:
  *   A {@link TransientStatus} with the current message, a `show` function, and
  *   a `clear` function.
  */
-export function useTransientStatus(
-  delayMs: number = DEFAULT_CLEAR_DELAY_MS
-): TransientStatus {
+export function useTransientStatus(): TransientStatus {
   const [message, setMessage] = useState<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -48,16 +43,15 @@ export function useTransientStatus(
    * Replaces any previously scheduled clear timeout.
    */
   const show = useCallback(
-    (msg: string, customDelayMs?: number): void => {
+    (msg: string): void => {
       clear();
       setMessage(msg);
-      const delay = customDelayMs ?? delayMs;
       timeoutRef.current = setTimeout(() => {
         setMessage(null);
         timeoutRef.current = null;
-      }, delay);
+      }, DEFAULT_CLEAR_DELAY_MS);
     },
-    [clear, delayMs]
+    [clear]
   );
 
   // Clear the timeout on unmount so we don't set state on an unmounted component.

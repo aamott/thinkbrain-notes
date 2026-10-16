@@ -37,8 +37,8 @@ pub fn register() {
             // once here instead of on every credential read.
             eprintln!("[sync] credential store unavailable: {error}");
         }
-        // No backend is compiled in for this target (Android today). Nothing to
-        // register, and nothing has gone wrong.
+        // No backend is compiled in for this target (iOS today; Android has
+        // its own arm above). Nothing to register, and nothing has gone wrong.
         None => {}
     }
 }

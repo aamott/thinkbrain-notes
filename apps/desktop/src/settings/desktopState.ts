@@ -69,8 +69,6 @@ export interface DesktopState {
   readonly rightPanelWidth: number;
   readonly bottomPanelOpen: boolean;
   readonly developmentExtensionDirectories: readonly string[];
-  readonly openTabs: readonly PersistedTab[];
-  readonly activeTabId: string | null;
   readonly workspaceViews: WorkspaceViews;
   readonly workspaceTabs: WorkspaceTabs;
 }
@@ -83,8 +81,6 @@ export interface DesktopStateUpdate {
   readonly rightPanelWidth?: number;
   readonly bottomPanelOpen?: boolean;
   readonly developmentExtensionDirectories?: readonly string[];
-  readonly openTabs?: readonly PersistedTab[];
-  readonly activeTabId?: string | null;
   /**
    * Targeted rather than the whole map, because two windows on two vaults write
    * this without knowing about each other: sending the entire map would make
@@ -115,8 +111,6 @@ export const DEFAULT_DESKTOP_STATE: DesktopState = Object.freeze({
   rightPanelWidth: DEFAULT_RIGHT_PANEL_WIDTH,
   bottomPanelOpen: false,
   developmentExtensionDirectories: [],
-  openTabs: [],
-  activeTabId: null,
   workspaceViews: {},
   workspaceTabs: {}
 });
@@ -164,8 +158,8 @@ export async function forgetWorkspace(
 }
 
 /**
- * Parses either the current nested schema or the prior flat desktop fields.
- * This is exported to keep migration and malformed-document behavior testable.
+ * Parses the nested desktop-state document out of the app-settings record.
+ * This is exported to keep malformed-document behavior testable.
  */
 export function parseDesktopState(contents: string | null): DesktopState {
   return readDesktopState(parseAppSettingsRecord(contents));
@@ -191,10 +185,10 @@ function readDesktopState(appSettings: Readonly<Record<string, unknown>>): Deskt
     return readVersionedDesktopState(storedState);
   }
 
-  return createDesktopState({
-    lastWorkspacePath: appSettings.lastWorkspacePath,
-    explorerOpen: appSettings.explorerOpen
-  });
+  // No desktop-state document: fields that predate it (top-level
+  // `lastWorkspacePath`, `explorerOpen`) are no longer part of the settings
+  // schema, so there is nothing left to fall back to.
+  return DEFAULT_DESKTOP_STATE;
 }
 
 function readVersionedDesktopState(storedState: Readonly<Record<string, unknown>>): DesktopState {
@@ -233,8 +227,6 @@ function createDesktopState(value: Readonly<Record<string, unknown>>): DesktopSt
     developmentExtensionDirectories: normalizeExtensionDirectories(
       value.developmentExtensionDirectories
     ),
-    openTabs: readPersistedTabs(value.openTabs),
-    activeTabId: readNonEmptyString(value.activeTabId),
     workspaceViews: readWorkspaceViews(value.workspaceViews),
     workspaceTabs: readWorkspaceTabs(value.workspaceTabs)
   };
@@ -260,23 +252,19 @@ function readWorkspaceTabs(value: unknown): WorkspaceTabs {
 }
 
 /**
- * One workspace's tabs, with the legacy flat list as its fallback.
+ * One workspace's tabs, or none.
  *
- * An existing user upgrading has tabs only in `openTabs`. Those belong to
- * whatever workspace was last open, so that workspace inherits them and no
- * other one does — handing them to every workspace is the bug being fixed.
+ * A workspace nothing was stored for reads the same as one stored empty: no
+ * tabs, which is the right answer for a workspace opened for the first time —
+ * and the only safe answer, since handing it another workspace's list is the
+ * bug the keying fixed.
  */
 export function workspaceTabs(
   state: DesktopState,
   workspacePath: string | null
 ): WorkspaceTabState {
   if (workspacePath === null) return { openTabs: [], activeTabId: null };
-  const stored = state.workspaceTabs[workspacePath];
-  if (stored) return stored;
-  if (state.lastWorkspacePath === workspacePath) {
-    return { openTabs: state.openTabs, activeTabId: state.activeTabId };
-  }
-  return { openTabs: [], activeTabId: null };
+  return state.workspaceTabs[workspacePath] ?? { openTabs: [], activeTabId: null };
 }
 
 /**
@@ -366,7 +354,7 @@ function normalizeWorkspacePaths(value: unknown, fallback?: string | null): read
   return promoteRecentWorkspace(paths, fallback);
 }
 
-export function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
+function promoteRecentWorkspace(paths: readonly string[], path: string | null | undefined): readonly string[] {
   const unique = [...new Set(path ? [path, ...paths] : paths)];
   return unique.slice(0, MAX_RECENT_WORKSPACES);
 }

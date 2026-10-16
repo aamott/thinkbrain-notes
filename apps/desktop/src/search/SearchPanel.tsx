@@ -7,8 +7,6 @@ import { searchService, type SearchResult } from "./searchService";
 import { useSearchIndexStore } from "./searchIndexStore";
 import { createDebounced } from "../lib/debounce";
 
-/** Module-scoped search service singleton backing the panel. */
-
 /** Debounce delay (ms) before firing a search after the query stops changing. */
 const SEARCH_DEBOUNCE_MS = 300;
 

@@ -9,8 +9,7 @@ const base: SignInStatus = {
   host: "github.com",
   selectedId: null,
   selected: null,
-  profiles: [],
-  legacy: null
+  profiles: []
 };
 
 describe("describeSignInStatus", () => {
@@ -80,13 +79,5 @@ describe("describeSignInStatus", () => {
     expect(copy.role).toBe("alert");
     expect(copy.text).toContain("github.com");
     expect(copy.text).toContain("gitlab.com");
-  });
-
-  it("reports a leftover per-repository sign-in", () => {
-    const copy = describeSignInStatus({
-      ...base,
-      legacy: { host: "github.com", username: "me" }
-    });
-    expect(copy.text).toMatch(/earlier version/);
   });
 });

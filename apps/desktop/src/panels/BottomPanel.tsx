@@ -1,15 +1,10 @@
-import { cn } from "../lib/utils";
 import type { BottomPanel as BottomPanelId } from "../shell/shellTypes";
 import { Unavailable } from "../shell/Unavailable";
 
 type BottomPanelProps = {
   readonly active: BottomPanelId;
-  readonly onChange: (panel: BottomPanelId) => void;
   readonly onClose: () => void;
 };
-
-/** Bottom dock tab ids, in display order. Terminal is the only wired surface. */
-const bottomPanelItems = ["terminal"] as const satisfies readonly BottomPanelId[];
 
 /**
  * Native terminal execution is gated on Agent Client Protocol capability work,
@@ -22,33 +17,26 @@ const TERMINAL_UNAVAILABLE =
 /**
  * Bottom dock surface extracted from DesktopShell.
  *
- * Renders a tab strip (terminal only today, kept for future extensibility), a
- * close button, and content for the selected surface.
+ * Terminal is the only wired surface, so the strip renders its one selected
+ * tab — no selection machinery — plus a close button and the tab's content.
  */
-export function BottomPanel({ active, onChange, onClose }: BottomPanelProps) {
+export function BottomPanel({ active, onClose }: BottomPanelProps) {
   const tabId = `bottom-panel-tab-${active}`;
   const contentId = `bottom-panel-content-${active}`;
 
   return (
     <section className="flex-[0_0_12rem] min-h-28 min-w-0 overflow-hidden border-t border-border bg-panel motion-reduce:transition-none" aria-label="Bottom panel">
       <div className="flex h-8 min-w-0 items-center overflow-x-auto border-b border-border" role="tablist" aria-label="Bottom panel tabs">
-        {bottomPanelItems.map((item) => (
-          <button
-            key={item}
-            id={`bottom-panel-tab-${item}`}
-            className={cn(
-              "h-full shrink-0 cursor-pointer border-0 border-b-2 border-b-transparent bg-transparent px-[0.7rem] text-[0.65rem] tracking-wider text-muted-foreground uppercase hover:border-b-primary hover:text-foreground",
-              active === item && "border-b-primary text-foreground"
-            )}
-            type="button"
-            role="tab"
-            aria-controls={`bottom-panel-content-${item}`}
-            aria-selected={active === item}
-            onClick={() => onChange(item)}
-          >
-            {item}
-          </button>
-        ))}
+        <button
+          id={tabId}
+          className="h-full shrink-0 border-0 border-b-2 border-b-primary bg-transparent px-[0.7rem] text-[0.65rem] tracking-wider text-foreground uppercase"
+          type="button"
+          role="tab"
+          aria-controls={contentId}
+          aria-selected="true"
+        >
+          {active}
+        </button>
         <span className="flex-1" />
         <button
           className="shrink-0 cursor-pointer border-0 bg-transparent px-2 text-sm text-muted-foreground hover:text-foreground"

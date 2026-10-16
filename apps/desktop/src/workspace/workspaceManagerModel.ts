@@ -4,7 +4,7 @@ import type { NativeKnownWorkspace } from "../native/commands";
  * Pure decisions for one row of the workspace manager — which badge it wears,
  * whether its Open button works, and which trailing removal it carries.
  */
-export interface WorkspaceRowState {
+interface WorkspaceRowState {
   readonly canOpen: boolean;
   readonly badge: "current" | "missing" | null;
   /** `forget` removes the entry from recents; `delete` permanently deletes a managed vault. */
