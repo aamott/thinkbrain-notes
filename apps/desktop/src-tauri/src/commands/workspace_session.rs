@@ -33,46 +33,121 @@ pub struct WorkspaceSession {
     search: Option<Arc<Mutex<Connection>>>,
 }
 
+/// What a request to watch a root should do next.
+enum WatchStep {
+    /// The watcher is running; the caller's interest was recorded.
+    Join,
+    /// Nobody watches the root; the caller spawns one and adopts it.
+    Spawn,
+    /// The window making the request was already destroyed — joining now
+    /// would register interest nobody could ever release.
+    TurnedAway,
+}
+
+/// What a spawn that finished outside the lock found on its return.
+enum WatchAdoption {
+    /// Installed as the root's watcher.
+    Kept,
+    /// A racing caller installed one first — the caller still joined, so its
+    /// interest stands; this spawn is handed back to drop.
+    Shared(WorkspaceDebouncer),
+    /// The spawn outlived its own release — a `closed` label or a pending
+    /// marker a release already cleared. Nothing was registered; the caller
+    /// drops the watcher and must not follow up as if it were watching.
+    Rejected(WorkspaceDebouncer),
+}
+
 /// Every workspace session, plus who wants each root watched.
 #[derive(Default)]
 pub struct WorkspaceSessions {
     interest: WatchInterest,
     sessions: HashMap<String, WorkspaceSession>,
+    /// Labels the OS destroyed. A watch or spawn that lands late for one must
+    /// not resurrect holdings whose release already ran — nobody will ever
+    /// release them again.
+    closed: HashSet<String>,
+    /// In-flight first-watch spawns, counted per `(root, label)`. Recorded
+    /// when a caller is sent to spawn and cleared by every release path, so
+    /// an adoption whose reservation is gone knows the request was cancelled
+    /// while the OS registration was in flight.
+    pending: HashMap<(String, String), u32>,
 }
 
 impl WorkspaceSessions {
-    /// Records `label`'s request when `root` is watched already, reporting
-    /// whether it joined. Checked and recorded together: a request must not
-    /// land on a watcher the last release just retired.
-    fn acquire_watch(&mut self, root: &str, label: &str) -> bool {
-        if !self.interest.is_watched(root) {
-            return false;
+    /// Decides what `label`'s request to watch `root` does next. Joined
+    /// interest is recorded here, atomically with the watcher check: a
+    /// request must not land on a watcher the last release just retired.
+    /// A spawning request is only reserved — its interest registers at
+    /// adoption, once a watcher exists to back it.
+    fn acquire_watch(&mut self, root: &str, label: &str) -> WatchStep {
+        if self.closed.contains(label) {
+            return WatchStep::TurnedAway;
         }
-        self.interest.acquire(root, label);
-        true
+        if self.interest.is_watched(root) {
+            self.interest.acquire(root, label);
+            return WatchStep::Join;
+        }
+        *self
+            .pending
+            .entry((root.to_string(), label.to_string()))
+            .or_insert(0) += 1;
+        WatchStep::Spawn
     }
 
-    /// Records `label`'s request and stores `watcher` for `root`. When a
-    /// racing caller placed a watcher first, this one is handed back for the
-    /// caller to drop outside the lock.
+    /// Adopts `watcher` for `root` on behalf of `label`, which reserved the
+    /// spawn in [`acquire_watch`]. When the reservation is gone — the window
+    /// was destroyed or a release cancelled it while the watcher spawned —
+    /// the spawn is rejected rather than resurrecting released holdings.
     fn adopt_watcher(
         &mut self,
         root: &str,
         label: &str,
         watcher: WorkspaceDebouncer,
-    ) -> Option<WorkspaceDebouncer> {
+    ) -> WatchAdoption {
+        if !self.claim_spawn(root, label) || self.closed.contains(label) {
+            return WatchAdoption::Rejected(watcher);
+        }
         self.interest.acquire(root, label);
         let session = self.sessions.entry(root.to_string()).or_default();
         if session.watcher.is_some() {
-            Some(watcher)
+            WatchAdoption::Shared(watcher)
         } else {
             session.watcher = Some(watcher);
-            None
+            WatchAdoption::Kept
         }
     }
 
+    /// Consumes one of `(root, label)`'s in-flight spawn reservations.
+    /// `false` when none remains — the releases it was paired with already
+    /// ran, so the spawn it fed belongs to nobody.
+    fn claim_spawn(&mut self, root: &str, label: &str) -> bool {
+        let key = (root.to_string(), label.to_string());
+        match self.pending.get_mut(&key) {
+            Some(count) => {
+                *count -= 1;
+                if *count == 0 {
+                    self.pending.remove(&key);
+                }
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Drops the spawn reservation `start` never consumed because it failed.
+    fn cancel_spawn(&mut self, root: &str, label: &str) {
+        self.claim_spawn(root, label);
+    }
+
     /// Drops one request, yielding what the last request was keeping alive.
+    /// When the label still has a spawn in flight, that reservation is the
+    /// request being released — the caller that asked to stop watching must
+    /// not gain a watcher when the spawn lands — and the joined interest, a
+    /// separate request, stays.
     fn unwatch(&mut self, root: &str, label: &str) -> Option<WorkspaceSession> {
+        if self.claim_spawn(root, label) {
+            return None;
+        }
         if !self.interest.release(root, label) {
             return None;
         }
@@ -94,8 +169,11 @@ impl WorkspaceSessions {
         Some(retired)
     }
 
-    /// Drops everything `label` held — its watch requests and its launch.
+    /// Drops everything `label` held — its watch requests and its launch —
+    /// and bars it from ever holding anything again.
     fn release_window(&mut self, label: &str) -> Vec<WorkspaceSession> {
+        self.closed.insert(label.to_string());
+        self.pending.retain(|(_, l), _| l != label);
         let mut retired: Vec<WorkspaceSession> = self
             .interest
             .release_window(label)
@@ -112,6 +190,7 @@ impl WorkspaceSessions {
         &mut self,
         root: &str,
     ) -> (HashMap<String, u32>, Option<WorkspaceSession>) {
+        self.pending.retain(|(r, _), _| r != root);
         (self.interest.release_root(root), self.sessions.remove(root))
     }
 
@@ -120,8 +199,19 @@ impl WorkspaceSessions {
     }
 
     /// Pools `connection` for `root`, unless another caller got there first —
-    /// then theirs is kept and this one is dropped.
+    /// then theirs is kept and this one is dropped. When nothing holds `root`
+    /// anymore — the last interest or launch released while `open` ran — the
+    /// connection goes back unpooled: pooling it would hold it for the rest
+    /// of the process, since nothing remains to release it.
     fn pool_search(&mut self, root: &str, connection: Connection) -> Arc<Mutex<Connection>> {
+        let held = self.interest.is_watched(root)
+            || self
+                .sessions
+                .get(root)
+                .is_some_and(|session| !session.launched.is_empty());
+        if !held {
+            return Arc::new(Mutex::new(connection));
+        }
         Arc::clone(
             self.sessions
                 .entry(root.to_string())
@@ -195,18 +285,41 @@ fn with_sessions<T>(f: impl FnOnce(&mut WorkspaceSessions) -> T) -> T {
 ///
 /// Interest is registered only once a watcher exists, so a failure to start
 /// leaves nothing claiming a watcher that does not exist.
-pub fn watch<F>(root: &str, label: &str, start: F) -> Result<(), NativeError>
+///
+/// Returns whether the request stands: `false` when the window was already
+/// destroyed, or the request was released while the watcher spawned. In either
+/// case nothing is held for `label` and the caller must not follow up — by
+/// attaching a sync engine, say — as if the watch existed.
+pub fn watch<F>(root: &str, label: &str, start: F) -> Result<bool, NativeError>
 where
     F: FnOnce() -> Result<WorkspaceDebouncer, NativeError>,
 {
-    if with_sessions(|sessions| sessions.acquire_watch(root, label)) {
-        return Ok(());
+    match with_sessions(|sessions| sessions.acquire_watch(root, label)) {
+        WatchStep::TurnedAway => return Ok(false),
+        WatchStep::Join => return Ok(true),
+        WatchStep::Spawn => {}
     }
-    let watcher = start()?;
-    drop(with_sessions(|sessions| {
-        sessions.adopt_watcher(root, label, watcher)
-    }));
-    Ok(())
+    let watcher = match start() {
+        Ok(watcher) => watcher,
+        Err(error) => {
+            with_sessions(|sessions| sessions.cancel_spawn(root, label));
+            return Err(error);
+        }
+    };
+    let adoption = with_sessions(|sessions| sessions.adopt_watcher(root, label, watcher));
+    match adoption {
+        WatchAdoption::Kept => Ok(true),
+        // Dropping a returned spawn stops the debouncer thread — outside the
+        // lock, the same reason the spawn ran outside it.
+        WatchAdoption::Shared(watcher) => {
+            drop(watcher);
+            Ok(true)
+        }
+        WatchAdoption::Rejected(watcher) => {
+            drop(watcher);
+            Ok(false)
+        }
+    }
 }
 
 /// Releases one of `label`'s requests to watch `root`, closing the watcher,

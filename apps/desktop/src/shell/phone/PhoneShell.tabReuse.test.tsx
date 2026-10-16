@@ -14,17 +14,16 @@ import { workspaceDocumentApi } from "../../workspace/workspaceDocumentAdapter";
  */
 vi.mock("../../workspace/WorkspaceExplorer", () => ({
   WorkspaceExplorer: (props: {
-    onMarkdownFileSelected?: (rootPath: string, relativePath: string) => void;
     onFileSelected?: (rootPath: string, relativePath: string) => void;
   }) => (
     <>
       <button
         aria-label="Probe note a.md"
-        onClick={() => props.onMarkdownFileSelected?.("/vault", "a.md")}
+        onClick={() => props.onFileSelected?.("/vault", "a.md")}
       />
       <button
         aria-label="Probe note b.md"
-        onClick={() => props.onMarkdownFileSelected?.("/vault", "b.md")}
+        onClick={() => props.onFileSelected?.("/vault", "b.md")}
       />
       <button
         aria-label="Probe file song.mp3"

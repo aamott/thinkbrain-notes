@@ -117,9 +117,14 @@ pub fn watch_workspace(
     let key = root.to_string_lossy().to_string();
     let label = window.label().to_string();
 
-    workspace_session::watch(&key, &label, || {
+    // When the request came from a window the OS already destroyed — or it
+    // was released while the watcher spawned — nothing is held for it, so
+    // the sync attach below would register interest nobody could release.
+    if !workspace_session::watch(&key, &label, || {
         spawn_debouncer(app.clone(), root.clone(), key.clone())
-    })?;
+    })? {
+        return Ok(key);
+    }
 
     // Auto Sync shares this lifecycle exactly: one engine per workspace, held
     // by window interest, released with the last window. Failing to record is

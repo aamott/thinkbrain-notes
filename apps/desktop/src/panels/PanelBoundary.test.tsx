@@ -10,7 +10,6 @@ import type { LeftPanelContext } from "./panelRegistryModel";
 const context: LeftPanelContext = {
   rootPath: "/notes",
   explorerProps: {
-    onMarkdownFileSelected: () => undefined,
     onMarkdownFileCreated: () => undefined,
     onNewNoteFocusHandled: () => undefined,
     newNoteFocusRequest: 0

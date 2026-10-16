@@ -66,9 +66,11 @@ interface UseWorkspaceSwitchingOptions {
   readonly api: WorkspaceDesktopApi;
   /**
    * Opens a workspace in this window through the shell's workspace session —
-   * settings restore, snapshot, entry listing.
+   * settings restore, snapshot, entry listing. Resolves when the open has
+   * settled; its own failures are already surfaced by the session, so callers
+   * `void` it.
    */
-  readonly openWorkspaceInWindow: (rootPath: string) => void;
+  readonly openWorkspaceInWindow: (rootPath: string) => Promise<void>;
   /** Fired after a new-window launch so the shell can persist the choice. */
   readonly onWorkspaceLaunched?: (rootPath: string) => void;
 }
@@ -154,7 +156,7 @@ export function useWorkspaceSwitching({
         await apiRef.current.openWorkspaceWindow(rootPath);
         callbacksRef.current.onWorkspaceLaunched?.(rootPath);
       } else {
-        callbacksRef.current.openWorkspaceInWindow(rootPath);
+        void callbacksRef.current.openWorkspaceInWindow(rootPath);
       }
       refreshKnownWorkspaces();
     } catch (error) {
@@ -169,7 +171,7 @@ export function useWorkspaceSwitching({
       const workspace = await apiRef.current.createManagedWorkspace(name);
       setCreateManagedWorkspaceOpenState(false);
       setManagedStorageNoticeOpen(true);
-      callbacksRef.current.openWorkspaceInWindow(workspace.root_path);
+      void callbacksRef.current.openWorkspaceInWindow(workspace.root_path);
       refreshKnownWorkspaces();
       return true;
     } catch (error) {

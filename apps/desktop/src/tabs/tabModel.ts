@@ -153,6 +153,8 @@ export function documentTabId(resource: Required<TabResource>): string {
  * Builds a tab for any file, inferring the tab kind from the extension.
  * Uses `inferTabKind` so `.md` → editor, `.png` → image-viewer, `.ts` →
  * code-editor, etc. The tab kind determines which renderer `TabContent` selects.
+ * The id matches what `documentTabId` computes for the same resource — an
+ * `editor:` id for an editor-kind file — so lookups keyed by it find the tab.
  */
 export function createFileTab(resource: Required<TabResource>): DesktopTab {
   const relativePath = resource.relativePath;
@@ -160,7 +162,7 @@ export function createFileTab(resource: Required<TabResource>): DesktopTab {
   const kind = inferTabKind(relativePath);
 
   return {
-    id: fileTabId(resource),
+    id: documentTabId(resource),
     title,
     kind,
     resource

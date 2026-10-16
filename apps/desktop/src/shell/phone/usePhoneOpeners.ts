@@ -100,13 +100,23 @@ export function usePhoneOpeners({
   // does not read — inspectors exist here as navigation overlays. `push`
   // updates the entry ref synchronously, so `showOverlay` lands the inspector
   // on top of the new tab route rather than underneath it.
-  const showVersions = useCallback(
+  // Taps open through the kind the file infers — a Markdown tap must land on
+  // its `editor:` tab id, not a `file:` one, or the pushed route misses the
+  // tab that was just created.
+  const openByKind = useCallback(
     (rootPath: string, relativePath: string) => {
       if (inferTabKind(relativePath) === "editor") openMarkdown(rootPath, relativePath);
       else openFile(rootPath, relativePath);
+    },
+    [openMarkdown, openFile]
+  );
+
+  const showVersions = useCallback(
+    (rootPath: string, relativePath: string) => {
+      openByKind(rootPath, relativePath);
       navigation.showOverlay({ kind: "inspector", panel: "history", parent: "content" });
     },
-    [openMarkdown, openFile, navigation]
+    [openByKind, navigation]
   );
 
   // The popup's create path runs the canonical command — the existing
@@ -120,17 +130,16 @@ export function usePhoneOpeners({
     if (command) runPaletteCommand(command);
   }, [navigation, paletteCommands, runPaletteCommand]);
 
-  // Same bag the desktop dock gets, minus the two open callbacks and
+  // Same bag the desktop dock gets, minus the open callback and
   // `onShowVersions`: file taps and "Previous versions…" must route through
   // the history stack instead of only activating a tab.
   const mergedExplorerProps = useMemo(
     () => ({
       ...explorerProps,
-      onMarkdownFileSelected: openMarkdown,
-      onFileSelected: openFile,
+      onFileSelected: openByKind,
       onShowVersions: showVersions
     }),
-    [explorerProps, openMarkdown, openFile, showVersions]
+    [explorerProps, openByKind, showVersions]
   );
 
   return {
