@@ -16,7 +16,11 @@ the existing merge UI. No conflict markers ever reach the frontend.
   three texts. The UI receives chunks, never `<<<<<<<`.
 - Clean regions are merged; conflict regions become per-chunk choices the
   existing `mergeModel` already renders. Auto-resolve only when base
-  confidence allows (zero risky hunks, counted on the same merge output).
+  confidence allows (zero risky hunks, counted on the same merge output) —
+  and never when `base == theirs`: a remote clock more than
+  `ARRIVAL_SKEW_SECS` ahead of ours can admit the winner-write snapshot as a
+  candidate, which `judge(ours, theirs, theirs)` scores 0-risky — a false
+  `proven` that would silently discard the entire remote side.
 - Binaries and non-UTF-8 keep whole-file choices (`merge::Kind` unchanged).
 
 ## Acceptance Criteria
