@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { invokeNativeCommand } from "../native/commands";
 import { ThemeProvider } from "../settings/ThemeProvider";
 import { useSettingsStore } from "../settings/settingsStore";
 import { ShellRoot, usePhoneChrome } from "./ShellRoot";
@@ -141,6 +142,25 @@ describe("ShellRoot", () => {
     const host = await render();
 
     expect(host.querySelector('[aria-label="ThinkBrain desktop workspace"]')).not.toBeNull();
+  });
+
+  // The switching controller is built once, above the chrome choice: swapping
+  // chrome must not rebuild it (and re-probe the host, re-list workspaces,
+  // drop open dialogs) the way a per-chrome controller did.
+  it("keeps one workspace switching controller across a chrome swap", async () => {
+    narrow = false;
+    coarse = false;
+    vi.mocked(invokeNativeCommand).mockClear();
+    const probes = () =>
+      vi.mocked(invokeNativeCommand).mock.calls.filter(([command]) => command === "workspace_access_capabilities").length;
+
+    const host = await render();
+    expect(probes()).toBe(1);
+
+    await act(async () => setShellMode("phone"));
+
+    expect(host.querySelector('[aria-label="ThinkBrain mobile workspace"]')).not.toBeNull();
+    expect(probes()).toBe(1);
   });
 });
 

@@ -5,7 +5,7 @@ import { splitContributionId } from "../extensions/desktopExtensionHost";
 import { createLazyExtensionTab } from "../extensions/LazyExtensionPanel";
 import { setWorkspaceBridge } from "../extensions/workspaceBridge";
 import { createDebounced } from "../lib/debounce";
-import type { NativeMarkdownFileEntry, NativeWorkspaceSnapshot } from "../native/commands";
+import type { NativeWorkspaceSnapshot } from "../native/commands";
 import {
   DEFAULT_DESKTOP_STATE,
   workspaceTabs,
@@ -30,6 +30,7 @@ import {
   type DesktopTabContext,
   type DesktopTabView
 } from "../tabs/tabRegistry";
+import { useWorkspaceSession } from "../workspace/useWorkspaceSession";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { usePanelLayout } from "./usePanelLayout";
 import { clearWorkspaceStores, indexWorkspaceStores, useWorkspaceIndexes } from "./useWorkspaceIndexes";
@@ -68,9 +69,31 @@ export function useWorkspaceLifecycle({
     updateBottomPanel,
     updatePanelWidth
   } = usePanelLayout();
-  const [restoredWorkspacePath, setRestoredWorkspacePath] = useState<string | null>(null);
-  const [workspaceName, setWorkspaceName] = useState<string | null>(null);
-  const [workspaceFiles, setWorkspaceFiles] = useState<readonly NativeMarkdownFileEntry[]>([]);
+  const handleWorkspaceOpened = useCallback((rootPath: string, snapshot: NativeWorkspaceSnapshot) => {
+    indexWorkspaceStores(rootPath, snapshot.files);
+    // Only `lastWorkspacePath` is sent: Rust promotes it into the recents
+    // itself. Persisting this window's in-memory list would let a stale
+    // window resurrect a path another window just forgot.
+    persistDesktopState({ lastWorkspacePath: rootPath });
+  }, []);
+
+  const handleWorkspaceUnavailable = useCallback(() => {
+    clearWorkspaceStores();
+    persistDesktopState({ lastWorkspacePath: null });
+  }, []);
+
+  // The window's one workspace session: the authority for which root is open.
+  // It opens the workspace itself — settings restore, snapshot, entry list —
+  // whether or not the explorer is mounted, and the explorer reads it.
+  const workspaceSession = useWorkspaceSession({
+    api: workspaceDesktopApi,
+    onOpened: handleWorkspaceOpened,
+    onUnavailable: handleWorkspaceUnavailable
+  });
+  const { open: openWorkspaceInWindow, rootPath: restoredWorkspacePath, setFiles: setWorkspaceFiles } =
+    workspaceSession;
+  const workspaceName = workspaceSession.snapshot?.workspace.name ?? null;
+  const workspaceFiles = workspaceSession.files;
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
   const [stateRestored, setStateRestored] = useState(!isTauri());
   const tabsRestoredRef = useRef(false);
@@ -88,7 +111,8 @@ export function useWorkspaceLifecycle({
       // `allSettled` type narrowing `windowWorkspaceRoot` requires.
       const desktopState = desktopResult.status === "fulfilled" ? desktopResult.value : DEFAULT_DESKTOP_STATE;
       const windowRoot = rootResult.status === "fulfilled" ? rootResult.value : null;
-      setRestoredWorkspacePath(windowRoot ?? desktopState.lastWorkspacePath);
+      const restoredRoot = windowRoot ?? desktopState.lastWorkspacePath;
+      if (restoredRoot) void openWorkspaceInWindow(restoredRoot);
       restorePanels(desktopState);
 
       // Restore this workspace's tabs once. Guarded by a ref because StrictMode
@@ -97,7 +121,7 @@ export function useWorkspaceLifecycle({
       // Keyed by the workspace this window actually has open. Reading a single
       // shared list here is what used to give two windows on two vaults the
       // same tabs, each pointing at the other's notes.
-      const rootPath = windowRoot ?? desktopState.lastWorkspacePath;
+      const rootPath = restoredRoot;
       const restoring = workspaceTabs(desktopState, rootPath);
       if (!tabsRestoredRef.current) {
         tabsRestoredRef.current = true;
@@ -131,7 +155,7 @@ export function useWorkspaceLifecycle({
     return () => {
       active = false;
     };
-  }, [dispatchTabs, loadDocumentIntoView, restorePanels]);
+  }, [dispatchTabs, loadDocumentIntoView, openWorkspaceInWindow, restorePanels]);
 
   /**
    * Debounced tab persistence: writes the open tab list and active tab id
@@ -163,37 +187,6 @@ export function useWorkspaceLifecycle({
     if (!stateRestored || !isTauri()) return;
     saveTabs({ tabs: tabState, workspacePath: restoredWorkspacePath });
   }, [saveTabs, stateRestored, tabState, restoredWorkspacePath]);
-
-  const handleWorkspaceOpened = useCallback((rootPath: string, snapshot: NativeWorkspaceSnapshot) => {
-    setRestoredWorkspacePath(rootPath);
-    setWorkspaceName(snapshot.workspace.name);
-    setWorkspaceFiles(snapshot.files);
-    indexWorkspaceStores(rootPath, snapshot.files);
-    // Only `lastWorkspacePath` is sent: Rust promotes it into the recents
-    // itself. Persisting this window's in-memory list would let a stale
-    // window resurrect a path another window just forgot.
-    persistDesktopState({ lastWorkspacePath: rootPath });
-  }, []);
-
-  /**
-   * Opens a workspace in this window.
-   *
-   * `restoredWorkspacePath` feeds the explorer's `initialWorkspacePath` (via
-   * `useShellState`'s explorerProps), so setting it runs the explorer's own
-   * load path — settings restore, snapshot, entry list — exactly as a first
-   * launch would; `handleWorkspaceOpened` then confirms it back here.
-   */
-  const openWorkspaceInWindow = useCallback((rootPath: string) => {
-    setRestoredWorkspacePath(rootPath);
-  }, []);
-
-  const handleWorkspaceUnavailable = useCallback(() => {
-    setRestoredWorkspacePath(null);
-    setWorkspaceName(null);
-    setWorkspaceFiles([]);
-    clearWorkspaceStores();
-    persistDesktopState({ lastWorkspacePath: null });
-  }, []);
 
   const handleWorkspaceLaunched = useCallback((rootPath: string) => {
     // Persist `lastWorkspacePath` so a fresh window (or a window whose native
@@ -253,7 +246,7 @@ export function useWorkspaceLifecycle({
   const handleMarkdownFileCreated = useCallback((rootPath: string, relativePath: string) => {
     if (rootPath !== restoredWorkspacePath) return;
     setWorkspaceFiles((files) => addWorkspaceFile(files, relativePath));
-  }, [restoredWorkspacePath]);
+  }, [restoredWorkspacePath, setWorkspaceFiles]);
 
   const cancelDeferredPersistence = useCallback(() => {
     cancelPanelWidthPersistence();
@@ -266,8 +259,6 @@ export function useWorkspaceLifecycle({
     cancelDeferredPersistence,
     handleMarkdownFileCreated,
     handleWorkspaceLaunched,
-    handleWorkspaceOpened,
-    handleWorkspaceUnavailable,
     leftPanel,
     leftWidth,
     leftWidthRef,
@@ -286,7 +277,8 @@ export function useWorkspaceLifecycle({
     updateBottomPanel,
     updatePanelWidth,
     workspaceFiles,
-    workspaceName
+    workspaceName,
+    workspaceSession
   };
 }
 

@@ -38,6 +38,16 @@ describe("workspaceExplorerReducer", () => {
     const ready = workspaceExplorerReducer(initialWorkspaceExplorerState, { type: "opened", snapshot, entries });
     expect(ready).toMatchObject({ phase: "ready", snapshot, entries, error: null });
   });
+
+  it("re-lists the open root without touching its snapshot, and nothing without one", () => {
+    const ready = workspaceExplorerReducer(initialWorkspaceExplorerState, { type: "opened", snapshot, entries });
+    const relisted = workspaceExplorerReducer(ready, { type: "listed", entries: entries.slice(0, 1) });
+
+    expect(relisted).toMatchObject({ phase: "ready", snapshot, entries: entries.slice(0, 1) });
+    expect(workspaceExplorerReducer(initialWorkspaceExplorerState, { type: "listed", entries })).toBe(
+      initialWorkspaceExplorerState
+    );
+  });
 });
 
 describe("buildWorkspaceTree", () => {

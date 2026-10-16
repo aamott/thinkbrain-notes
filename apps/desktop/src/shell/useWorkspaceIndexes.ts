@@ -31,35 +31,6 @@ export function useWorkspaceIndexes({
   // windows are ignored.
   useEffect(() => subscribeWorkspaceStores(), []);
 
-  // Index the restored workspace for search and wiki-links even when the
-  // explorer panel is closed. Without this, `indexWorkspace` is only called
-  // from `handleWorkspaceOpened`, which fires via the WorkspaceExplorer's mount
-  // effect — so closing the explorer before restart leaves both indexes empty.
-  // The store's `rootPath` guard prevents double-indexing when the explorer is
-  // also open and has already triggered `handleWorkspaceOpened`.
-  useEffect(() => {
-    if (!isTauri() || !restoredWorkspacePath) return;
-    const rootPath = restoredWorkspacePath;
-    const { rootPath: wikiRoot } = useWikiLinkIndexStore.getState();
-    if (wikiRoot === rootPath) return;
-    // Switching workspaces while this read is in flight must not index the old
-    // one over the new. `indexWorkspace` stamps its own root before checking
-    // anything, so its internal guards cannot reject a stale caller — the
-    // caller has to not call. Without this, a late listing for the previous
-    // vault leaves both indexes holding its notes under its root, and every
-    // later note event for the current vault is dropped by the root guards.
-    let cancelled = false;
-    void workspaceDesktopApi.openWorkspace(rootPath).then((snapshot) => {
-      if (cancelled) return;
-      // The explorer may have indexed this same workspace in the meantime.
-      if (useWikiLinkIndexStore.getState().rootPath === rootPath) return;
-      indexWorkspaceStores(rootPath, snapshot.files);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [restoredWorkspacePath]);
-
   // Watch the open workspace for edits the app did not make. Both indexes and
   // the calendar are caches of this folder, and until now only in-app writes
   // refreshed them — a `git pull`, a sync client or another editor left them

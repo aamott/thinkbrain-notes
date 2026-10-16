@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -10,7 +9,8 @@ use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, ne
 use tauri::{Emitter, Manager};
 
 use crate::commands::workspace::resolve_workspace_root;
-use crate::error::{NativeError, lock_or_recover};
+use crate::commands::workspace_session;
+use crate::error::NativeError;
 
 use super::{
     Changes, WORKSPACE_CHANGED_EVENT, WorkspaceChangedPayload, announce_conflicts, collect_changes,
@@ -22,7 +22,7 @@ use super::{
 /// one separately would reindex the vault a file at a time.
 const DEBOUNCE_WINDOW: Duration = Duration::from_millis(400);
 
-type WorkspaceDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
+pub type WorkspaceDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 
 /// Tracks who wants which workspace watched.
 ///
@@ -89,16 +89,13 @@ impl WatchInterest {
         });
         released
     }
-}
 
-/// The live watchers and the interest keeping each one alive.
-#[derive(Default)]
-struct WatchState {
-    interest: WatchInterest,
-    debouncers: HashMap<String, WorkspaceDebouncer>,
+    /// Drops every window's interest in `root` at once, naming each window
+    /// that held it and how many requests it had outstanding.
+    pub fn release_root(&mut self, root: &str) -> HashMap<String, u32> {
+        self.holders.remove(root).unwrap_or_default()
+    }
 }
-
-static WATCHERS: Mutex<Option<WatchState>> = Mutex::new(None);
 
 /// Starts watching `root_path` on behalf of the calling window.
 ///
@@ -120,17 +117,9 @@ pub fn watch_workspace(
     let key = root.to_string_lossy().to_string();
     let label = window.label().to_string();
 
-    let mut guard = lock_or_recover(&WATCHERS);
-    let state = guard.get_or_insert_with(WatchState::default);
-
-    // Start the watcher before registering interest, so a failure to start
-    // leaves nothing claiming a watcher that does not exist.
-    if !state.interest.is_watched(&key) {
-        let debouncer = spawn_debouncer(app.clone(), root.clone(), key.clone())?;
-        state.debouncers.insert(key.clone(), debouncer);
-    }
-    state.interest.acquire(&key, &label);
-    drop(guard);
+    workspace_session::watch(&key, &label, || {
+        spawn_debouncer(app.clone(), root.clone(), key.clone())
+    })?;
 
     // Auto Sync shares this lifecycle exactly: one engine per workspace, held
     // by window interest, released with the last window. Failing to record is
@@ -184,68 +173,22 @@ pub fn watch_workspace(
 /// the watcher it was called to release.
 #[tauri::command]
 pub fn unwatch_workspace(window: tauri::Window, canonical_root: String) -> Result<(), NativeError> {
-    // Flush while the watcher is still live. Dropping the debouncer first
-    // would leave a gap where a vault edit is seen by neither the flush
-    // nor the watcher.
-    crate::commands::sync::registry::detach(&canonical_root, window.label());
-    let mut guard = lock_or_recover(&WATCHERS);
-    let Some(state) = guard.as_mut() else {
-        return Ok(());
-    };
-    if state.interest.release(&canonical_root, window.label()) {
-        state.debouncers.remove(&canonical_root);
-    }
+    workspace_session::release_watch(&canonical_root, window.label());
     Ok(())
-}
-
-/// Releases every watcher a window held, for windows the OS destroys.
-///
-/// A destroyed window never runs the frontend teardown that would otherwise
-/// call `unwatch_workspace`, so its watchers would be held until the process
-/// exits.
-pub fn release_window_watchers(label: &str) {
-    // Same ordering as unwatch_workspace: flush before the watcher is gone.
-    crate::commands::sync::registry::release_window(label);
-    let mut guard = lock_or_recover(&WATCHERS);
-    let Some(state) = guard.as_mut() else {
-        return;
-    };
-    for root in state.interest.release_window(label) {
-        state.debouncers.remove(&root);
-    }
 }
 
 /// Registers the canonical "what happens when a window dies" cleanup on a
 /// window.
 ///
-/// Every window needs its file watchers released when the OS destroys it
-/// (the frontend teardown never runs in that case). Workspace windows *also*
-/// need their entry in `WorkspaceWindowRoots` removed; pass an `extra_cleanup`
-/// closure for that, or `None` for the main window declared in
-/// `tauri.conf.json`, which is never registered as a workspace window.
-///
-/// Centralizing the policy here means a reader only has to look in one place
-/// to know the full cleanup, instead of finding a near-duplicate closure in
-/// both `lib.rs` and `workspace.rs`.
-pub fn attach_window_destroy_cleanup<F>(
-    window: &tauri::WebviewWindow,
-    label: String,
-    extra_cleanup: Option<F>,
-) where
-    F: FnOnce() + Send + 'static,
-{
-    // `on_window_event` requires `Fn` (it may be invoked for many event kinds),
-    // but the destroy cleanup is one-shot. Wrap the closure in a `Mutex` so the
-    // `Fn` closure can `take()` it on the single `Destroyed` event.
-    let extra_cleanup = std::sync::Mutex::new(extra_cleanup);
+/// A destroyed window never runs the frontend teardown, so everything it held
+/// — watch requests, sync engines, the root it was launched onto — is
+/// released from here through the workspace session table, or it outlives
+/// the window. The main window declared in `tauri.conf.json` and every
+/// workspace window share this one policy.
+pub fn attach_window_destroy_cleanup(window: &tauri::WebviewWindow, label: String) {
     window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
-            if let Some(extra) = extra_cleanup.lock().ok().and_then(|mut g| g.take()) {
-                extra();
-            }
-            // A destroyed window never runs the frontend teardown, so its file
-            // watchers have to be released from here or they outlive it.
-            release_window_watchers(&label);
+            workspace_session::release_window(&label);
         }
     });
 }

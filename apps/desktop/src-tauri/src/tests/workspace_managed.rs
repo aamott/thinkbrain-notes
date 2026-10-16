@@ -95,3 +95,49 @@ fn deleting_a_managed_vault_rejects_a_path_that_is_gone() {
     assert_eq!(error.code, "workspace.managed_missing");
     fs::remove_dir_all(&app_data).ok();
 }
+
+/// Deleting a vault that is still open releases everything the host holds
+/// for it in one step — watcher, index connection, sync engine — so nothing
+/// is left recording into history that is about to be wiped.
+#[test]
+fn deleting_an_open_managed_vault_releases_its_workspace_session() {
+    use crate::commands::workspace_session;
+    use notify_debouncer_full::new_debouncer;
+
+    let app_data = make_temp_test_dir("managed-delete-open", "workspace", true);
+    let vault =
+        create_managed_workspace_in(&app_data, "Open").expect("managed workspace is created");
+    let key = vault.root_path.clone();
+    let vault_path = PathBuf::from(&key);
+
+    workspace_session::watch(&key, "managed-open-window", || {
+        Ok(
+            new_debouncer(std::time::Duration::from_millis(100), None, |_| {})
+                .expect("debouncer starts"),
+        )
+    })
+    .expect("watching succeeds");
+    crate::commands::sync::registry::attach(&app_data, &vault_path, &key, "managed-open-window")
+        .expect("attaching succeeds");
+    workspace_session::search_connection(&key, || {
+        Ok(rusqlite::Connection::open_in_memory().expect("an index opens"))
+    })
+    .expect("the index opens");
+
+    delete_managed_workspace_in(&app_data, &key).expect("delete succeeds");
+
+    assert!(
+        !workspace_session::holds(&key),
+        "the session outlived the vault"
+    );
+    assert!(
+        crate::commands::sync::registry::engine(&key).is_none(),
+        "the sync engine outlived the vault"
+    );
+    let hidden_repo = crate::commands::sync::bootstrap::hidden_repo_path(&app_data, &key);
+    assert!(
+        !hidden_repo.exists(),
+        "the vault's history survived the delete"
+    );
+    fs::remove_dir_all(&app_data).ok();
+}

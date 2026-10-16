@@ -103,10 +103,9 @@ async function renderExplorer(
   await act(async () => {
     root?.render(
       <WorkspaceSwitchingHarness api={resolvedApi} initialWorkspacePath={initialWorkspacePath ?? null}>
-        {(workspacePath) => (
+        {() => (
           <WorkspaceExplorer
             api={resolvedApi}
-            initialWorkspacePath={workspacePath}
             {...props}
           />
         )}

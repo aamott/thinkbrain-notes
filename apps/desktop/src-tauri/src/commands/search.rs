@@ -3,7 +3,6 @@ use crate::error::{NativeError, failed, lock_or_recover};
 use rusqlite::{Connection, Transaction, params};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -20,9 +19,6 @@ use metadata::{
     path_prefix_sql, replace_document_metadata,
 };
 
-static SEARCH_CONNECTIONS: Mutex<Option<HashMap<String, Arc<Mutex<Connection>>>>> =
-    Mutex::new(None);
-
 pub fn get_search_connection(
     app: &tauri::AppHandle,
     root_path: &str,
@@ -33,16 +29,10 @@ pub fn get_search_connection(
     let canonical_root = resolve_workspace_root(root_path)?
         .to_string_lossy()
         .to_string();
-
-    let mut lock = lock_or_recover(&SEARCH_CONNECTIONS);
-    let pool = lock.get_or_insert_with(HashMap::new);
-    if let Some(conn) = pool.get(&canonical_root) {
-        return Ok(conn.clone());
-    }
-    let conn = open_index_connection(app, &canonical_root)?;
-    let arc = Arc::new(Mutex::new(conn));
-    pool.insert(canonical_root, arc.clone());
-    Ok(arc)
+    // Pooled in the workspace's session, so it closes with the workspace.
+    crate::commands::workspace_session::search_connection(&canonical_root, || {
+        open_index_connection(app, &canonical_root)
+    })
 }
 
 /// A single note record sent from the frontend to (re)index.
@@ -270,18 +260,6 @@ pub fn search_index_file(app_data_dir: &Path, canonical_root: &str) -> PathBuf {
     app_data_dir
         .join("index")
         .join(format!("workspace-{workspace_key:016x}.sqlite3"))
-}
-
-/// Drops a workspace's pooled index connection so its file can be removed.
-///
-/// A live `Connection` holds the SQLite file open; without this a delete could
-/// unlink the database while the pool still writes to the handle (or, on
-/// Windows, fail outright). Keyed by canonical root, the same as the pool.
-pub fn release_search_connection(canonical_root: &str) {
-    let mut lock = lock_or_recover(&SEARCH_CONNECTIONS);
-    if let Some(pool) = lock.as_mut() {
-        pool.remove(canonical_root);
-    }
 }
 
 /// Creates the FTS5 virtual table backing search. Idempotent.

@@ -17,6 +17,8 @@ type WorkspaceExplorerAction =
       readonly snapshot: NativeWorkspaceSnapshot;
       readonly entries: readonly NativeWorkspaceEntry[];
     }
+  /** A re-listing of the open root: same snapshot, fresh entries. */
+  | { readonly type: "listed"; readonly entries: readonly NativeWorkspaceEntry[] }
   | { readonly type: "failed"; readonly message: string }
   | { readonly type: "dismiss" };
 
@@ -41,6 +43,10 @@ export function workspaceExplorerReducer(
         entries: action.entries,
         error: null
       };
+    case "listed":
+      return state.snapshot
+        ? { phase: "ready", snapshot: state.snapshot, entries: action.entries, error: null }
+        : state;
     case "failed":
       return { ...initialWorkspaceExplorerState, phase: "error", error: action.message };
     case "dismiss":

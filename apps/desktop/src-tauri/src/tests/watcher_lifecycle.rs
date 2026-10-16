@@ -342,3 +342,23 @@ fn closing_a_window_releases_every_watcher_it_was_holding() {
     assert!(interest.is_watched("/vault"));
     assert!(!interest.is_watched("/notes"));
 }
+
+/// A workspace going away takes every window's interest with it, and says who
+/// held it so each holder's other resources can be released too.
+#[test]
+fn releasing_a_root_drops_every_window_holding_it() {
+    let mut interest = WatchInterest::default();
+
+    interest.acquire("/vault", "main");
+    interest.acquire("/vault", "second");
+    interest.acquire("/vault", "second");
+    interest.acquire("/notes", "main");
+
+    let holders = interest.release_root("/vault");
+
+    assert_eq!(holders.get("main"), Some(&1));
+    assert_eq!(holders.get("second"), Some(&2));
+    assert!(!interest.is_watched("/vault"));
+    assert!(interest.is_watched("/notes"));
+    assert!(interest.release_root("/vault").is_empty());
+}

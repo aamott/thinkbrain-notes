@@ -22,14 +22,10 @@ import {
 } from "./panelRegistryModel";
 
 const explorerProps: DesktopPanelContext["explorerProps"] = {
-  initialWorkspacePath: null,
-  onWorkspaceOpened: () => undefined,
-  onWorkspaceUnavailable: () => undefined,
   onMarkdownFileSelected: () => undefined,
   onMarkdownFileCreated: () => undefined,
   onNewNoteFocusHandled: () => undefined,
-  newNoteFocusRequest: 0,
-  onWorkspaceLaunched: () => undefined
+  newNoteFocusRequest: 0
 };
 
 /**

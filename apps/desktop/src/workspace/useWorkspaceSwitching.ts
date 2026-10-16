@@ -19,8 +19,8 @@ const DESKTOP_WORKSPACE_ACCESS: NativeWorkspaceAccessCapabilities = {
  * dialogs the shell mounts.
  *
  * In-window opens do not load the workspace here: they go through
- * `openWorkspaceInWindow`, which points the explorer's `initialWorkspacePath`
- * at the new root and lets its existing load path run. Launch, pick and
+ * `openWorkspaceInWindow`, the shell's workspace session, which owns the load
+ * path whether or not the explorer is mounted. Launch, pick and
  * capability failures surface as transient notifications (the explorer banner
  * belongs to in-workspace operations); create-dialog failures stay in the
  * dialog via `createManagedWorkspaceError`.
@@ -65,9 +65,8 @@ export interface WorkspaceSwitchingController {
 interface UseWorkspaceSwitchingOptions {
   readonly api: WorkspaceDesktopApi;
   /**
-   * Opens a workspace in this window. The shell points the explorer's
-   * `initialWorkspacePath` at the root so the explorer's own load path —
-   * settings restore, snapshot, entry listing — runs unchanged.
+   * Opens a workspace in this window through the shell's workspace session —
+   * settings restore, snapshot, entry listing.
    */
   readonly openWorkspaceInWindow: (rootPath: string) => void;
   /** Fired after a new-window launch so the shell can persist the choice. */

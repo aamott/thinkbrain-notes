@@ -4,14 +4,12 @@
 
 use crate::NativeError;
 use crate::commands::workspace::{
-    WorkspaceWindowRoots, describe_workspace, next_workspace_window_label, open_workspace_window,
-    register_workspace_window_root, resolve_workspace_root, unregister_workspace_window_root,
-    workspace_window_root,
+    describe_workspace, next_workspace_window_label, open_workspace_window, resolve_workspace_root,
 };
+use crate::commands::workspace_session::{launched_root, register_launch, unregister_launch};
 use crate::tests::make_temp_test_dir;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::thread;
 
 // Async-command guard
@@ -34,30 +32,21 @@ fn workspace_window_creation_command_is_async() {
 /// Window labels isolate roots and cleanup.
 #[test]
 fn workspace_window_roots_are_scoped_to_opaque_window_labels() {
-    let roots = WorkspaceWindowRoots::default();
     let first = next_workspace_window_label();
     let second = next_workspace_window_label();
 
     assert_ne!(first, second);
     assert!(first.starts_with("workspace-"));
-    register_workspace_window_root(&roots, first.clone(), "/notes/first".to_string());
-    register_workspace_window_root(&roots, second.clone(), "/notes/second".to_string());
+    register_launch(first.clone(), "/notes/first".to_string());
+    register_launch(second.clone(), "/notes/second".to_string());
 
-    assert_eq!(
-        workspace_window_root(&roots, &first),
-        Some("/notes/first".to_string())
-    );
-    assert_eq!(
-        workspace_window_root(&roots, &second),
-        Some("/notes/second".to_string())
-    );
+    assert_eq!(launched_root(&first), Some("/notes/first".to_string()));
+    assert_eq!(launched_root(&second), Some("/notes/second".to_string()));
 
-    unregister_workspace_window_root(&roots, &first);
-    assert_eq!(workspace_window_root(&roots, &first), None);
-    assert_eq!(
-        workspace_window_root(&roots, &second),
-        Some("/notes/second".to_string())
-    );
+    unregister_launch(&first);
+    assert_eq!(launched_root(&first), None);
+    assert_eq!(launched_root(&second), Some("/notes/second".to_string()));
+    unregister_launch(&second);
 }
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -92,17 +81,15 @@ fn workspace_window_labels_are_unique_and_prefixed() {
 /// Concurrent command and destroy callbacks do not deadlock the registry.
 #[test]
 fn workspace_window_roots_survive_concurrent_register_and_unregister() {
-    let roots = Arc::new(WorkspaceWindowRoots::default());
     let mut handles = Vec::new();
 
     for _ in 0..8 {
-        let roots = Arc::clone(&roots);
         handles.push(thread::spawn(move || {
             for _ in 0..100 {
                 let label = next_workspace_window_label();
-                register_workspace_window_root(&roots, label.clone(), "/vault".to_string());
-                let _ = workspace_window_root(&roots, &label);
-                unregister_workspace_window_root(&roots, &label);
+                register_launch(label.clone(), "/vault".to_string());
+                let _ = launched_root(&label);
+                unregister_launch(&label);
             }
         }));
     }

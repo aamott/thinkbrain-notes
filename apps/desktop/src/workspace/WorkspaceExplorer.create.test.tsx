@@ -13,8 +13,8 @@ import { WorkspaceSwitchingHarness } from "./workspaceSwitching.testHarness";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 
 /** The switching controller lives at shell level; bare explorer mounts borrow one. */
-const inShell = (api: WorkspaceDesktopApi, node: React.ReactNode) => (
-  <WorkspaceSwitchingHarness api={api}>{() => node}</WorkspaceSwitchingHarness>
+const inShell = (api: WorkspaceDesktopApi, workspacePath: string, node: React.ReactNode) => (
+  <WorkspaceSwitchingHarness api={api} initialWorkspacePath={workspacePath}>{() => node}</WorkspaceSwitchingHarness>
 );
 
 vi.mock("./workspaceSettings", () => ({
@@ -91,10 +91,9 @@ async function renderExplorer(fixture: ExplorerFixture, props: Record<string, un
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(inShell(fixture.api,
+    root?.render(inShell(fixture.api, "/vault",
       <WorkspaceExplorer
         api={fixture.api}
-        initialWorkspacePath="/vault"
         onMarkdownFileCreated={fixture.onMarkdownFileCreated}
         onFileSelected={fixture.onFileSelected}
         {...props}
@@ -152,10 +151,9 @@ async function openNewNote(fixture: ExplorerFixture) {
   document.body.append(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(inShell(fixture.api,
+    root?.render(inShell(fixture.api, "/vault",
       <WorkspaceExplorer
         api={fixture.api}
-        initialWorkspacePath="/vault"
         onMarkdownFileCreated={fixture.onMarkdownFileCreated}
         onFileSelected={fixture.onFileSelected}
         newNoteFocusRequest={1}
@@ -294,10 +292,9 @@ describe("WorkspaceExplorer New note extension flow", () => {
     await typeInto(inputOf("New file name")!, "stale.txt");
 
     await act(async () => {
-      root?.render(inShell(fixture.api,
+      root?.render(inShell(fixture.api, "/vault",
         <WorkspaceExplorer
           api={fixture.api}
-          initialWorkspacePath="/vault"
           newNoteFocusRequest={2}
           onMarkdownFileCreated={fixture.onMarkdownFileCreated}
           onFileSelected={fixture.onFileSelected}
@@ -549,10 +546,9 @@ describe("Create a different file type? confirmation", () => {
     };
     fixture.api = { ...fixture.api, openWorkspace: async () => other };
     await act(async () => {
-      root?.render(inShell(fixture.api,
+      root?.render(inShell(fixture.api, "/other",
         <WorkspaceExplorer
           api={fixture.api}
-          initialWorkspacePath="/other"
           onMarkdownFileCreated={fixture.onMarkdownFileCreated}
           onFileSelected={fixture.onFileSelected}
         />
@@ -631,10 +627,9 @@ describe("desktop canonical New note command integration", () => {
         openSettings: vi.fn(),
         closePalette
       };
-      return inShell(fixture.api,
+      return inShell(fixture.api, "/vault",
         <WorkspaceExplorer
           api={fixture.api}
-          initialWorkspacePath="/vault"
           newNoteFocusRequest={request}
           onMarkdownFileCreated={fixture.onMarkdownFileCreated}
           onFileSelected={fixture.onFileSelected}

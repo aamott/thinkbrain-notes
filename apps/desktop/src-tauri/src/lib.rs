@@ -28,7 +28,6 @@ mod workspace_window_lifecycle_tests;
 
 pub use error::NativeError;
 
-use crate::commands::workspace::WorkspaceWindowRoots;
 use tauri::Manager;
 
 /// Works around WebKitGTK's DMA-BUF renderer aborting on the NVIDIA driver.
@@ -70,7 +69,6 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
 
     builder
-        .manage(WorkspaceWindowRoots::default())
         .setup(|app| {
             // The sign-in catalog and per-workspace sync settings live under
             // the app data dir, which sync code reaches only through the
@@ -89,15 +87,9 @@ pub fn run() {
             // declared in tauri.conf.json exists before any command runs. A
             // destroyed window never runs the frontend teardown, so without
             // this its file watchers outlive it whenever another window keeps
-            // the process alive. The main window is never registered as a
-            // workspace window, so it has no `WorkspaceWindowRoots` entry to
-            // unregister — pass `None` for the extra cleanup.
+            // the process alive.
             for (label, window) in app.webview_windows().into_iter() {
-                crate::commands::watcher::attach_window_destroy_cleanup(
-                    &window,
-                    label.to_string(),
-                    None::<fn()>,
-                );
+                crate::commands::watcher::attach_window_destroy_cleanup(&window, label.to_string());
             }
             Ok(())
         })

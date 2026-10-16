@@ -13,7 +13,7 @@ import {
 
 interface UseWorkspaceInlineCreateOptions {
   readonly stateRef: RefObject<WorkspaceExplorerState>;
-  readonly rootPathRef: RefObject<string | undefined>;
+  readonly rootPathRef: RefObject<string | null>;
   readonly apiRef: RefObject<WorkspaceDesktopApi>;
   readonly runWithRefresh: (operation: () => Promise<unknown>, options?: { selectMarkdown?: string }) => Promise<boolean>;
   readonly setActionError: Dispatch<SetStateAction<string | null>>;
