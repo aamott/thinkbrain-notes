@@ -70,13 +70,18 @@ fn next_second() {
 
 /// Both devices start from "the line", then each rewrites it.
 fn clash(name: &str) -> (Device, Synced) {
+    clash_with(name, "their wording\n")
+}
+
+/// The same, with the other device's version given.
+fn clash_with(name: &str, theirs: &str) -> (Device, Synced) {
     let one = device(&format!("{name}-one"));
     let two = device(&format!("{name}-two"));
     let there = shared(name);
     write(&one, "the line\n");
     trip(&one, &there);
     trip(&two, &there);
-    write(&one, "their wording\n");
+    write(&one, theirs);
     trip(&one, &there);
     write(&two, "our wording\n");
     next_second();
@@ -109,6 +114,19 @@ fn a_pulled_conflict_names_the_base_the_merge_computed() {
     let base = derived(&two, copy).expect("a base is named");
     assert_eq!(base.id, blob("the line\n").to_string());
     assert_eq!(base.source, BaseSource::Merge);
+}
+
+/// An empty version from the other device leaves nothing to merge by line, so
+/// the pull names no base for it — as it does for one kept beside unsaved text.
+#[test]
+fn a_pulled_conflict_with_an_empty_version_names_no_base() {
+    let (two, synced) = clash_with("base-git-empty", "");
+
+    let [copy] = synced.conflict_copies.as_slice() else {
+        panic!("expected one copy, got {:?}", synced.conflict_copies);
+    };
+    assert_eq!(fs::read(two.vault.join(&copy.copy)).expect("readable"), b"");
+    assert_eq!(copy.base, None);
 }
 
 /// Two devices that each already had the note share no ancestor for it. The

@@ -72,9 +72,10 @@ pub(super) fn leave_copies(
             continue;
         }
         // The ancestor this very merge used for the note, so the conflict can
-        // later be merged against exactly what both sides started from.
+        // later be merged against exactly what both sides started from. An
+        // empty version leaves nothing to merge by line, so it names no base.
         let base = conflict.entries()[0]
-            .filter(|entry| entry.mode.is_blob())
+            .filter(|entry| entry.mode.is_blob() && !contents.is_empty())
             .map(|entry| noted(entry.id, id.to_owned()));
         left.push(git_copy(beside, original, base));
     }

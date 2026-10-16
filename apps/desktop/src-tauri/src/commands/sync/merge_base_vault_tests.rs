@@ -288,8 +288,10 @@ fn a_noted_base_is_not_used_once_the_copy_has_been_rewritten() {
     v.record(BASELINE);
     v.record("ONE\ntwo\nthree\n");
     v.arrive(PULLED, "one\ntwo\nTHREE\n", much_later());
+    // Noted against a version other than the one recorded selection picks, so
+    // the id below tells the two apart.
     v.engine
-        .note_pulled_conflicts([pulled(BASELINE, "one\ntwo\nTHREE\n")]);
+        .note_pulled_conflicts([pulled("ONE\ntwo\nthree\n", "one\ntwo\nTHREE\n")]);
 
     v.arrive(PULLED, "one\nTWO\nthree\n", much_later());
     let base = v.base(PULLED).expect("a recorded base is named");
@@ -299,6 +301,7 @@ fn a_noted_base_is_not_used_once_the_copy_has_been_rewritten() {
         BaseSource::Recorded,
         "a stale noted base was used"
     );
+    assert_eq!(base.id, blob(BASELINE));
 }
 
 const PULLED: &str = "note (from another device).md";

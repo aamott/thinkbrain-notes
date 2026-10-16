@@ -137,9 +137,26 @@ pub fn derive(
     ours: &[u8],
     theirs: &[u8],
 ) -> Result<Option<MergeBase>, NativeError> {
-    let as_noted = |written| {
-        gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, theirs)
-            .is_ok_and(|id| id == written)
+    let as_noted = |written| match gix::objs::compute_hash(
+        repo.object_hash(),
+        gix::object::Kind::Blob,
+        theirs,
+    ) {
+        Ok(id) if id == written => true,
+        Ok(_) => {
+            eprintln!(
+                "[sync] noted merge base set aside for {}: the copy changed since it was noted",
+                pairing.copy
+            );
+            false
+        }
+        Err(error) => {
+            eprintln!(
+                "[sync] noted merge base set aside for {}: the copy could not be hashed: {error:?}",
+                pairing.copy
+            );
+            false
+        }
     };
     if let Some(noted) = pairing.base.filter(|noted| as_noted(noted.written)) {
         let id = noted.id;
