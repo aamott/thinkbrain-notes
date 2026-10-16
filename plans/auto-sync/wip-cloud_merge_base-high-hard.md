@@ -35,14 +35,29 @@ A conflict is `(ours, theirs, base?, confidence)` regardless of producer.
 
 ## Acceptance Criteria
 
-- Git-sourced `ConflictCopy` names the exact base blob the merge computed.
-- Daemon conflicts select among pre-arrival recorded versions by risky-hunk
+- [x] Git-sourced `ConflictCopy` names the exact base blob the merge computed.
+- [x] Daemon conflicts select among pre-arrival recorded versions by risky-hunk
   minimization, tie-breaking older; post-arrival snapshots are never
   candidates.
-- Confidence travels with the conflict; ambiguous or absent bases leave both
+- [x] Confidence travels with the conflict; ambiguous or absent bases leave both
   versions for manual review. No silently dropped edits.
-- Tests: two devices from a shared baseline, offline edits, conflict after
+- [x] Tests: two devices from a shared baseline, offline edits, conflict after
   restart, missing/ambiguous base, multiple copies of one file.
+
+## Decisions
+
+- Selection lives in `merge_base.rs`; `judge` is the pure scorer. Risky hunks
+  use the text merge's own diff (Myers over byte lines, `gix::diff::blob`) and
+  its touching rule; no new dependency.
+- Confidence is `proven` (zero risky hunks, or theirs only adds) or
+  `ambiguous`; no base is `None`. Provenance is a separate `source`
+  (`merge`/`recorded`). Only `proven` may ever skip review (`mergeIsProven`).
+- Arrival is the copy's mtime in whole seconds with a strict `<`, so a
+  boundary snapshot is excluded rather than risked.
+- A pull's base is held in memory on the engine; a rescan by name never
+  overwrites it. After a restart a git copy falls back to recorded selection.
+- A base that cannot be derived is logged and reported as none; the conflict
+  still opens.
 
 ## Known gaps (deferred)
 

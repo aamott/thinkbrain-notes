@@ -71,7 +71,12 @@ pub(super) fn leave_copies(
             skipped.push(stuck(beside, Some(id.to_owned()), error));
             continue;
         }
-        left.push(git_copy(beside, original));
+        // The ancestor this very merge used for the note, so the conflict can
+        // later be merged against exactly what both sides started from.
+        let base = conflict.entries()[0]
+            .filter(|entry| entry.mode.is_blob())
+            .map(|entry| entry.id);
+        left.push(git_copy(beside, original, base));
     }
     Ok((left, skipped))
 }
@@ -138,7 +143,9 @@ pub(super) fn apply(
                 continue;
             }
             kept_back += 1;
-            copies.push(git_copy(beside, original));
+            // Both the unrecorded text on disk and the arriving version grew
+            // from what this vault last recorded at the path.
+            copies.push(git_copy(beside, original, expected));
             continue;
         }
 
@@ -312,14 +319,19 @@ fn write_deletion_marker(
 ) -> Result<conflict::ConflictCopy, NativeError> {
     let beside = conflict::deletion_beside_in(vault, original);
     put(&vault.join(&beside), b"")?;
-    Ok(git_copy(beside, original))
+    Ok(git_copy(beside, original, None))
 }
 
-fn git_copy(copy: String, original: impl Into<String>) -> conflict::ConflictCopy {
+fn git_copy(
+    copy: String,
+    original: impl Into<String>,
+    base: Option<gix::ObjectId>,
+) -> conflict::ConflictCopy {
     conflict::ConflictCopy {
         copy,
         original: original.into(),
         provider: "git",
+        base,
     }
 }
 

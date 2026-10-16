@@ -227,8 +227,15 @@ impl Engine {
         let mut conflicts = lock_or_recover(&self.conflicts);
         let mut any_new = false;
         for copy in found {
-            if conflicts.insert(copy.copy.clone(), copy.clone()).is_none() {
-                any_new = true;
+            match conflicts.get_mut(&copy.copy) {
+                // Seen again by name — the scan or the watcher — after a pull
+                // noted it with the base its merge computed. Keep that base.
+                Some(known) if copy.base.is_none() && known.base.is_some() => {}
+                Some(known) => *known = copy,
+                None => {
+                    conflicts.insert(copy.copy.clone(), copy);
+                    any_new = true;
+                }
             }
         }
         any_new

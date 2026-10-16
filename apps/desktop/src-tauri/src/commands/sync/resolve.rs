@@ -20,13 +20,13 @@ use serde::{Deserialize, Serialize};
 use crate::NativeError;
 use crate::commands::workspace::{
     acquire_workspace_mutation_lock, entry_metadata, resolve_workspace_entry_path,
-    resolve_workspace_root,
 };
 
 use super::conflict::{self, ConflictCopy};
 use super::engine::Engine;
 use super::failed;
 use super::merge::{self, Kind};
+use super::merge_base;
 
 /// What we call the version already in the vault.
 const OURS_LABEL: &str = "This computer";
@@ -107,6 +107,10 @@ pub struct ConflictView {
     /// `None` when `kind` is binary: there is nothing to compare line by line,
     /// and the choice is between whole files.
     pub text: Option<ConflictText>,
+    /// The version both sides grew from, and how far a merge against it can be
+    /// trusted. `None` when there is none to name: both versions stay for a
+    /// person to compare.
+    pub base: Option<merge_base::MergeBase>,
 }
 
 /// What the user decided.
@@ -168,8 +172,8 @@ pub fn read_conflict(
     copy_path: String,
     buffer: Option<String>,
 ) -> Result<ConflictView, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
-    view(&root, &copy_path, buffer.as_deref())
+    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
+    view(engine.as_deref(), &root, &copy_path, buffer.as_deref())
 }
 
 #[tauri::command]
@@ -215,7 +219,12 @@ pub fn resolve_conflict(
 /// the user is looking at — resolving against the last save would quietly throw
 /// away everything typed since. The fingerprint still comes from disk: it
 /// exists to notice someone *else* writing, and the buffer is not someone else.
+///
+/// The base is derived here, every time, from `engine`'s recorded chain —
+/// nothing pins it, so a restart or a sibling copy's resolution is reflected
+/// the next time the conflict is opened.
 pub fn view(
+    engine: Option<&Engine>,
     root: &Path,
     copy_path: &str,
     buffer: Option<&str>,
@@ -233,9 +242,21 @@ pub fn view(
         Kind::Binary
     };
 
+    // Only text has lines to merge against a base.
+    let base = engine.filter(|_| text.is_some()).and_then(|engine| {
+        merge_base::open(
+            engine,
+            root,
+            &sides.pairing,
+            sides.shown(),
+            &sides.theirs.bytes,
+        )
+    });
+
     Ok(ConflictView {
         summary: sides.summarise(root, kind)?,
         text,
+        base,
     })
 }
 

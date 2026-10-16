@@ -15,7 +15,7 @@ struct Fixture {
 
 impl Fixture {
     fn view(&self) -> ConflictView {
-        view(&self.vault, MARKER, None).expect("the decision is readable")
+        view(None, &self.vault, MARKER, None).expect("the decision is readable")
     }
 
     fn resolve(&self, resolution: Resolution) -> Result<Resolved, NativeError> {

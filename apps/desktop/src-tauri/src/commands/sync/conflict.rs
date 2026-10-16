@@ -34,6 +34,11 @@ pub struct ConflictCopy {
     /// Vault-relative path of the note it was copied from.
     pub original: String,
     pub provider: &'static str,
+    /// The per-file base blob the producing merge computed, when it computed
+    /// one. Only a pull knows it; a daemon's copy, and any copy found again by
+    /// name after a restart, leave it `None` and have their base derived from
+    /// the recorded chain when opened.
+    pub base: Option<gix::ObjectId>,
 }
 
 /// Splits a file name into stem and extension, keeping the dot with the
@@ -318,6 +323,7 @@ pub fn pair(relative: &str, original_exists: impl Fn(&str) -> bool) -> Option<Co
             copy: relative.to_string(),
             original,
             provider: pattern.provider,
+            base: None,
         });
     }
     None

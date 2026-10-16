@@ -28,7 +28,7 @@ use super::snapshot::{self, Reason};
 /// own recorded history only. The version timeline itself has no cap:
 /// `history_walk` reads every reachable commit so a paginated list never
 /// silently stops early.
-const SCAN: usize = 5_000;
+pub(super) const SCAN: usize = 5_000;
 
 /// What happened to one note in one recorded change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
