@@ -88,6 +88,8 @@ const dayName = (host: HTMLDivElement, day: number): string | null =>
     ?.getAttribute("aria-label") ?? null;
 
 describe("the calendar's read errors", () => {
+  // The failure copy is owned by journalChrome.test.tsx; these prove the code
+  // reaches the right state and its action still works.
   it("names an unreadable folder instead of drawing an empty grid", async () => {
     const host = await mount({
       service: service({
@@ -97,8 +99,10 @@ describe("the calendar's read errors", () => {
       })
     });
 
-    expect(host.textContent).toContain("Can't read the journal folder.");
     expect(host.querySelector('[role="grid"]')).toBeNull();
+    expect(
+      [...host.querySelectorAll("button")].some((b) => b.textContent === "Retry")
+    ).toBe(true);
   });
 
   it("offers the folder when there is no workspace", async () => {
@@ -112,7 +116,6 @@ describe("the calendar's read errors", () => {
       onChooseFolder
     });
 
-    expect(host.textContent).toContain("Open a folder to start journaling.");
     const open = [...host.querySelectorAll("button")].find(
       (button) => button.textContent === "Open folder…"
     );
@@ -130,7 +133,9 @@ describe("the calendar's read errors", () => {
       onOpenSettings: () => undefined
     });
 
-    expect(host.textContent).toContain("The journal folder setting isn't a valid path.");
+    expect(
+      [...host.querySelectorAll("button")].some((b) => b.textContent === "Open settings")
+    ).toBe(true);
   });
 
   it("draws the grid again when Retry succeeds", async () => {

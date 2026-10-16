@@ -2,8 +2,17 @@ import { useCallback, useMemo, useState, type KeyboardEvent as ReactKeyboardEven
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { visibleWorkspacePaths } from "./workspaceExplorerTypes";
 
-/** Folder expansion and the active row, with arrow/Home/End movement between visible rows. */
-export function useWorkspaceTreeNavigation(tree: readonly WorkspaceTreeNode[]) {
+/**
+ * Folder expansion, the active row, and the tree's whole keyboard contract:
+ * ArrowUp/Down/Home/End move between visible rows at list level, while
+ * `handleRowKeyDown` owns the row-level keys — ArrowRight expands a folder or
+ * steps into it, ArrowLeft collapses or steps out to the parent, Enter/Space
+ * toggles a folder or opens a file.
+ */
+export function useWorkspaceTreeNavigation(
+  tree: readonly WorkspaceTreeNode[],
+  onFileSelected: (relativePath: string) => void
+) {
   const [expandedFolders, setExpandedFolders] = useState<ReadonlySet<string>>(new Set());
 
   const expandFolder = useCallback((relativePath: string) => {
@@ -57,6 +66,44 @@ export function useWorkspaceTreeNavigation(tree: readonly WorkspaceTreeNode[]) {
     }
   }, [visiblePaths, activePath]);
 
+  const handleRowKeyDown = useCallback((event: ReactKeyboardEvent, node: WorkspaceTreeNode) => {
+    const isDirectory = node.entry.kind === "directory";
+    const isExpanded = expandedFolders.has(node.entry.relative_path);
+    switch (event.key) {
+      case "ArrowRight":
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDirectory) {
+          if (!isExpanded) {
+            toggleFolder(node.entry.relative_path);
+          } else {
+            const firstChild = node.children[0];
+            if (firstChild) setActivePath(firstChild.entry.relative_path);
+          }
+        }
+        break;
+      case "ArrowLeft":
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDirectory && isExpanded) {
+          collapseFolder(node.entry.relative_path);
+        } else if (node.entry.parent_path) {
+          setActivePath(node.entry.parent_path);
+        }
+        break;
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        event.stopPropagation();
+        if (isDirectory) {
+          toggleFolder(node.entry.relative_path);
+        } else if (node.entry.kind === "file") {
+          onFileSelected(node.entry.relative_path);
+        }
+        break;
+    }
+  }, [expandedFolders, onFileSelected, toggleFolder, collapseFolder]);
+
   return {
     expandedFolders,
     setExpandedFolders,
@@ -65,6 +112,7 @@ export function useWorkspaceTreeNavigation(tree: readonly WorkspaceTreeNode[]) {
     expandFolder,
     toggleFolder,
     collapseFolder,
-    handleTreeKeyDown
+    handleTreeKeyDown,
+    handleRowKeyDown
   };
 }

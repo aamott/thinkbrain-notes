@@ -359,11 +359,12 @@ describe("journal panel list at scale (D13)", () => {
 });
 
 describe("journal panel states", () => {
+  // The failure copy itself is owned by journalChrome.test.tsx; these only
+  // prove the panel wires each state's action back to its callback.
   it("offers to open a folder when no workspace is open", async () => {
     const onChooseFolder = vi.fn();
     const host = await render({ view: viewOf([], "no-workspace"), onChooseFolder });
 
-    expect(host.textContent).toContain("Open a folder to start journaling.");
     button(host, "Open folder…").click();
     expect(onChooseFolder).toHaveBeenCalledOnce();
   });
@@ -372,7 +373,6 @@ describe("journal panel states", () => {
     const onRetry = vi.fn();
     const host = await render({ view: viewOf([], "unreadable"), onRetry });
 
-    expect(host.textContent).toContain("Can't read the journal folder.");
     button(host, "Retry").click();
     expect(onRetry).toHaveBeenCalledOnce();
   });
@@ -381,7 +381,6 @@ describe("journal panel states", () => {
     const onOpenSettings = vi.fn();
     const host = await render({ view: viewOf([], "invalid-root"), onOpenSettings });
 
-    expect(host.textContent).toContain("The journal folder setting isn't a valid path.");
     button(host, "Open settings").click();
     expect(onOpenSettings).toHaveBeenCalledOnce();
   });

@@ -53,6 +53,9 @@ export interface WorkspaceExplorerActions {
   readonly submitCreate: (target: CreateState, name: string) => Promise<boolean>;
   readonly submitRename: (target: RenameState, name: string) => Promise<boolean>;
   readonly handleTreeKeyDown: (event: ReactKeyboardEvent<HTMLUListElement>) => void;
+  /** Row-level tree keys (ArrowLeft/Right, Enter/Space); owned by the same
+   *  navigation module as `handleTreeKeyDown` so the whole key map is one file. */
+  readonly handleRowKeyDown: (event: ReactKeyboardEvent, node: WorkspaceTreeNode) => void;
   readonly handleFileSelected: (relativePath: string) => void;
   readonly showContextMenu: (event: ReactMouseEvent, target: ContextMenuTarget) => void;
   /** Opens the same menu at coordinates supplied by a completed touch hold. */
@@ -119,6 +122,21 @@ interface NewNoteCreateState {
 }
 
 export type CreateState = FolderCreateState | NewFileCreateState | NewNoteCreateState;
+
+/**
+ * The explorer's in-flight inline-edit state: the rename and create drafts,
+ * the two pending confirmations, and the errors those surfaces display.
+ * One prop rather than six — the fields travel together between
+ * `WorkspaceExplorer` and its view.
+ */
+export interface ExplorerEditingState {
+  readonly renaming: RenameState | null;
+  readonly creating: CreateState | null;
+  readonly pendingDelete: NativeWorkspaceEntry | null;
+  readonly pendingExtensionConfirm: PendingExtensionConfirm | null;
+  readonly inlineCreateError: string | null;
+  readonly extensionConfirmError: string | null;
+}
 
 export function isNewNoteCreate(target: CreateState): target is NewNoteCreateState {
   return target.kind === "file" && target.source === "new-note";

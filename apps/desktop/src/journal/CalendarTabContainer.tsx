@@ -10,13 +10,13 @@ import {
   type WeekStart,
   type EventSubscriber
 } from "@thinkbrain/core";
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { AppEvents } from "../events/appEvents";
 import { CalendarTab } from "./CalendarTab";
-import { useJournalListRefresh, type JournalTroubleCode } from "./journalChrome";
+import { useJournalListRefresh, useJournalListing } from "./journalChrome";
 import { selectJournalDay, useJournalFilter } from "./journalFilterStore";
-import { JournalError, type JournalService } from "./journalService";
+import type { JournalService } from "./journalService";
 
 /**
  * Feeds the calendar from the journal folder.
@@ -55,11 +55,21 @@ export function CalendarTabContainer({
   const today = toJournalDate(now());
   const [view, setView] = useState<CalendarView>(initialView);
   const [focusDate, setFocusDate] = useState<JournalDate>(today);
-  const [entries, setEntries] = useState<readonly CalendarEntry[]>([]);
+  const { status, listing, reload } = useJournalListing(service);
+  // Metadata filtering waits on the platform index (D41); until then the
+  // calendar counts entries, which is all D29's first release shows.
+  const entries = useMemo<readonly CalendarEntry[]>(
+    () =>
+      listing?.entries.map((entry) => ({
+        relativePath: entry.relativePath,
+        ref: entry.ref,
+        values: {}
+      })) ?? [],
+    [listing]
+  );
   // Null while the folder reads fine, which covers both "still loading" and
   // "loaded": neither draws anything the other does not.
-  const [trouble, setTrouble] = useState<JournalTroubleCode | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
+  const trouble = status === "loading" || status === "ready" ? null : status;
   const { selectedDay } = useJournalFilter();
 
   // `initialView` is now reactive (the journal extension re-reads the setting
@@ -73,50 +83,6 @@ export function CalendarTabContainer({
     setLastInitialView(initialView);
     setView(initialView);
   }
-
-  const read = useCallback(async (): Promise<{
-    readonly trouble: JournalTroubleCode | null;
-    readonly entries: readonly CalendarEntry[];
-  }> => {
-    try {
-      const listing = await service.listEntries();
-      return {
-        trouble: null,
-        entries: listing.entries.map((entry) => ({
-          relativePath: entry.relativePath,
-          ref: entry.ref,
-          // Metadata filtering waits on the platform index (D41); until then the
-          // calendar counts entries, which is all D29's first release shows.
-          values: {}
-        }))
-      };
-    } catch (error: unknown) {
-      // The service already turned this into approved copy (D63); the tab only
-      // needs to know which state to draw. Swallowing it here would draw a grid
-      // of empty days, which reads as "you wrote nothing" rather than "I could
-      // not look".
-      return {
-        trouble: error instanceof JournalError ? error.code : "unreadable",
-        entries: []
-      };
-    }
-  }, [service]);
-
-  useEffect(() => {
-    // A workspace switch can land while a read is in flight; the stale result
-    // must not overwrite the newer one.
-    let cancelled = false;
-    void read().then((next) => {
-      if (cancelled) return;
-      setTrouble(next.trouble);
-      setEntries(next.entries);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [read, reloadToken]);
-
-  const reload = useCallback((): void => setReloadToken((token) => token + 1), []);
 
   // The calendar is a second view of a folder the user edits from elsewhere, so
   // it has to hear about writes rather than trust its mount-time read (D68).

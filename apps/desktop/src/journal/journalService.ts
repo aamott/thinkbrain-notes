@@ -80,6 +80,17 @@ const UNREADABLE_FOLDER = "Can't read the journal folder.";
 /** Which failure happened, so the UI picks a state without matching on copy. */
 export type JournalErrorCode = "no-workspace" | "invalid-root" | "unreadable";
 
+/**
+ * The title copy each failure code carries, keyed by code so the UI states
+ * (`JournalTrouble`) draw from the same strings the errors are thrown with —
+ * two copies that must agree but can drift are how inconsistency ships (D63).
+ */
+export const JOURNAL_ERROR_TITLES: Record<JournalErrorCode, string> = {
+  "no-workspace": NO_WORKSPACE,
+  "invalid-root": INVALID_ROOT,
+  unreadable: UNREADABLE_FOLDER
+};
+
 /** An error carrying user-facing copy plus the detail behind it. */
 export class JournalError extends Error {
   constructor(
