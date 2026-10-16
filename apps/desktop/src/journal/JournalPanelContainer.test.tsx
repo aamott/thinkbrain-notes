@@ -140,6 +140,44 @@ describe("journal panel container", () => {
     expect(openEntry).toHaveBeenCalledWith("journal/2026-08-07-1802.md");
   });
 
+  it("deletes an entry only after the dialog confirms", async () => {
+    const deleteEntry = vi.fn(async () => undefined);
+    const host = await mount({ service: service({ deleteEntry }) });
+    const row = [...host.querySelectorAll('[role="treeitem"]')].find((el) =>
+      el.getAttribute("aria-label")?.includes("6:02 PM")
+    );
+    if (!row) throw new Error("entry row missing");
+
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    // First Delete opens the confirm dialog; the second is the dialog's own
+    // button — the menu is gone by then.
+    await click(host, "Delete");
+    expect(deleteEntry).not.toHaveBeenCalled();
+
+    await click(host, "Delete");
+    expect(deleteEntry).toHaveBeenCalledWith("journal/2026-08-07-1802.md");
+  });
+
+  it("keeps the entry when the delete dialog is cancelled", async () => {
+    const deleteEntry = vi.fn(async () => undefined);
+    const host = await mount({ service: service({ deleteEntry }) });
+    const row = [...host.querySelectorAll('[role="treeitem"]')].find((el) =>
+      el.getAttribute("aria-label")?.includes("6:02 PM")
+    );
+    if (!row) throw new Error("entry row missing");
+
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    await click(host, "Delete");
+    await click(host, "Cancel");
+
+    expect(deleteEntry).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("6:02 PM");
+  });
+
   it("collapses and reopens a group", async () => {
     const host = await mount();
 
