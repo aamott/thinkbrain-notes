@@ -19,6 +19,8 @@ const commandContext: DesktopCommandContext = {
   revealPanel: () => undefined,
   revealLeftPanel: () => undefined,
   openSettings: () => undefined,
+  goBack: () => undefined,
+  goForward: () => undefined,
   closePalette: () => undefined
 };
 
@@ -27,7 +29,8 @@ describe("desktop command registry", () => {
     const registry = createDesktopCommandRegistry();
 
     expect(registry.entries().map((command) => command.id)).toEqual([
-      "open-file", "new-note", "search", "toggle-live-preview", "toggle-theme",
+      "open-file", "new-note", "search", "go-back", "go-forward",
+      "toggle-live-preview", "toggle-theme",
       "toggle-explorer", "toggle-outline", "toggle-assistant", "toggle-bottom-panel",
       "open-settings", "open-graph", "open-extensions"
     ]);

@@ -387,6 +387,38 @@ describe("tab activation history", () => {
     expect(canGoForwardInTabs(forward)).toBe(false);
   });
 
+  it("keeps the cursor on its visit when an unrelated tab closes mid-history", () => {
+    // Visits [A, C, B, A], then three Backs land on the first A with a live
+    // forward tail ahead of it.
+    const opened = reduce(
+      { type: "open", tab: noteA },
+      { type: "open", tab: noteC },
+      { type: "open", tab: noteB },
+      { type: "activate", tabId: noteA.id },
+      { type: "goBack" },
+      { type: "goBack" },
+      { type: "goBack" }
+    );
+    expect(opened.activeTabId).toBe(noteA.id);
+
+    // Closing C must not move the cursor: Forward still walks B then A, the
+    // same future it had before the close. Re-anchoring by `lastIndexOf`
+    // would jump to the *last* A and flip the forward tail into the back
+    // stack — Back would walk visits that were in the user's future.
+    const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteC.id });
+
+    expect(closed.history.entries).toEqual([noteA.id, noteB.id, noteA.id]);
+    expect(closed.activeTabId).toBe(noteA.id);
+    expect(canGoBackInTabs(closed)).toBe(false);
+    expect(canGoForwardInTabs(closed)).toBe(true);
+
+    const forward = desktopTabReducer(closed, { type: "goForward" });
+    expect(forward.activeTabId).toBe(noteB.id);
+    const forward2 = desktopTabReducer(forward, { type: "goForward" });
+    expect(forward2.activeTabId).toBe(noteA.id);
+    expect(canGoForwardInTabs(forward2)).toBe(false);
+  });
+
   it("anchors the cursor on the survivor when the active tab closes", () => {
     const opened = reduce(
       { type: "open", tab: noteA },

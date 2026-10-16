@@ -27,7 +27,12 @@ import { type NewTabAction } from "../tabs/NewTabView";
 import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
-import { canGoBackInTabs, canGoForwardInTabs, inspectableRelativePath } from "../tabs/tabModel";
+import {
+  canGoBackInTabs,
+  canGoForwardInTabs,
+  historyDestination,
+  inspectableRelativePath
+} from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
@@ -166,6 +171,8 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           currentWorkspacePath={shell.restoredWorkspacePath ?? undefined}
           canGoBack={canGoBackInTabs(tabState)}
           canGoForward={canGoForwardInTabs(tabState)}
+          backDestination={historyDestination(tabState, -1)}
+          forwardDestination={historyDestination(tabState, 1)}
           onBack={() => dispatchTabs({ type: "goBack" })}
           onForward={() => dispatchTabs({ type: "goForward" })}
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}

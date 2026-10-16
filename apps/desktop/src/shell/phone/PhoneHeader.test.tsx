@@ -39,18 +39,18 @@ const button = (label: string): HTMLButtonElement | null =>
   container!.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
 
 describe("PhoneHeader", () => {
-  it("keeps Back visible but hides Forward at the history boundaries", async () => {
+  it("keeps Back and Forward visible but disabled at the history boundaries", async () => {
     await render();
 
     expect(button("Back")?.disabled).toBe(true);
-    expect(button("Forward")).toBeNull();
+    expect(button("Forward")?.disabled).toBe(true);
     expect(container?.querySelector('[aria-label="Open navigation"]')).toBeNull();
   });
 
-  it("enables Back independently and renders Forward only when available", async () => {
+  it("enables Back and Forward independently", async () => {
     await render({ canGoBack: true, canGoForward: false });
     expect(button("Back")?.disabled).toBe(false);
-    expect(button("Forward")).toBeNull();
+    expect(button("Forward")?.disabled).toBe(true);
 
     await act(async () => {
       root?.render(

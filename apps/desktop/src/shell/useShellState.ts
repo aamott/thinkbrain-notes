@@ -184,6 +184,7 @@ export function useShellState(): ShellState {
     paletteOpen,
     runCommand
   } = useShellCommands({
+    tabState,
     dispatchTabs,
     theme,
     setTheme,

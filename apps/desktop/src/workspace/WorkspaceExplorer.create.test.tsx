@@ -625,6 +625,8 @@ describe("desktop canonical New note command integration", () => {
         revealPanel: vi.fn(),
         revealLeftPanel: vi.fn(),
         openSettings: vi.fn(),
+        goBack: vi.fn(),
+        goForward: vi.fn(),
         closePalette
       };
       return inShell(fixture.api, "/vault",

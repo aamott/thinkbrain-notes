@@ -1,16 +1,20 @@
 # History Input Parity
 
-**Status:** ⬜ pending · **Urgency:** med · **Difficulty:** easy
+**Status:** ✅ done · **Urgency:** med · **Difficulty:** easy
 
-Back/Forward are click-only today. Every comparable surface (browsers,
-Obsidian, VS Code, file managers) exposes them on more inputs. Bring the app
-to parity.
+Back/Forward were click-only. Now at parity: Alt+←/→ and Ctrl/Cmd+[/] on
+the keyboard, mouse X1/X2 thumb buttons, and command-palette entries gated
+on `canGoBack`/`canGoForward`. Destination tooltips ("Back to X") and the
+always-rendered phone Forward were picked up as optional polish; the
+history-dropdown remains open.
 
 ## In scope
 
-- Keyboard shortcut in `useShellShortcuts` — pick a platform-idiomatic chord
-  (Alt+←/→ matches browsers/file managers; Ctrl+Alt+←/→ matches Obsidian;
-  decide and document).
+- Keyboard shortcut in `useShellShortcuts` — decided: **Alt+←/→** (the
+  browser/file-manager chord) plus **Ctrl/Cmd+[/]** (the macOS browser
+  chord, kept everywhere since nothing else binds it). Alt+←/→ defers to
+  text inputs where it means word-jump; Ctrl+Alt+←/→ (Obsidian) was skipped
+  because desktop environments commonly claim it for workspace switching.
 - Mouse back/forward thumb buttons (X1/X2, `auxclick`/pointer button 3–4) on
   desktop.
 - Command-palette entries so the actions are discoverable and remappable

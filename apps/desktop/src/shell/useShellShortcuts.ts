@@ -29,7 +29,16 @@ export interface ShellShortcutsProps {
 /**
  * Binds the global shortcuts: command palette (Ctrl/Cmd+P), explorer
  * (Ctrl/Cmd+B), bottom dock (Ctrl/Cmd+J), save (Ctrl/Cmd+S), tab switching
- * (Ctrl+Tab / Ctrl+Shift+Tab), and Escape to dismiss the palette.
+ * (Ctrl+Tab / Ctrl+Shift+Tab), history Back/Forward (Alt+Left/Right, plus
+ * Ctrl/Cmd+[ and Ctrl/Cmd+]), mouse thumb buttons, and Escape to dismiss
+ * the palette.
+ *
+ * History chords: Alt+Left/Right is the browser and file-manager convention
+ * and stays free of editing conflicts on every platform — on macOS the
+ * word-jump chord is Option+Left/Right in *text inputs*, so it also gets the
+ * browser-native Cmd+[/Cmd+] alternative. Dispatching is unconditional: the
+ * reducer no-ops when the cursor has nowhere to go, same contract the
+ * title-bar buttons rely on via `canGoBackInTabs`/`canGoForwardInTabs`.
  */
 export function useShellShortcuts({
   tabState,
@@ -77,11 +86,47 @@ export function useShellShortcuts({
           void saveDocument(activeTab);
         }
       }
+      // History Back/Forward. Skipped while an editable element has focus
+      // so Alt+Left/Right inside an editor keeps its word-jump meaning;
+      // Cmd/Ctrl+[/] stays bound regardless since no editing shortcut uses it.
+      if (
+        (event.key === "[" || event.key === "]") &&
+        modifier &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        dispatchTabs({ type: event.key === "[" ? "goBack" : "goForward" });
+        return;
+      }
+      if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        const target = event.target as HTMLElement | null;
+        const inEditable =
+          target !== null &&
+          (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
+        if (!inEditable) {
+          event.preventDefault();
+          dispatchTabs({ type: event.key === "ArrowLeft" ? "goBack" : "goForward" });
+        }
+        return;
+      }
       if (event.key === "Escape") {
         if (!event.defaultPrevented && paletteOpen) closePalette();
       }
     };
+    // Mouse thumb buttons (X1/X2) arrive as auxclick button 3/4 — the same
+    // Back/Forward gesture browsers and file managers honour. `mouseup` is
+    // used rather than `auxclick` for WebKitGTK coverage, where auxclick is
+    // not reliably dispatched for the extra buttons.
+    const onMouseUp = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      dispatchTabs({ type: event.button === 3 ? "goBack" : "goForward" });
+    };
     window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
   }, [closePalette, openPalette, paletteOpen, selectLeftPanel, toggleBottomPanel, activeTab, saveDocument, dispatchTabs, tabState.tabs, tabState.activeTabId]);
 }

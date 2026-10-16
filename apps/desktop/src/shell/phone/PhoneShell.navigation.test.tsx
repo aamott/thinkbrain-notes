@@ -78,10 +78,10 @@ describe("PhoneShell navigation", () => {
 
     expect(locationPill(host)).toContain("Files");
     expect(filesVisible(host)).toBe(true);
-    // Back remains visible and dimmed at the root; Forward has no useful target
-    // and stays out of the header until a Back creates one.
+    // Both stay dimmed at the history ends — Forward renders disabled rather
+    // than disappearing so the header doesn't reflow when a target appears.
     expect(backButton(host)?.disabled).toBe(true);
-    expect(forwardButton(host)).toBeNull();
+    expect(forwardButton(host)?.disabled).toBe(true);
     expect(host.querySelector('[aria-label="Open navigation"]')).toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe("PhoneShell navigation", () => {
   it("Forward returns to the note after Back", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
-    expect(forwardButton(host)).toBeNull();
+    expect(forwardButton(host)?.disabled).toBe(true);
 
     await click(host, "Back");
     expect(filesVisible(host)).toBe(true);
@@ -154,7 +154,7 @@ describe("PhoneShell navigation", () => {
     await click(host, "Forward");
     expect(noteTitleVisible(host)).toBe(true);
     expect(noteTitle(host)?.value).toBe("note");
-    expect(forwardButton(host)).toBeNull();
+    expect(forwardButton(host)?.disabled).toBe(true);
   });
 
   it("opens and closes the action-items menu without adding it to history", async () => {
@@ -259,7 +259,7 @@ describe("PhoneShell navigation", () => {
     await click(host, "Back");
     expect(visibleDialog(host, "Open tabs")).toBeNull();
     expect(noteTitleVisible(host)).toBe(true);
-    expect(forwardButton(host)).toBeNull();
+    expect(forwardButton(host)?.disabled).toBe(true);
 
     // And the next Back still walks content history to Files.
     await click(host, "Back");

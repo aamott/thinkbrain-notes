@@ -1,6 +1,6 @@
 # History Cursor Re-Anchor Bug
 
-**Status:** ⬜ pending · **Urgency:** med · **Difficulty:** easy
+**Status:** ✅ done · **Urgency:** med · **Difficulty:** easy
 
 `removeTab` re-anchors the history cursor with
 `entries.lastIndexOf(activeTabId)` — the *last* occurrence of the surviving
