@@ -12,7 +12,7 @@ struct Fixture {
 
 impl Fixture {
     fn view(&self) -> ConflictView {
-        view(&self.vault, COPY, None).expect("the conflict is readable")
+        view(None, &self.vault, COPY, None).expect("the conflict is readable")
     }
 
     /// Resolves with the fingerprints the panel would have been handed.
@@ -114,8 +114,8 @@ fn only_a_real_conflict_copy_can_be_opened() {
         ),
         ("../outside.md", "workspace.invalid_path"),
     ] {
-        let refused =
-            view(&f.vault, path, None).expect_err(&format!("{path} was accepted as a conflict"));
+        let refused = view(None, &f.vault, path, None)
+            .expect_err(&format!("{path} was accepted as a conflict"));
         assert_eq!(
             refused.code, code,
             "{path} was refused for the wrong reason"
@@ -152,7 +152,7 @@ fn a_card_gets_both_versions_without_paying_for_the_texts() {
 fn an_unsaved_editor_buffer_stands_in_for_this_computers_version() {
     let f = text_fixture("resolve-buffer");
 
-    let seen = view(&f.vault, COPY, Some("# Note\nstill typing\nend\n"))
+    let seen = view(None, &f.vault, COPY, Some("# Note\nstill typing\nend\n"))
         .expect("the conflict is readable");
 
     assert_eq!(
@@ -171,7 +171,7 @@ fn an_unsaved_editor_buffer_stands_in_for_this_computers_version() {
 fn the_fingerprint_follows_the_disk_even_when_a_buffer_is_shown() {
     let f = text_fixture("resolve-buffer-fingerprint");
 
-    let with_buffer = view(&f.vault, COPY, Some("# Note\nstill typing\nend\n"))
+    let with_buffer = view(None, &f.vault, COPY, Some("# Note\nstill typing\nend\n"))
         .expect("the conflict is readable");
 
     assert_eq!(
