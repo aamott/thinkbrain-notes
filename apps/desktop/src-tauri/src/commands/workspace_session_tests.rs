@@ -15,18 +15,32 @@ fn index() -> Connection {
     Connection::open_in_memory().expect("an in-memory index opens")
 }
 
+/// Exercises the same two-phase watch the public entry point runs across
+/// the global lock: join a live watcher, else spawn one and adopt it.
+fn watch_into(
+    sessions: &mut WorkspaceSessions,
+    root: &str,
+    label: &str,
+    start: impl FnOnce() -> Result<WorkspaceDebouncer, NativeError>,
+) -> Result<(), NativeError> {
+    if sessions.acquire_watch(root, label) {
+        return Ok(());
+    }
+    sessions.adopt_watcher(root, label, start()?);
+    Ok(())
+}
+
 /// Two windows on one vault share its watcher, and it goes with the last.
 #[test]
 fn a_watcher_lives_while_any_window_wants_it() {
     let mut sessions = WorkspaceSessions::default();
     let mut started = 0;
     for label in ["main", "second"] {
-        sessions
-            .watch("/vault", label, || {
-                started += 1;
-                idle_watcher()
-            })
-            .expect("watching succeeds");
+        watch_into(&mut sessions, "/vault", label, || {
+            started += 1;
+            idle_watcher()
+        })
+        .expect("watching succeeds");
     }
     assert_eq!(started, 1, "the second window started a second watcher");
 
@@ -43,9 +57,7 @@ fn a_watcher_lives_while_any_window_wants_it() {
 #[test]
 fn the_search_connection_goes_with_the_last_window() {
     let mut sessions = WorkspaceSessions::default();
-    sessions
-        .watch("/vault", "main", idle_watcher)
-        .expect("watching succeeds");
+    watch_into(&mut sessions, "/vault", "main", idle_watcher).expect("watching succeeds");
     let pooled = sessions.pool_search("/vault", index());
     assert!(Arc::ptr_eq(
         &pooled,
@@ -76,15 +88,11 @@ fn a_second_search_connection_for_one_vault_is_turned_away() {
 fn releasing_a_workspace_drops_everything_it_held_at_once() {
     let mut sessions = WorkspaceSessions::default();
     for label in ["main", "second", "second"] {
-        sessions
-            .watch("/vault", label, idle_watcher)
-            .expect("watching succeeds");
+        watch_into(&mut sessions, "/vault", label, idle_watcher).expect("watching succeeds");
     }
     sessions.pool_search("/vault", index());
     sessions.register_launch("second", "/vault");
-    sessions
-        .watch("/other", "main", idle_watcher)
-        .expect("watching succeeds");
+    watch_into(&mut sessions, "/other", "main", idle_watcher).expect("watching succeeds");
 
     let (holders, released) = sessions.release_workspace("/vault");
 
@@ -106,15 +114,9 @@ fn releasing_a_workspace_drops_everything_it_held_at_once() {
 fn a_destroyed_window_releases_its_watches_and_its_launch() {
     let mut sessions = WorkspaceSessions::default();
     sessions.register_launch("doomed", "/mine");
-    sessions
-        .watch("/mine", "doomed", idle_watcher)
-        .expect("watching succeeds");
-    sessions
-        .watch("/shared", "doomed", idle_watcher)
-        .expect("watching succeeds");
-    sessions
-        .watch("/shared", "main", idle_watcher)
-        .expect("watching succeeds");
+    watch_into(&mut sessions, "/mine", "doomed", idle_watcher).expect("watching succeeds");
+    watch_into(&mut sessions, "/shared", "doomed", idle_watcher).expect("watching succeeds");
+    watch_into(&mut sessions, "/shared", "main", idle_watcher).expect("watching succeeds");
 
     let retired = sessions.release_window("doomed");
 
@@ -142,9 +144,7 @@ fn a_launch_is_remembered_independently_of_watching() {
         Some("/vault")
     );
 
-    sessions
-        .watch("/vault", "window-a", idle_watcher)
-        .expect("watching succeeds");
+    watch_into(&mut sessions, "/vault", "window-a", idle_watcher).expect("watching succeeds");
     sessions.unwatch("/vault", "window-a");
     assert_eq!(
         sessions.launched_root("window-a").as_deref(),
@@ -156,15 +156,33 @@ fn a_launch_is_remembered_independently_of_watching() {
     assert!(!sessions.holds("/vault"));
 }
 
+/// Two first watchers racing both spawn; the first to adopt wins and the
+/// loser's is handed back to be dropped.
+#[test]
+fn a_watcher_that_loses_the_first_watch_race_is_dropped() {
+    let mut sessions = WorkspaceSessions::default();
+    assert!(
+        sessions
+            .adopt_watcher("/vault", "main", idle_watcher().expect("watcher starts"))
+            .is_none(),
+        "the first watcher is kept"
+    );
+    assert!(
+        sessions
+            .adopt_watcher("/vault", "second", idle_watcher().expect("watcher starts"))
+            .is_some(),
+        "the losing spawn is handed back"
+    );
+}
+
 /// A watcher that fails to start leaves nothing claiming it exists.
 #[test]
 fn a_watcher_that_fails_to_start_registers_no_interest() {
     let mut sessions = WorkspaceSessions::default();
-    let error = sessions
-        .watch("/vault", "main", || {
-            Err(NativeError::new("watcher.start_failed", "no"))
-        })
-        .expect_err("the failure is reported");
+    let error = watch_into(&mut sessions, "/vault", "main", || {
+        Err(NativeError::new("watcher.start_failed", "no"))
+    })
+    .expect_err("the failure is reported");
     assert_eq!(error.code, "watcher.start_failed");
     assert!(!sessions.holds("/vault"));
 }

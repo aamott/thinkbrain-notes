@@ -41,21 +41,34 @@ pub struct WorkspaceSessions {
 }
 
 impl WorkspaceSessions {
-    /// Registers one request from `label` to watch `root`, starting the
-    /// watcher if nobody was watching it yet.
-    ///
-    /// The watcher starts before the interest is registered, so a failure to
-    /// start leaves nothing claiming a watcher that does not exist.
-    fn watch<F>(&mut self, root: &str, label: &str, start: F) -> Result<(), NativeError>
-    where
-        F: FnOnce() -> Result<WorkspaceDebouncer, NativeError>,
-    {
+    /// Records `label`'s request when `root` is watched already, reporting
+    /// whether it joined. Checked and recorded together: a request must not
+    /// land on a watcher the last release just retired.
+    fn acquire_watch(&mut self, root: &str, label: &str) -> bool {
         if !self.interest.is_watched(root) {
-            let watcher = start()?;
-            self.sessions.entry(root.to_string()).or_default().watcher = Some(watcher);
+            return false;
         }
         self.interest.acquire(root, label);
-        Ok(())
+        true
+    }
+
+    /// Records `label`'s request and stores `watcher` for `root`. When a
+    /// racing caller placed a watcher first, this one is handed back for the
+    /// caller to drop outside the lock.
+    fn adopt_watcher(
+        &mut self,
+        root: &str,
+        label: &str,
+        watcher: WorkspaceDebouncer,
+    ) -> Option<WorkspaceDebouncer> {
+        self.interest.acquire(root, label);
+        let session = self.sessions.entry(root.to_string()).or_default();
+        if session.watcher.is_some() {
+            Some(watcher)
+        } else {
+            session.watcher = Some(watcher);
+            None
+        }
     }
 
     /// Drops one request, yielding what the last request was keeping alive.
@@ -171,13 +184,29 @@ fn with_sessions<T>(f: impl FnOnce(&mut WorkspaceSessions) -> T) -> T {
     f(guard.get_or_insert_with(WorkspaceSessions::default))
 }
 
-/// Registers one request from `label` to watch `root`; see
-/// [`WorkspaceSessions::watch`].
+/// Registers one request from `label` to watch `root`, starting the watcher
+/// if nobody was watching it yet.
+///
+/// The watcher is spawned outside the lock — creating it registers an OS
+/// watch and starts a debouncer thread, and every window's open and close
+/// waits on this table, the same reason `search_connection` opens outside
+/// it. Two first watchers racing both spawn; the first to adopt wins and the
+/// other's is dropped.
+///
+/// Interest is registered only once a watcher exists, so a failure to start
+/// leaves nothing claiming a watcher that does not exist.
 pub fn watch<F>(root: &str, label: &str, start: F) -> Result<(), NativeError>
 where
     F: FnOnce() -> Result<WorkspaceDebouncer, NativeError>,
 {
-    with_sessions(|sessions| sessions.watch(root, label, start))
+    if with_sessions(|sessions| sessions.acquire_watch(root, label)) {
+        return Ok(());
+    }
+    let watcher = start()?;
+    drop(with_sessions(|sessions| {
+        sessions.adopt_watcher(root, label, watcher)
+    }));
+    Ok(())
 }
 
 /// Releases one of `label`'s requests to watch `root`, closing the watcher,
