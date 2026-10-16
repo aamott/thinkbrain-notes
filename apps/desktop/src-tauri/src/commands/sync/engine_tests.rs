@@ -173,6 +173,7 @@ fn a_conflict_found_twice_is_only_one_conflict() {
         copy: "note.sync-conflict-20260816-093100-K3SDFHG.md".to_string(),
         original: "note.md".to_string(),
         provider: "Syncthing",
+        base: None,
     };
 
     f.engine.note_conflicts([copy.clone()]);
@@ -190,6 +191,7 @@ fn only_the_first_sighting_of_a_conflict_is_worth_announcing() {
         copy: "note.sync-conflict-20260816-093100-K3SDFHG.md".to_string(),
         original: "note.md".to_string(),
         provider: "Syncthing",
+        base: None,
     };
 
     assert!(

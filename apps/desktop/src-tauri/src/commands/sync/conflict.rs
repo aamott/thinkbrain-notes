@@ -34,6 +34,22 @@ pub struct ConflictCopy {
     /// Vault-relative path of the note it was copied from.
     pub original: String,
     pub provider: &'static str,
+    /// The per-file base blob the producing merge computed, when it computed
+    /// one. Only a pull knows it; a daemon's copy, and any copy found again by
+    /// name after a restart, leave it `None` and have their base derived from
+    /// the recorded chain when opened.
+    pub base: Option<NotedBase>,
+}
+
+/// A pull's base for one copy, and the copy content it was computed for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NotedBase {
+    /// The per-file ancestor blob.
+    pub id: gix::ObjectId,
+    /// The blob id of the copy as the pull wrote it. A later pull can rewrite
+    /// the same slot before it notes its own base; content that no longer
+    /// matches is not the pair this base belongs to.
+    pub written: gix::ObjectId,
 }
 
 /// Splits a file name into stem and extension, keeping the dot with the
@@ -318,6 +334,7 @@ pub fn pair(relative: &str, original_exists: impl Fn(&str) -> bool) -> Option<Co
             copy: relative.to_string(),
             original,
             provider: pattern.provider,
+            base: None,
         });
     }
     None
