@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -8,7 +7,8 @@ import {
 } from "react";
 
 import { intersectPaths, type JournalFacet, type JournalPredicate } from "./journalFacets";
-import { JournalError, type JournalListing, type JournalService } from "./journalService";
+import { useJournalListing } from "./journalChrome";
+import type { JournalListing, JournalService } from "./journalService";
 import type { JournalStatus } from "./journalViewModel";
 
 /**
@@ -91,9 +91,7 @@ export function useJournalEntriesQuery({
   loadFacets,
   matchEntries
 }: UseJournalEntriesQueryInput): JournalEntriesQuery {
-  const [status, setStatus] = useState<JournalStatus>("loading");
-  const [listing, setListing] = useState<JournalListing | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
+  const { status, listing, reload, retry } = useJournalListing(service, listKey);
   const [search, setSearch] = useState("");
   const [matches, setMatches] = useState<{
     readonly query: string;
@@ -107,37 +105,6 @@ export function useJournalEntriesQuery({
     readonly of: readonly JournalPredicate[];
     readonly paths: ReadonlySet<string>;
   } | null>(null);
-
-  /** Reads the folder without touching state, so the effect owns when to apply it. */
-  const read = useCallback(async (): Promise<{
-    readonly status: JournalStatus;
-    readonly listing: JournalListing | null;
-  }> => {
-    try {
-      return { status: "ready", listing: await service.listEntries() };
-    } catch (error: unknown) {
-      // The service already turned this into approved copy (D63); the panel
-      // only needs to know which state to draw.
-      return {
-        status: error instanceof JournalError ? error.code : "unreadable",
-        listing: null
-      };
-    }
-  }, [service]);
-
-  useEffect(() => {
-    // A workspace switch can land while a read is in flight; the stale result
-    // must not overwrite the newer one.
-    let cancelled = false;
-    void read().then((next) => {
-      if (cancelled) return;
-      setStatus(next.status);
-      setListing(next.listing);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [read, reloadToken, listKey]);
 
   const filtersAvailable =
     indexAvailable && loadFacets !== undefined && matchEntries !== undefined;
@@ -217,13 +184,6 @@ export function useJournalEntriesQuery({
       clearTimeout(timer);
     };
   }, [query, searching, searchEntries]);
-
-  // Stable identity: the container's note-event subscriptions key on it.
-  const reload = useCallback((): void => setReloadToken((token) => token + 1), []);
-  const retry = (): void => {
-    setStatus("loading");
-    reload();
-  };
 
   return {
     status,

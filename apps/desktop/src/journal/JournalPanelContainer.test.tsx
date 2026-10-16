@@ -10,7 +10,12 @@ import {
   resetJournalFilter,
   selectJournalDay
 } from "./journalFilterStore";
-import { JournalError, type JournalListing, type JournalService } from "./journalService";
+import {
+  JOURNAL_ERROR_TITLES,
+  JournalError,
+  type JournalListing,
+  type JournalService
+} from "./journalService";
 import { parseJournalFilename, UNDATED, type JournalEntryRef } from "@thinkbrain/core";
 
 let root: Root | null = null;
@@ -81,16 +86,20 @@ describe("journal panel container", () => {
     expect(host.textContent).toContain("Fri 7");
   });
 
-  it("shows the approved copy when no workspace is open", async () => {
+  // Failure copy is owned by journalChrome.test.tsx; these prove the error
+  // code reaches a drawn state with its action.
+  it("shows the no-workspace state when no workspace is open", async () => {
     const host = await mount({
       service: service({
         listEntries: async () => {
-          throw new JournalError("no-workspace", "Open a folder to start journaling.", undefined);
+          throw new JournalError("no-workspace", "No workspace is open.", undefined);
         }
       })
     });
 
-    expect(host.textContent).toContain("Open a folder to start journaling.");
+    expect(host.querySelector('[role="tree"]')).toBeNull();
+    // The code's title, not a literal: journalChrome.test.tsx owns the copy.
+    expect(host.textContent).toContain(JOURNAL_ERROR_TITLES["no-workspace"]);
   });
 
   it("shows the unreadable-folder state and retries from it", async () => {
@@ -102,7 +111,7 @@ describe("journal panel container", () => {
       .mockResolvedValue(listing(["2026-08-07-1802.md"]));
     const host = await mount({ service: service({ listEntries }) });
 
-    expect(host.textContent).toContain("Can't read the journal folder.");
+    expect(host.querySelector('[role="tree"]')).toBeNull();
     await click(host, "Retry");
 
     expect(host.querySelector('[role="tree"]')).not.toBeNull();
@@ -129,6 +138,44 @@ describe("journal panel container", () => {
     await click(host, "Fri 7, 6:02 PM");
 
     expect(openEntry).toHaveBeenCalledWith("journal/2026-08-07-1802.md");
+  });
+
+  it("deletes an entry only after the dialog confirms", async () => {
+    const deleteEntry = vi.fn(async () => undefined);
+    const host = await mount({ service: service({ deleteEntry }) });
+    const row = [...host.querySelectorAll('[role="treeitem"]')].find((el) =>
+      el.getAttribute("aria-label")?.includes("6:02 PM")
+    );
+    if (!row) throw new Error("entry row missing");
+
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    // First Delete opens the confirm dialog; the second is the dialog's own
+    // button — the menu is gone by then.
+    await click(host, "Delete");
+    expect(deleteEntry).not.toHaveBeenCalled();
+
+    await click(host, "Delete");
+    expect(deleteEntry).toHaveBeenCalledWith("journal/2026-08-07-1802.md");
+  });
+
+  it("keeps the entry when the delete dialog is cancelled", async () => {
+    const deleteEntry = vi.fn(async () => undefined);
+    const host = await mount({ service: service({ deleteEntry }) });
+    const row = [...host.querySelectorAll('[role="treeitem"]')].find((el) =>
+      el.getAttribute("aria-label")?.includes("6:02 PM")
+    );
+    if (!row) throw new Error("entry row missing");
+
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    await click(host, "Delete");
+    await click(host, "Cancel");
+
+    expect(deleteEntry).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("6:02 PM");
   });
 
   it("collapses and reopens a group", async () => {
@@ -165,7 +212,11 @@ describe("journal panel container", () => {
 
     await click(host, "New journal entry");
 
-    expect(host.textContent).toContain("Can't read the journal folder.");
+    // The failed action re-read the folder; the read's failure replaced the list.
+    expect(host.querySelector('[role="tree"]')).toBeNull();
+    expect(
+      [...host.querySelectorAll("button")].some((b) => b.textContent === "Retry")
+    ).toBe(true);
     errors.mockRestore();
   });
 });
