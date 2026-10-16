@@ -500,16 +500,32 @@ function removeTab(state: DesktopTabState, tabId: string): DesktopTabState {
     ? tabs[index]?.id ?? tabs[index - 1]?.id ?? null
     : state.activeTabId;
 
-  // The closed tab's visits die with it; the cursor re-anchors on the last
-  // visit of the tab that stays active, so Back never lands on the tab that
-  // was just closed.
+  // The closed tab's visits die with it. The cursor keeps pointing at the
+  // same *visit* — it shifts left by however many earlier entries died —
+  // rather than re-anchoring on the active tab's last occurrence, which would
+  // silently promote Forward visits into the Back stack when the user is
+  // sitting on an earlier visit of a repeated tab (`[A, B, A]`, cursor on the
+  // first A, close an unrelated tab: lastIndexOf would jump to the last A).
   const entries = state.history.entries.filter((id) => id !== tabId);
-  let cursor = activeTabId === null ? -1 : entries.lastIndexOf(activeTabId);
-  // Every activated tab has an entry; if state arrived without one (a
-  // reducer-external tab list, say a test fixture), record it now.
-  if (cursor < 0 && activeTabId !== null) {
-    entries.push(activeTabId);
-    cursor = entries.length - 1;
+  let cursor: number;
+  const currentVisit = state.history.entries[state.history.cursor];
+  if (currentVisit !== undefined && currentVisit !== tabId) {
+    let removedBefore = 0;
+    for (let index = 0; index < state.history.cursor; index += 1) {
+      if (state.history.entries[index] === tabId) removedBefore += 1;
+    }
+    cursor = state.history.cursor - removedBefore;
+  } else {
+    // The visit the user was on died with the closed tab (or there was none):
+    // re-anchor on the most recent visit of the tab left active, so Back
+    // never lands on the tab that was just closed.
+    cursor = activeTabId === null ? -1 : entries.lastIndexOf(activeTabId);
+    // Every activated tab has an entry; if state arrived without one (a
+    // reducer-external tab list, say a test fixture), record it now.
+    if (cursor < 0 && activeTabId !== null) {
+      entries.push(activeTabId);
+      cursor = entries.length - 1;
+    }
   }
 
   return { tabs, activeTabId, closeRequest: null, history: { entries, cursor } };
@@ -547,6 +563,19 @@ export function canGoBackInTabs(state: DesktopTabState): boolean {
 /** Whether the title bar's Forward button has a later visit to re-walk. */
 export function canGoForwardInTabs(state: DesktopTabState): boolean {
   return liveEntryIndex(state, 1) >= 0;
+}
+
+/**
+ * The open tab Back (`direction` `-1`) or Forward (`1`) would land on, or
+ * `null` when there is nowhere to go — the same live-entry scan the buttons
+ * and `stepHistory` share, so a destination tooltip can never promise a
+ * visit the action would skip.
+ */
+export function historyDestination(state: DesktopTabState, direction: -1 | 1): DesktopTab | null {
+  const index = liveEntryIndex(state, direction);
+  if (index < 0) return null;
+  const tabId = state.history.entries[index];
+  return state.tabs.find((tab) => tab.id === tabId) ?? null;
 }
 
 /**

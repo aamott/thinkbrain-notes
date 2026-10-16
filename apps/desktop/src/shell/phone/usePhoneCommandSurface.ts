@@ -44,7 +44,12 @@ export function usePhoneCommandSurface(navigation: PhoneNavigation): void {
           revealLeft(panelId);
         }
       },
-      revealLeftPanel: revealLeft
+      revealLeftPanel: revealLeft,
+      // History walks this chrome's route stack, not desktop tab history —
+      // `back`/`forward` already no-op when the browser-history depth says
+      // there is nowhere to go.
+      goBack: navigation.back,
+      goForward: navigation.forward
     };
   }, [navigation]);
   useCommandSurface(commandSurface);

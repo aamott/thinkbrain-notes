@@ -47,6 +47,10 @@ type TitleBarProps = {
   readonly canGoBack: boolean;
   /** Whether a Forward visit exists after Back moved the history cursor. */
   readonly canGoForward: boolean;
+  /** The tab Back would land on — the button's "Back to X" tooltip. */
+  readonly backDestination: DesktopTab | null;
+  /** The tab Forward would land on — the button's "Forward to X" tooltip. */
+  readonly forwardDestination: DesktopTab | null;
   /** Called when the user clicks Back. */
   readonly onBack: () => void;
   /** Called when the user clicks Forward. */
@@ -96,6 +100,8 @@ export function TitleBar({
   currentWorkspacePath,
   canGoBack,
   canGoForward,
+  backDestination,
+  forwardDestination,
   onBack,
   onForward,
   onSelectTab,
@@ -238,7 +244,7 @@ export function TitleBar({
             type="button"
             className={NAV_BUTTON}
             aria-label="Back"
-            title="Back"
+            title={backDestination ? `Back to ${tabAccessibleName(backDestination)}` : "Back"}
             disabled={!canGoBack}
             onClick={onBack}
           >
@@ -248,7 +254,7 @@ export function TitleBar({
             type="button"
             className={NAV_BUTTON}
             aria-label="Forward"
-            title="Forward"
+            title={forwardDestination ? `Forward to ${tabAccessibleName(forwardDestination)}` : "Forward"}
             disabled={!canGoForward}
             onClick={onForward}
           >

@@ -38,6 +38,13 @@ export interface DesktopCommandContext {
   /** Reveals a left-side panel by id; admits registered extension panels too. */
   readonly revealLeftPanel: (panelId: string) => void;
   readonly openSettings: () => void;
+  /**
+   * Steps the activation history back/forward one visit. On the desktop
+   * chrome this walks `DesktopTabHistory`; the phone chrome reroutes both to
+   * its browser-history-backed navigation via `useCommandSurface`.
+   */
+  readonly goBack: () => void;
+  readonly goForward: () => void;
   readonly closePalette: (restoreFocus?: boolean) => void;
 }
 
@@ -114,6 +121,20 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     keywords: ["find", "full text"],
     keybinding: "Ctrl/Cmd+Shift+F",
     handler: withClosePalette("openSearch")
+  }),
+  available({
+    id: "go-back",
+    title: "Go back",
+    keywords: ["history", "navigate", "previous"],
+    keybinding: "Alt+←",
+    handler: withClosePalette("goBack")
+  }),
+  available({
+    id: "go-forward",
+    title: "Go forward",
+    keywords: ["history", "navigate", "next"],
+    keybinding: "Alt+→",
+    handler: withClosePalette("goForward")
   }),
   available({
     id: "toggle-live-preview",

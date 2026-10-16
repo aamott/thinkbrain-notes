@@ -6,7 +6,7 @@
  * a command does — and the chromes only see the results.
  */
 
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import {
   useDesktopCommands,
@@ -16,7 +16,13 @@ import {
 import { persistDesktopState } from "../settings/desktopStatePersistence";
 import { useSettingsStore } from "../settings/settingsStore";
 import type { AppTheme } from "../settings/ThemeProvider";
-import { createStaticTab, type DesktopTabAction } from "../tabs/tabModel";
+import {
+  canGoBackInTabs,
+  canGoForwardInTabs,
+  createStaticTab,
+  type DesktopTabAction,
+  type DesktopTabState
+} from "../tabs/tabModel";
 import {
   isSelectableLeftPanel,
   isSelectableRightPanel,
@@ -55,6 +61,7 @@ export function useCommandSurface(overrides: Partial<DesktopCommandContext>): vo
 }
 
 interface UseShellCommandsOptions {
+  readonly tabState: DesktopTabState;
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
   readonly theme: AppTheme;
   readonly setTheme: (theme: AppTheme) => void;
@@ -68,6 +75,7 @@ interface UseShellCommandsOptions {
 }
 
 export function useShellCommands({
+  tabState,
   dispatchTabs,
   theme,
   setTheme,
@@ -79,7 +87,33 @@ export function useShellCommands({
   toggleRightPanel,
   toggleBottomPanel
 }: UseShellCommandsOptions) {
-  const paletteCommands = useDesktopCommands();
+  const registeredCommands = useDesktopCommands();
+  // Back/Forward are state-dependent like the title-bar buttons: when the
+  // history cursor has nowhere to go the palette greys the command out with
+  // a reason rather than running a no-op. (The desktop `requires` downgrade
+  // in `useDesktopCommands` is the same pattern, driven by platform
+  // capabilities; this one is driven by the live tab history.)
+  const paletteCommands = useMemo(
+    () =>
+      registeredCommands.map((command) => {
+        if (command.id === "go-back" && !canGoBackInTabs(tabState)) {
+          return {
+            ...command,
+            availability: "unavailable" as const,
+            unavailableMessage: "No earlier visit in this workspace's history."
+          };
+        }
+        if (command.id === "go-forward" && !canGoForwardInTabs(tabState)) {
+          return {
+            ...command,
+            availability: "unavailable" as const,
+            unavailableMessage: "No forward visit — it is cleared whenever a new tab is activated."
+          };
+        }
+        return command;
+      }),
+    [registeredCommands, tabState]
+  );
   const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -150,6 +184,10 @@ export function useShellCommands({
         if (isSelectableLeftPanel(panelId)) revealLeft(panelId);
       },
       openSettings: openSettingsTab,
+      // Same actions the title-bar buttons dispatch; the reducer no-ops when
+      // the cursor has nowhere to go.
+      goBack: () => dispatchTabs({ type: "goBack" }),
+      goForward: () => dispatchTabs({ type: "goForward" }),
       closePalette,
       // Spread last: the mounted chrome's rerouted effects (see
       // `useCommandSurface`) replace the desktop dock wiring above. The
@@ -161,7 +199,7 @@ export function useShellCommands({
       .catch((error: unknown) => {
         console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
       });
-  }, [closePalette, openSettingsTab, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setRightPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel]);
+  }, [closePalette, dispatchTabs, openSettingsTab, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setRightPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel]);
 
   return {
     closePalette,

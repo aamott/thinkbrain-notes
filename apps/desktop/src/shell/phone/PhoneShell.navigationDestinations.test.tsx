@@ -152,7 +152,7 @@ describe("PhoneShell drawer destinations", () => {
     await drawerPick(host, "Search");
     expect(searchVisible(host)).toBe(true);
     // The note entry was truncated: no Forward target remains.
-    expect(forwardButton(host)).toBeNull();
+    expect(forwardButton(host)?.disabled).toBe(true);
 
     await click(host, "Back");
     expect(filesVisible(host)).toBe(true);
