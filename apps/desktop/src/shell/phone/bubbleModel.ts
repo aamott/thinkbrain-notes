@@ -1,7 +1,7 @@
 import type { PhoneRoute } from "./usePhoneNavigation";
 
 /** The floating-bubble identifiers, in their stable within-group order. */
-export type BubbleId = "home" | "new-note" | "actions";
+type BubbleId = "home" | "new-note" | "actions";
 
 /** Everything {@link resolveBubbles} needs; computed once per PhoneShell render. */
 export interface BubbleContext {

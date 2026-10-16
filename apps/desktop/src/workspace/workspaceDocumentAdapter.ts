@@ -27,7 +27,7 @@ export interface WorkspaceMarkdownDocumentWrite extends WorkspaceMarkdownDocumen
   readonly expected: string | undefined;
 }
 
-export interface WorkspaceMarkdownDocumentCreate extends WorkspaceMarkdownDocumentRef {
+interface WorkspaceMarkdownDocumentCreate extends WorkspaceMarkdownDocumentRef {
   readonly contents?: string;
 }
 

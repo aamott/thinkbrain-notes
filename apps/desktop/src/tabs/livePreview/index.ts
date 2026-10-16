@@ -14,6 +14,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { buildDecorations } from "./decorate";
 import { extractWikiLinkTarget } from "./nodes/links";
 import type { LivePreviewOptions } from "./options";
+import { selectionTouchesRange } from "./reveal";
 import { livePreviewTheme } from "./theme";
 
 export type { LivePreviewOptions } from "./options";
@@ -71,16 +72,51 @@ export function livePreview(options: LivePreviewOptions = {}): Extension {
   // document. The handler walks up from the click target to find a
   // `cm-link-resolved` element, resolves the target at the clicked position,
   // and calls `onOpenNote` with the vault-relative path.
+  //
+  // Reveal state is sampled at `mousedown`, not `click`: CodeMirror moves the
+  // cursor into the link on mousedown, so by click time the selection always
+  // touches it. `press` remembers which link the press started on and whether
+  // its syntax was still hidden. A press on a concealed link follows; a press
+  // on a revealed link edits unless Mod is held — Mod+click follows either way.
+  let press: { from: number; to: number; revealed: boolean } | null = null;
   const clickHandler = options.onOpenNote
     ? EditorView.domEventHandlers({
-        click: (event, view) => {
+        // `pointerdown` rather than `mousedown`: it covers touch taps too, and
+        // it still fires before CodeMirror moves the cursor into the link.
+        pointerdown: (event, view) => {
+          press = null;
           const target = event.target;
           if (!(target instanceof HTMLElement)) return false;
 
           const resolvedEl = target.closest(".cm-link-resolved");
-          if (!resolvedEl) return false;
+          if (!(resolvedEl instanceof HTMLElement)) return false;
+
+          const node = wikiLinkNodeAt(view, view.posAtDOM(resolvedEl));
+          if (!node) return false;
+
+          press = {
+            from: node.from,
+            to: node.to,
+            revealed: selectionTouchesRange(view.state, node.from, node.to)
+          };
+          return false;
+        },
+        click: (event, view) => {
+          const start = press;
+          press = null;
+          const target = event.target;
+          if (!(target instanceof HTMLElement) || !start) return false;
+
+          const resolvedEl = target.closest(".cm-link-resolved");
+          if (!(resolvedEl instanceof HTMLElement)) return false;
 
           const pos = view.posAtDOM(resolvedEl);
+          const node = wikiLinkNodeAt(view, pos);
+          // The release has to land on the same link the press started on —
+          // a drag that merely ends over a link is a selection gesture.
+          if (!node || node.from !== start.from || node.to !== start.to) return false;
+          if (start.revealed && !event.ctrlKey && !event.metaKey) return false;
+
           if (!openWikiLinkAt(view, pos, options)) return false;
           event.preventDefault();
           return true;
@@ -105,12 +141,17 @@ export function livePreview(options: LivePreviewOptions = {}): Extension {
   return [plugin, clickHandler, keyHandler, livePreviewTheme];
 }
 
+/** The `WikiLink` syntax node containing `pos`, or `null`. */
+function wikiLinkNodeAt(view: EditorView, pos: number): SyntaxNode | null {
+  let node: SyntaxNode | null = syntaxTree(view.state).resolve(pos, 1);
+  while (node && node.name !== "WikiLink") node = node.parent;
+  return node && node.name === "WikiLink" ? node : null;
+}
+
 /** Resolves a wiki link at `pos` and calls `onOpenNote`. Returns true if handled. */
 function openWikiLinkAt(view: EditorView, pos: number, options: LivePreviewOptions): boolean {
-  const tree = syntaxTree(view.state);
-  let node: SyntaxNode | null = tree.resolve(pos, 1);
-  while (node && node.name !== "WikiLink") node = node.parent;
-  if (!node || node.name !== "WikiLink") return false;
+  const node = wikiLinkNodeAt(view, pos);
+  if (!node) return false;
   const targetText = extractWikiLinkTarget(node, view.state.doc);
   if (!targetText) return false;
   const resolvedPath = resolveWikiLinkTarget(targetText, options.noteIndex ?? []);

@@ -50,7 +50,7 @@ export interface DesktopTabRegistry {
   subscribe(listener: () => void): () => void;
 }
 
-export const builtInDesktopTabViews: readonly DesktopTabView[] = [
+const builtInDesktopTabViews: readonly DesktopTabView[] = [
   {
     kind: "editor",
     label: "Markdown editor",

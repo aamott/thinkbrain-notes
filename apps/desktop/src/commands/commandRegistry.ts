@@ -41,7 +41,7 @@ export interface DesktopCommandContext {
   readonly closePalette: (restoreFocus?: boolean) => void;
 }
 
-export type CommandAvailability = "available" | "unavailable";
+type CommandAvailability = "available" | "unavailable";
 
 /** Desktop specialization of the platform-agnostic command contribution. */
 export interface DesktopCommand
@@ -61,7 +61,7 @@ export interface DesktopCommand
 }
 
 /** Platform capabilities a command can declare a dependency on. */
-export type PlatformCapability =
+type PlatformCapability =
   | "canSpawnProcess"; // terminal, ACP agent host
 
 export type DesktopCommandRegistry = ContributionRegistry<DesktopCommand>;

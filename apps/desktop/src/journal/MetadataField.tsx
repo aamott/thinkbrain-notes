@@ -10,7 +10,7 @@ import { useState } from "react";
  * value is reported the moment it changes and nothing is written here.
  */
 
-export type MetadataFieldSize = "compact" | "touch";
+type MetadataFieldSize = "compact" | "touch";
 
 export interface MetadataFieldProps {
   readonly definition: JournalFieldDefinition;

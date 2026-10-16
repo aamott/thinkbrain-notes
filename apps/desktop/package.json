@@ -1,6 +1,6 @@
 {
   "name": "@thinkbrain/desktop",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -32,7 +32,6 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "@thinkbrain/core": "workspace:*",
     "@thinkbrain/ui": "workspace:*",
-    "codemirror": "^6.0.2",
     "lucide-react": "^1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

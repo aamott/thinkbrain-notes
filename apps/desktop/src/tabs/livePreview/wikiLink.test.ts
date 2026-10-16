@@ -111,6 +111,12 @@ describe("wiki link resolution styling", () => {
   });
 });
 
+/** Dispatches the pointerdown+click pair a real pointer press produces. */
+function pressLink(el: HTMLElement, init: MouseEventInit = {}): void {
+  el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, ...init }));
+  el.dispatchEvent(new MouseEvent("click", { bubbles: true, ...init }));
+}
+
 describe("wiki link click navigation", () => {
   it("calls onOpenNote when a resolved wiki link is clicked", () => {
     const onOpenNote = vi.fn();
@@ -120,7 +126,7 @@ describe("wiki link click navigation", () => {
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
-    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    pressLink(linkEl);
     expect(onOpenNote).toHaveBeenCalledTimes(1);
     expect(onOpenNote).toHaveBeenCalledWith("My Note.md");
   });
@@ -133,7 +139,7 @@ describe("wiki link click navigation", () => {
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-broken") as HTMLElement;
     expect(linkEl).not.toBeNull();
-    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    pressLink(linkEl);
     expect(onOpenNote).not.toHaveBeenCalled();
   });
 
@@ -143,9 +149,7 @@ describe("wiki link click navigation", () => {
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
     // Should not throw — just a no-op.
-    expect(() =>
-      linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }))
-    ).not.toThrow();
+    expect(() => pressLink(linkEl)).not.toThrow();
   });
 
   it("calls onOpenNote with the correct path for an aliased link", () => {
@@ -156,8 +160,49 @@ describe("wiki link click navigation", () => {
     });
     const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
     expect(linkEl).not.toBeNull();
-    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    pressLink(linkEl);
     expect(onOpenNote).toHaveBeenCalledWith("folder/Other.md");
+  });
+
+  it("does not follow a revealed link on a plain click", () => {
+    const onOpenNote = vi.fn();
+    // Cursor at 8 sits inside [[My Note]], so the syntax is already revealed —
+    // a plain click is an edit, not a follow.
+    preview = mountPreview("see [[My Note]] now", 8, {
+      noteIndex: NOTE_INDEX,
+      onOpenNote
+    });
+    const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
+    expect(linkEl).not.toBeNull();
+    pressLink(linkEl);
+    expect(onOpenNote).not.toHaveBeenCalled();
+  });
+
+  it("follows a revealed link on Mod+click", () => {
+    const onOpenNote = vi.fn();
+    preview = mountPreview("see [[My Note]] now", 8, {
+      noteIndex: NOTE_INDEX,
+      onOpenNote
+    });
+    const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
+    expect(linkEl).not.toBeNull();
+    pressLink(linkEl, { ctrlKey: true });
+    expect(onOpenNote).toHaveBeenCalledWith("My Note.md");
+  });
+
+  it("does not follow when the press started outside the link", () => {
+    const onOpenNote = vi.fn();
+    preview = mountPreview("see [[My Note]] now", 0, {
+      noteIndex: NOTE_INDEX,
+      onOpenNote
+    });
+    const linkEl = preview.view.dom.querySelector(".cm-link-resolved") as HTMLElement;
+    const line = linkEl.closest(".cm-line") as HTMLElement;
+    // A press that begins off the link and releases onto it is a selection
+    // gesture, not a follow — only the click leg fires on the link.
+    line.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onOpenNote).not.toHaveBeenCalled();
   });
 });
 

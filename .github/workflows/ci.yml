@@ -36,6 +36,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Dead code
+        run: pnpm knip --no-progress
+
       - name: Typecheck
         run: pnpm typecheck
 

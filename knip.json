@@ -7,7 +7,7 @@
     },
     "apps/desktop": {
       "entry": ["index.html", "demo/main.tsx", "e2e/**/*.spec.ts"],
-      "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "demo/**/*.{ts,tsx}", "*.ts"],
+      "project": ["src/**/*.{ts,tsx,css}", "e2e/**/*.ts", "demo/**/*.{ts,tsx}", "*.ts"],
       "paths": { "@/*": ["./src/*"] }
     },
     "packages/core": {},

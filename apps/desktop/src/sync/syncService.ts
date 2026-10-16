@@ -16,7 +16,6 @@ import type {
   HistoryUsage,
   SavedSignIn,
   SignInStatus,
-  Synced,
   SyncStatus,
   VersionDiff
 } from "./historyTypes";
@@ -37,17 +36,6 @@ export const HISTORY_PAGE = 60;
 
 export function readSyncStatus(rootPath: string): Promise<SyncStatus> {
   return invokeNativeCommand("sync_status", { rootPath });
-}
-
-/**
- * One round trip to wherever this folder syncs to: bring down what changed
- * there, merge it, send ours back.
- *
- * Slow by nature — it is a network call around a merge — so a caller has to
- * expect to wait, and the native side keeps two of them from overlapping.
- */
-export function syncNow(rootPath: string): Promise<Synced> {
-  return invokeNativeCommand("sync_now", { rootPath });
 }
 
 /** Saves credentials, then starts a background check of the git link. */

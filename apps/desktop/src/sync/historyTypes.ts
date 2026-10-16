@@ -6,9 +6,9 @@
  * nothing in the UI is entitled to read anything into them.
  */
 
-export type NoteChangeKind = "added" | "updated" | "removed";
+type NoteChangeKind = "added" | "updated" | "removed";
 
-export interface ChangedNote {
+interface ChangedNote {
   /** Workspace-relative, forward slashes. */
   readonly path: string;
   readonly change: NoteChangeKind;
@@ -21,7 +21,7 @@ export interface ChangedNote {
  * was supplied. `recorded` is the version the selected change kept. Restoring
  * replaces `current` with `recorded`, which is exactly what the preview draws.
  */
-export interface VersionText {
+interface VersionText {
   readonly current: string;
   readonly recorded: string;
 }
@@ -47,7 +47,7 @@ export type VersionDiff = VersionDiffBase &
  * the record says about itself. The panel only names the source when one
  * timeline mixes the two.
  */
-export type HistorySource = "local" | "git";
+type HistorySource = "local" | "git";
 
 /** One recorded change, as the history list shows it. */
 export interface RecordedChange {
@@ -97,7 +97,7 @@ export type SyncState = "off" | "problem" | "syncing" | "attention" | "saving" |
 export type SyncPhase = "saving" | "checking" | "combining" | "sending";
 
 /** Whether a git link has completed a round trip from this device. */
-export type SyncHealth = "unknown" | "healthy" | "problem";
+type SyncHealth = "unknown" | "healthy" | "problem";
 
 export interface SyncProblem {
   readonly code: string;
@@ -107,7 +107,7 @@ export interface SyncProblem {
 }
 
 /** A note that could not be written or recorded, with something to do about it. */
-export interface StuckNote {
+interface StuckNote {
   readonly path: string;
   readonly code: string;
   readonly message: string;
@@ -163,7 +163,7 @@ export const NOT_RECORDING: SyncStatus = Object.freeze({
 });
 
 /** What became of the notes we tried to send on. */
-export type SyncLanded =
+type SyncLanded =
   | { readonly state: "moved" }
   /** Retained as a native diagnostic; the UI gives a stable, actionable message instead. */
   | { readonly state: "refused"; readonly reason: string };
@@ -195,18 +195,18 @@ export interface HistoryCleanup {
 }
 
 /** One reusable git sign-in, without its token. */
-export interface SignInProfile {
+interface SignInProfile {
   readonly id: string;
   readonly label: string;
   readonly host: string;
   readonly username: string;
 }
 
-export interface SelectedSignIn extends SignInProfile {
+interface SelectedSignIn extends SignInProfile {
   readonly saved: boolean;
 }
 
-export type SignInStorage = "available" | "unavailable" | "unsupported";
+type SignInStorage = "available" | "unavailable" | "unsupported";
 
 export interface SignInStatus {
   readonly storage: SignInStorage;
