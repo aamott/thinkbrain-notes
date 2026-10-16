@@ -126,9 +126,10 @@ pub fn open(
 
 /// The base for `pairing`, judged against `ours` and `theirs`.
 ///
-/// The merge's own base when the copy carries one and it is still readable;
-/// otherwise the best recorded version of the note from before the copy
-/// arrived.
+/// The merge's own base when the copy carries one, the copy still holds the
+/// content it was noted for, and the base is readable; otherwise the best
+/// recorded version of the note from before the copy arrived. `theirs` is the
+/// copy's content as just read, so the check needs no lock and no other read.
 pub fn derive(
     repo: &gix::Repository,
     root: &Path,
@@ -136,7 +137,12 @@ pub fn derive(
     ours: &[u8],
     theirs: &[u8],
 ) -> Result<Option<MergeBase>, NativeError> {
-    if let Some(id) = pairing.base {
+    let as_noted = |written| {
+        gix::objs::compute_hash(repo.object_hash(), gix::object::Kind::Blob, theirs)
+            .is_ok_and(|id| id == written)
+    };
+    if let Some(noted) = pairing.base.filter(|noted| as_noted(noted.written)) {
+        let id = noted.id;
         if let Ok(object) = repo.find_object(id) {
             let (confidence, risky_hunks) = judge(ours, &object.data, theirs);
             return Ok(Some(MergeBase {

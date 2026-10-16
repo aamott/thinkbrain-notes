@@ -269,14 +269,50 @@ fn a_base_noted_by_a_pull_is_used_when_the_conflict_opens() {
     let v = vault("base-noted");
     v.record(BASELINE);
     v.record("ONE\ntwo\nthree\n");
-    let copy = "note (from another device).md";
-    v.arrive(copy, "one\ntwo\nTHREE\n", at_second(1_000));
-    let mut pulled = super::super::conflict::pair(copy, |_| true).expect("a git copy");
-    pulled.base = Some(gix::ObjectId::from_hex(blob(BASELINE).as_bytes()).expect("hex"));
-    v.engine.note_conflicts([pulled]);
+    v.arrive(PULLED, "one\ntwo\nTHREE\n", at_second(1_000));
+    v.engine
+        .note_pulled_conflicts([pulled(BASELINE, "one\ntwo\nTHREE\n")]);
 
-    let base = v.base(copy).expect("the noted base is used");
+    let base = v.base(PULLED).expect("the noted base is used");
 
     assert_eq!(base.id, blob(BASELINE));
     assert_eq!(base.source, BaseSource::Merge);
+}
+
+/// A second pull rewrites the same slot, and the copy is opened before that
+/// pull notes its own base. The engine still holds the first pull's base,
+/// which belongs to other content, so it is not used for this copy.
+#[test]
+fn a_noted_base_is_not_used_once_the_copy_has_been_rewritten() {
+    let v = vault("base-noted-rewritten");
+    v.record(BASELINE);
+    v.record("ONE\ntwo\nthree\n");
+    v.arrive(PULLED, "one\ntwo\nTHREE\n", much_later());
+    v.engine
+        .note_pulled_conflicts([pulled(BASELINE, "one\ntwo\nTHREE\n")]);
+
+    v.arrive(PULLED, "one\nTWO\nthree\n", much_later());
+    let base = v.base(PULLED).expect("a recorded base is named");
+
+    assert_eq!(
+        base.source,
+        BaseSource::Recorded,
+        "a stale noted base was used"
+    );
+}
+
+const PULLED: &str = "note (from another device).md";
+
+/// The pull's copy at `PULLED`, noted with `base` for the content `written`.
+fn pulled(base: &str, written: &str) -> super::super::conflict::ConflictCopy {
+    let mut copy = super::super::conflict::pair(PULLED, |_| true).expect("a git copy");
+    copy.base = Some(super::super::conflict::NotedBase {
+        id: object_id(base),
+        written: object_id(written),
+    });
+    copy
+}
+
+fn object_id(contents: &str) -> gix::ObjectId {
+    gix::ObjectId::from_hex(blob(contents).as_bytes()).expect("hex")
 }

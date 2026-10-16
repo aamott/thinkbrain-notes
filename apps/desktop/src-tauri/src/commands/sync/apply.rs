@@ -75,7 +75,7 @@ pub(super) fn leave_copies(
         // later be merged against exactly what both sides started from.
         let base = conflict.entries()[0]
             .filter(|entry| entry.mode.is_blob())
-            .map(|entry| entry.id);
+            .map(|entry| noted(entry.id, id.to_owned()));
         left.push(git_copy(beside, original, base));
     }
     Ok((left, skipped))
@@ -146,7 +146,10 @@ pub(super) fn apply(
             // Both the unrecorded text on disk and the arriving version grew
             // from what this vault last recorded at the path. An empty arriving
             // version leaves nothing to merge by line, so it names no base.
-            let base = expected.filter(|_| !theirs.is_empty());
+            let base = expected
+                .zip(blob_id)
+                .filter(|_| !theirs.is_empty())
+                .map(|(expected, written)| noted(expected, written));
             copies.push(git_copy(beside, original, base));
             continue;
         }
@@ -324,10 +327,14 @@ fn write_deletion_marker(
     Ok(git_copy(beside, original, None))
 }
 
+fn noted(id: gix::ObjectId, written: gix::ObjectId) -> conflict::NotedBase {
+    conflict::NotedBase { id, written }
+}
+
 fn git_copy(
     copy: String,
     original: impl Into<String>,
-    base: Option<gix::ObjectId>,
+    base: Option<conflict::NotedBase>,
 ) -> conflict::ConflictCopy {
     conflict::ConflictCopy {
         copy,

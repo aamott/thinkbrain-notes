@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use super::super::conflict::ConflictCopy;
+use super::super::conflict::{ConflictCopy, NotedBase};
 use super::super::round::{self, Synced};
 use super::super::{snapshot, test_support};
 use super::*;
@@ -98,7 +98,13 @@ fn a_pulled_conflict_names_the_base_the_merge_computed() {
         panic!("expected one copy, got {:?}", synced.conflict_copies);
     };
     assert_eq!(copy.copy, COPY);
-    assert_eq!(copy.base, Some(blob("the line\n")));
+    assert_eq!(
+        copy.base,
+        Some(NotedBase {
+            id: blob("the line\n"),
+            written: blob("their wording\n"),
+        })
+    );
 
     let base = derived(&two, copy).expect("a base is named");
     assert_eq!(base.id, blob("the line\n").to_string());
@@ -157,7 +163,10 @@ fn seeing_a_pulled_copy_again_keeps_its_base() {
         copy: COPY.to_string(),
         original: NOTE.to_string(),
         provider: "git",
-        base: Some(blob("the line\n")),
+        base: Some(NotedBase {
+            id: blob("the line\n"),
+            written: blob("their wording\n"),
+        }),
     };
     let by_name = ConflictCopy {
         base: None,
@@ -183,7 +192,10 @@ fn a_later_pull_into_the_same_slot_replaces_the_base() {
         copy: COPY.to_string(),
         original: NOTE.to_string(),
         provider: "git",
-        base: Some(blob("the line\n")),
+        base: Some(NotedBase {
+            id: blob("the line\n"),
+            written: blob("their wording\n"),
+        }),
     };
     let later = ConflictCopy {
         base: None,
@@ -206,7 +218,13 @@ fn a_version_kept_beside_unrecorded_text_names_the_recorded_one_as_base() {
         panic!("expected one copy, got {:?}", synced.conflict_copies);
     };
     assert_eq!(copy.copy, COPY);
-    assert_eq!(copy.base, Some(blob("the line\n")));
+    assert_eq!(
+        copy.base,
+        Some(NotedBase {
+            id: blob("the line\n"),
+            written: blob("their wording\n"),
+        })
+    );
     assert_eq!(
         fs::read_to_string(two.vault.join(NOTE)).expect("readable"),
         "still typing\n"

@@ -56,9 +56,11 @@ A conflict is `(ours, theirs, base?, confidence)` regardless of producer.
   (`merge`/`recorded`). Only `proven` may ever skip review (`mergeIsProven`).
 - Arrival is the copy's mtime less a 2-minute skew margin, compared in whole
   seconds with a strict `<`; anything near the boundary is excluded.
-- A pull's base is held in memory on the engine. Sightings by name (scan,
-  watcher) never overwrite an entry; a later pull into the same slot does.
-  After a restart a git copy falls back to recorded selection.
+- A pull's base is held in memory on the engine with the blob id of the copy
+  it was computed for, and is used only while the copy still has that
+  content. Sightings by name (scan, watcher) never overwrite an entry; a later
+  pull into the same slot does. After a restart a git copy falls back to
+  recorded selection.
 - A base that cannot be derived is logged and reported as none; the conflict
   still opens.
 
