@@ -36,6 +36,7 @@ fn pairing(copy: &str, original: &str) -> ConflictCopy {
         copy: copy.to_string(),
         original: original.to_string(),
         provider: "Syncthing",
+        base: None,
     }
 }
 

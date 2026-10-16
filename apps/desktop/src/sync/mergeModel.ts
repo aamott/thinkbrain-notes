@@ -10,6 +10,8 @@
 import { Chunk } from "@codemirror/merge";
 import { Text } from "@codemirror/state";
 
+import type { ConflictBase } from "./conflictTypes";
+
 /** Whole lines that differ between two texts, split by direction. */
 export interface LineDelta {
   /** Lines present in `after` but not in `before`. */
@@ -42,4 +44,14 @@ export function lineDelta(before: string, after: string): LineDelta {
     }
   }
   return { added, removed };
+}
+
+/**
+ * Whether merging against `base` is proven unable to drop any of our text.
+ *
+ * Only then may a merge go ahead without the user reviewing it. An ambiguous
+ * base, or none at all, leaves both versions for a person to compare.
+ */
+export function mergeIsProven(base: ConflictBase | null | undefined): boolean {
+  return base?.confidence === "proven";
 }
