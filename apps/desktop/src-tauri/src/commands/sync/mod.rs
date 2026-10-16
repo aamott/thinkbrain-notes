@@ -201,6 +201,7 @@ mod history_walk;
 pub mod import;
 pub mod maintain;
 pub mod merge;
+pub mod merge_base;
 mod network;
 pub mod pending;
 pub mod push;
