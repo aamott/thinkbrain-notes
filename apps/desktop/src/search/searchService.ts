@@ -40,7 +40,7 @@ export interface SearchResult {
   readonly score: number;
 }
 
-export interface MetadataPredicate {
+interface MetadataPredicate {
   readonly key: string;
   readonly value: IndexMetadataValue;
 }
@@ -51,7 +51,7 @@ export interface MetadataQuery {
   readonly predicates: readonly MetadataPredicate[];
 }
 
-export interface MetadataFacet {
+interface MetadataFacet {
   readonly key: string;
   readonly values: readonly IndexMetadataValue[];
 }
@@ -62,7 +62,7 @@ export interface MetadataQueryData {
 }
 
 /** Narrows what a single search asks the index about. */
-export interface SearchOptions {
+interface SearchOptions {
   /**
    * Workspace-relative folder to search inside; absent searches the whole
    * vault, which is what a search box over a workspace wants.
@@ -78,7 +78,7 @@ export interface SearchOptions {
 }
 
 /** Options for batch indexing. */
-export interface IndexOptions {
+interface IndexOptions {
   /** Aborts an in-flight `indexWorkspace` between batches. */
   readonly signal?: AbortSignal;
   /** Invoked after each batch with cumulative `{ indexed, total }`. */

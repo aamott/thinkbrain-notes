@@ -30,7 +30,7 @@ export type PhoneRoute =
  * inspector that grew out of the actions menu records `parent: "actions"` so
  * dismissing it restores the menu it came from.
  */
-export type PhoneOverlay =
+type PhoneOverlay =
   | { readonly kind: "navigation" }
   | { readonly kind: "tabs" }
   | { readonly kind: "actions" }

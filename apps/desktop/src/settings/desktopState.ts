@@ -1,11 +1,11 @@
 import { invokeNativeCommand } from "../native/commands";
 import { isRecord } from "@thinkbrain/core";
 
-export const DESKTOP_STATE_VERSION = 5;
+const DESKTOP_STATE_VERSION = 5;
 export const DESKTOP_STATE_KEY = "desktopState";
-export const MAX_RECENT_WORKSPACES = 12;
-export const MIN_PANEL_WIDTH = 224;
-export const MAX_PANEL_WIDTH = 480;
+const MAX_RECENT_WORKSPACES = 12;
+const MIN_PANEL_WIDTH = 224;
+const MAX_PANEL_WIDTH = 480;
 export const DEFAULT_LEFT_PANEL_WIDTH = 288;
 export const DEFAULT_RIGHT_PANEL_WIDTH = 320;
 
@@ -26,7 +26,7 @@ export interface PersistedTab {
  * conflict-safe writes, and churning it on every toggle would collide with the
  * writes that are preferences. Nor in the vault: it describes this machine.
  */
-export type WorkspaceViews = Readonly<
+type WorkspaceViews = Readonly<
   Record<string, Readonly<Record<string, readonly string[]>>>
 >;
 
@@ -38,7 +38,7 @@ export type WorkspaceViews = Readonly<
  * at whichever vault had written last. Keyed by workspace for the same reason
  * `workspaceViews` is, and written the same targeted way.
  */
-export type WorkspaceTabs = Readonly<Record<string, WorkspaceTabState>>;
+type WorkspaceTabs = Readonly<Record<string, WorkspaceTabState>>;
 
 /** What one workspace had open. */
 export interface WorkspaceTabState {
@@ -54,7 +54,7 @@ export interface WorkspaceTabsUpdate {
 }
 
 /** One view's collapsed groups, in one workspace. */
-export interface CollapsedGroupsUpdate {
+interface CollapsedGroupsUpdate {
   readonly workspacePath: string;
   readonly viewId: string;
   readonly collapsed: readonly string[];

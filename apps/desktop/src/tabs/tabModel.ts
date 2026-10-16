@@ -48,7 +48,7 @@ export function isDocumentBackedKind(kind: string): boolean {
   return DOCUMENT_BACKED_KINDS.has(kind);
 }
 
-export interface CloseRequest {
+interface CloseRequest {
   readonly tabId: string;
 }
 
@@ -61,7 +61,7 @@ export interface CloseRequest {
  * history. Entries name tab ids, so a retarget rewrites them in place and a
  * close scrubs them — Back can never land on a tab that no longer exists.
  */
-export interface DesktopTabHistory {
+interface DesktopTabHistory {
   readonly entries: readonly string[];
   /** Index of the current visit; `-1` while nothing has been activated. */
   readonly cursor: number;

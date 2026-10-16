@@ -40,9 +40,10 @@ Non-goals (out of scope for this epic):
 - **Graph logic lives in `packages/core`.** Node/edge assembly, target
   resolution, and filtering are platform-agnostic and must not depend on React
   or a rendering library. The desktop app provides the rendering adapter.
-- **Rendering is desktop-only for now.** The graph view uses a force-directed
-  layout rendered in the desktop app (`apps/desktop`). Mobile (Tauri Mobile
-  build target, Phase 2) is out of scope until core adapter interfaces exist.
+- **Rendering lives in the desktop app as an extension surface.** The graph
+  view uses a force-directed layout rendered by a desktop extension
+  (`apps/desktop`), mountable in the left-bar popout or a workspace tab, and
+  must work on phone layouts too (button → full view).
 - **Graph UI uses shared `--tn-*` tokens.**
 
 ## Dependencies

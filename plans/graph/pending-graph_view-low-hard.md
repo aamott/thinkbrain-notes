@@ -2,36 +2,53 @@
 
 ## Goal
 
-Render a visual network of the whole vault: notes are nodes, wiki-link
-connections are edges. A force-directed layout positions nodes; users can
-pan, zoom, and click a node to open that note. The graph is derived live from
-the wiki-link index — never stored.
+Obsidian-style visual network of the vault: a dot per note, edges for resolved
+wiki links, optional tag nodes. Delivered as an **extension** (loosely coupled,
+registers its own panels/tab surface — follow existing extension conventions).
+Graph assembly lives in `packages/core`, derived live from the wiki-link index
+— never stored, no rendering dependency.
 
-Depends on link target resolution (shipped; see `plans/graph/done-summary.md`).
+## Surfaces
 
-## Acceptance Criteria
+- **Left-bar popout** — compact graph in the popout panel, plus a button that
+  opens the full graph in a workspace tab.
+- **Tab** — full graph view opened from that button.
+- **Mobile** — tapping the button goes straight to the full graph view;
+  no popout.
+- Build the graph UI so its mount surface is swappable — we may move to
+  tab-only later, so the view must not assume it lives in a popout.
 
-- Graph view renders all notes as nodes and resolved wiki links as directed
-      edges.
-- Force-directed layout is stable and performant for vaults up to a few
-      thousand notes (virtualize or sample beyond that).
-- Pan, zoom, and drag-to-rearrange (local layout only, not persisted)
-      work smoothly.
-- Clicking a node opens the note in the editor.
-- Node appearance reflects note status (e.g. `status` frontmatter field)
-      via theme tokens, not hardcoded colors.
-- Graph recomputes when the index updates (file save / reindex).
-- Graph assembly (nodes/edges) is in `packages/core` with no rendering
-      dependency; rendering is desktop-only in `apps/desktop`.
-- Vitest covers graph assembly in `packages/core`.
+## Options panel (right side)
+
+Implementor picks the set; candidates: tag nodes on/off, orphans on/off,
+filter by path/tag/status, local-graph depth around active note, physics
+strength, labels on/off / label zoom threshold.
+
+## Performance (hard requirement)
+
+Must stay smooth with thousands of notes. The implementor plans for this
+explicitly: budget for render (canvas/WebGL, not DOM), incremental layout,
+and adaptive degradation — if the vault exceeds a size threshold or measured
+frame rate drops, group/cluster nodes, drop labels, or limit visible nodes
+rather than jank. Behavior should adapt at runtime, not just at load.
+
+## Acceptance
+
+- All notes render as nodes, resolved wiki links as directed edges; tag
+  nodes optional via the panel.
+- Pan, zoom, drag-to-rearrange (local only, not persisted); click a node to
+  open its note — on every surface, including phone.
+- Adaptive perf: correct clustering/limiting kicks in at scale or under
+  measured jank, without freezing the UI.
+- Node/tag styling via `--tn-*` theme tokens.
+- Recomputes when the wiki-link index updates.
+- Vitest covers assembly + clustering in `packages/core`.
+- Discuss alternatives with owner before locking: renderer choice (canvas vs
+  WebGL lib), physics lib, and any options beyond the candidate list.
 
 ## References
 
-- `packages/core/src/note-model.ts` — `WikiLink`, `NoteMetadata`
-- `packages/core/src/markdown.ts` — `extractWikiLinks`
-- `plans/indexing-search/` — indexing-search epic and index lifecycle
-- `apps/desktop/src-tauri/src/commands/search.rs` — shipped native index backend
-- `apps/desktop/src/native/commands.ts` — existing typed bridge for native
-  index access
-- `plans/graph/` — this epic
-- `plans/graph/done-summary.md` — link target resolution, prerequisite (shipped)
+- `packages/core/src/note-model.ts`, `markdown.ts` — `WikiLink`, `extractWikiLinks`
+- `plans/graph/` — epic; link resolution already shipped (see `done-summary.md`)
+- `apps/desktop/src/extensions/` — extension host, panel/tab registration
+- `apps/desktop/src-tauri/src/commands/search.rs` — native index backend

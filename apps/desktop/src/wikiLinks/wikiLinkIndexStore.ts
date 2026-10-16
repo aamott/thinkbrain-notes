@@ -46,7 +46,7 @@ let currentSubscription: (() => void) | null = null;
 let indexingAbortController: AbortController | null = null;
 
 /** Lifecycle state for the current workspace's in-memory link index. */
-export type WikiLinkIndexStatus = "idle" | "indexing" | "ready" | "error";
+type WikiLinkIndexStatus = "idle" | "indexing" | "ready" | "error";
 
 /** State + actions exposed by the wiki-link index store. */
 export interface WikiLinkIndexStore {

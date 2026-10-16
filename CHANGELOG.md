@@ -3,6 +3,30 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.4.2 — 2026-10-12
+
+Patch release — removes a feature that never worked on real devices and a
+large amount of dead weight found in a full-repo audit.
+
+- **Pinch-to-zoom removed** — the editor pinch gesture shipped in 0.4.1 never
+  fired reliably in real WebViews; the entire feature (~2,200 lines incl.
+  tests) is gone. The `editor.fontSize` and `editor.lineWrapping` settings it
+  drove still apply live.
+- **Sideways page drag fixed** — root `overscroll-behavior: none` stops the
+  whole page rubber-banding on horizontal finger drags; intentional
+  horizontal scrolling inside code blocks and the tab strip is unchanged.
+- **Wiki links follow only when concealed** — clicking a `[[link]]` whose
+  markdown syntax is showing (cursor inside it) now edits instead of
+  navigating; Ctrl/Cmd+click follows either way.
+- **Dead code cleanup** — ~1,700 more lines removed after a top-to-bottom
+  audit: unused exports, write-only fields, guards for states that can't
+  occur, inert capability grants, and the unused `codemirror` dependency.
+- **Migration paths removed** — the flat desktop-state dual-write and legacy
+  URL-keyed sign-in migration are gone. If a workspace still relies on a
+  legacy sign-in, relink it once via Settings → git link.
+- **Tooling** — `pnpm knip` now detects dead files/exports/types/deps and
+  runs in CI so new dead code fails the build.
+
 ## 0.4.1 — 2026-10-11
 
 Patch release focused on mobile reading comfort.

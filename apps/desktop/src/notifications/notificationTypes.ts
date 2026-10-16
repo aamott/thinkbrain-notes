@@ -17,7 +17,7 @@
  */
 
 /** How loudly a notification should be surfaced. */
-export type NotificationSeverity = "silent" | "transient" | "sticky";
+type NotificationSeverity = "silent" | "transient" | "sticky";
 
 /** Visual tone, mapped to theme tokens (success/warning/destructive/info). */
 export type NotificationVariant = "error" | "warning" | "info" | "success";

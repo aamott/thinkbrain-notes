@@ -27,7 +27,7 @@ follow at all (`livePreview/nodes/links.ts` — "deliberately not implemented").
 
 ## Acceptance
 
-- [ ] Tap on a concealed resolved wiki link follows it (current behavior kept);
+- [x] Tap on a concealed resolved wiki link follows it (current behavior kept);
       tap on the same link while its syntax is revealed places the cursor and
       does not follow.
 - [ ] Tap on a concealed `[text](target)` link follows: vault-relative target →

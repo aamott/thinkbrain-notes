@@ -11,7 +11,7 @@ import { describeWhen } from "./conflictCard";
 import type { SyncPhase, SyncStatus } from "./historyTypes";
 
 /** How loudly the footer should say it. */
-export type PillTone = "quiet" | "busy" | "warn";
+type PillTone = "quiet" | "busy" | "warn";
 
 export interface PillCopy {
   readonly symbol: string;

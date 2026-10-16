@@ -30,7 +30,7 @@ export interface JournalEntry {
 }
 
 /** A file in the journal folder whose name carries no unambiguous date (D36, D38). */
-export interface UndatedEntry {
+interface UndatedEntry {
   readonly relativePath: string;
   readonly updatedAt: number | null;
 }
