@@ -1,7 +1,15 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { EventSubscriber } from "@thinkbrain/core";
 import type { AppEvents } from "../events/appEvents";
+import {
+  JOURNAL_ERROR_TITLES,
+  JournalError,
+  type JournalErrorCode,
+  type JournalListing,
+  type JournalService
+} from "./journalService";
+import type { JournalStatus } from "./journalViewModel";
 
 /**
  * Chrome and wiring the journal's two surfaces share.
@@ -54,8 +62,8 @@ export function EmptyState({
   );
 }
 
-/** The three ways listing the journal folder can fail. */
-export type JournalTroubleCode = "no-workspace" | "invalid-root" | "unreadable";
+/** The three ways listing the journal folder can fail — the service's error codes. */
+export type JournalTroubleCode = JournalErrorCode;
 
 export interface JournalTroubleProps {
   readonly status: JournalTroubleCode;
@@ -75,28 +83,79 @@ export function JournalTrouble({
   onChooseFolder,
   onOpenSettings
 }: JournalTroubleProps) {
-  // Three failure modes, each with its approved copy (D63). Built per render
-  // because the callbacks close over the host's affordances; the literal is the
-  // single source of the copy, so the two switch statements that used to drift
-  // (D63) cannot.
-  const COPY: Record<JournalTroubleCode, { title: string; actions: { label: string; run: (() => void) | undefined }[] }> = {
-    "no-workspace": {
-      title: "Open a folder to start journaling.",
-      actions: [{ label: "Open folder…", run: onChooseFolder }]
-    },
-    "invalid-root": {
-      title: "The journal folder setting isn't a valid path.",
-      actions: [{ label: "Open settings", run: onOpenSettings }]
-    },
-    unreadable: {
-      title: "Can't read the journal folder.",
-      actions: [
-        { label: "Retry", run: onRetry },
-        { label: "Choose a different folder…", run: onChooseFolder }
-      ]
-    }
+  // Actions are built per render because they close over the host's
+  // affordances; the titles come from the service so the copy cannot drift
+  // between the error and the state that shows it (D63).
+  const ACTIONS: Record<JournalTroubleCode, { label: string; run: (() => void) | undefined }[]> = {
+    "no-workspace": [{ label: "Open folder…", run: onChooseFolder }],
+    "invalid-root": [{ label: "Open settings", run: onOpenSettings }],
+    unreadable: [
+      { label: "Retry", run: onRetry },
+      { label: "Choose a different folder…", run: onChooseFolder }
+    ]
   };
-  return <EmptyState {...COPY[status]} />;
+  return <EmptyState title={JOURNAL_ERROR_TITLES[status]} actions={ACTIONS[status]} />;
+}
+
+/**
+ * The folder read both journal surfaces share: `listEntries`, the
+ * `JournalError` → status mapping, and a cancelled-flag effect that re-runs
+ * when `key` or the reload token changes. `key` is the listing's identity —
+ * a kept-mounted panel surviving a workspace switch re-reads rather than
+ * showing the last vault's entries.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- shared hook, no JSX
+export function useJournalListing(
+  service: JournalService,
+  key?: unknown
+): {
+  readonly status: JournalStatus;
+  readonly listing: JournalListing | null;
+  /** Re-reads the folder, after an action changed it or a read failed. */
+  readonly reload: () => void;
+  /** Back to loading and a fresh read, for the failure states' Retry. */
+  readonly retry: () => void;
+} {
+  const [state, setState] = useState<{ status: JournalStatus; listing: JournalListing | null }>({
+    status: "loading",
+    listing: null
+  });
+  const [reloadToken, setReloadToken] = useState(0);
+
+  /** Reads the folder without touching state, so the effect owns when to apply it. */
+  const read = useCallback(async () => {
+    try {
+      return { status: "ready" as const, listing: await service.listEntries() };
+    } catch (error: unknown) {
+      // The service already turned this into approved copy (D63); the surface
+      // only needs to know which state to draw.
+      return {
+        status: error instanceof JournalError ? error.code : ("unreadable" as const),
+        listing: null
+      };
+    }
+  }, [service]);
+
+  useEffect(() => {
+    // A workspace switch can land while a read is in flight; the stale result
+    // must not overwrite the newer one.
+    let cancelled = false;
+    void read().then((next) => {
+      if (!cancelled) setState(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [read, reloadToken, key]);
+
+  // Stable identity: containers' note-event subscriptions key on it.
+  const reload = useCallback((): void => setReloadToken((token) => token + 1), []);
+  const retry = useCallback((): void => {
+    setState((current) => ({ ...current, status: "loading" }));
+    reload();
+  }, [reload]);
+
+  return { status: state.status, listing: state.listing, reload, retry };
 }
 
 /**

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { File, FilePlus, FolderOpen, FolderPlus, MoreHorizontal, RefreshCw } from "lucide-react";
-import type { NativeWorkspaceEntry } from "../native/commands";
 import type { WorkspaceExplorerState, WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
@@ -12,7 +11,7 @@ import { CreateFileTypeConfirmDialog } from "./CreateFileTypeConfirmDialog";
 import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, OPEN_FOLDER_LABEL } from "./gitLinkImportCopy";
 import { ManagedStorageNotice, WorkspaceSwitchingSelector } from "./WorkspaceSwitching";
 import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
-import { HEADER_ACTION_CLASSES, type ContextMenuState, type CreateState, type PendingExtensionConfirm, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { HEADER_ACTION_CLASSES, type ContextMenuState, type ExplorerEditingState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 import { useWorkspaceTreeDrag, WORKSPACE_DROP_ROOT_ATTR, type WorkspaceTreeDrag } from "./useWorkspaceTreeDrag";
 import { useWorkspaceFileDrag } from "./useWorkspaceFileDrag";
 
@@ -22,12 +21,7 @@ interface WorkspaceExplorerViewProps {
   readonly tree: readonly WorkspaceTreeNode[];
   readonly workspaceRootPath?: string;
   readonly contextMenu: ContextMenuState | null;
-  readonly renaming: RenameState | null;
-  readonly creating: CreateState | null;
-  readonly pendingDelete: NativeWorkspaceEntry | null;
-  readonly pendingExtensionConfirm: PendingExtensionConfirm | null;
-  readonly inlineCreateError: string | null;
-  readonly extensionConfirmError: string | null;
+  readonly editing: ExplorerEditingState;
   readonly actionError: string | null;
   readonly busy: boolean;
   readonly showHidden: boolean;
@@ -47,12 +41,7 @@ export function WorkspaceExplorerView({
   tree,
   workspaceRootPath,
   contextMenu,
-  renaming,
-  creating,
-  pendingDelete,
-  pendingExtensionConfirm,
-  inlineCreateError,
-  extensionConfirmError,
+  editing,
   actionError,
   busy,
   showHidden,
@@ -64,6 +53,7 @@ export function WorkspaceExplorerView({
   switching,
   workspaceSelectorInPanel = false
 }: WorkspaceExplorerViewProps) {
+  const { renaming, creating, pendingDelete, pendingExtensionConfirm, inlineCreateError, extensionConfirmError } = editing;
   const isBusy = state.phase === "opening" || busy;
   // The menu has to know its own trigger, or the press that closes it counts
   // as an outside click first and it shuts and reopens in one gesture.

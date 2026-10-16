@@ -16,7 +16,7 @@ import {
   remapMovedPath,
   workspaceMoveDestination
 } from "./workspaceMove";
-import { joinPath, isValidName, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
+import { joinPath, isValidName, type ExplorerEditingState, type RenameState, type WorkspaceExplorerActions } from "./workspaceExplorerTypes";
 
 export interface WorkspaceExplorerProps {
   readonly api?: WorkspaceDesktopApi;
@@ -68,6 +68,11 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const tree = useMemo(() => buildWorkspaceTree(state.entries, explorerSort), [state.entries, explorerSort]);
   const workspaceRootPath = state.snapshot?.workspace.root_path;
+  const handleFileSelected = useCallback((relativePath: string) => {
+    if (!workspaceRootPath) return;
+    onFileSelected?.(workspaceRootPath, relativePath);
+  }, [onFileSelected, workspaceRootPath]);
+
   const {
     expandedFolders,
     setExpandedFolders,
@@ -76,8 +81,9 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     expandFolder,
     toggleFolder,
     collapseFolder,
-    handleTreeKeyDown
-  } = useWorkspaceTreeNavigation(tree);
+    handleTreeKeyDown,
+    handleRowKeyDown
+  } = useWorkspaceTreeNavigation(tree, handleFileSelected);
 
   // Refs holding the latest state/props so async helpers never read stale
   // closures after an `await`. The workspace root captured before an operation
@@ -263,11 +269,6 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
     onNewNoteFocusHandled?.();
   }, [state.phase, focusNewNote, onNewNoteFocusHandled, newNoteFocusRequest]);
 
-  const handleFileSelected = useCallback((relativePath: string) => {
-    if (!workspaceRootPath) return;
-    onFileSelected?.(workspaceRootPath, relativePath);
-  }, [onFileSelected, workspaceRootPath]);
-
   const submitRename = useCallback(async (target: RenameState, newName: string): Promise<boolean> => {
     const rootPath = stateRef.current.snapshot?.workspace.root_path;
     if (!rootPath) return false;
@@ -344,6 +345,20 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
 
   const dismissError = session.dismissError;
 
+  // The editing cluster travels as one prop to the view — the six fields
+  // only ever change meaning together.
+  const editing = useMemo<ExplorerEditingState>(
+    () => ({
+      renaming,
+      creating,
+      pendingDelete,
+      pendingExtensionConfirm,
+      inlineCreateError,
+      extensionConfirmError
+    }),
+    [renaming, creating, pendingDelete, pendingExtensionConfirm, inlineCreateError, extensionConfirmError]
+  );
+
   // Memoized, and every member is already a stable callback or state setter.
   // That is load-bearing rather than tidy: `WorkspaceTreeItem` is memoized, and
   // a fresh object here would re-render every row in the tree on every
@@ -357,6 +372,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       submitCreate,
       submitRename,
       handleTreeKeyDown,
+      handleRowKeyDown,
       handleFileSelected,
       showContextMenu,
       showContextMenuAt,
@@ -391,6 +407,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       dismissError,
       dismissExtensionConfirm,
       handleFileSelected,
+      handleRowKeyDown,
       handleTreeKeyDown,
       refreshEntries,
       requestDelete,
@@ -417,12 +434,7 @@ export const WorkspaceExplorer = memo(function WorkspaceExplorer({
       tree={tree}
       workspaceRootPath={workspaceRootPath}
       contextMenu={contextMenu}
-      renaming={renaming}
-      creating={creating}
-      pendingDelete={pendingDelete}
-      pendingExtensionConfirm={pendingExtensionConfirm}
-      inlineCreateError={inlineCreateError}
-      extensionConfirmError={extensionConfirmError}
+      editing={editing}
       actionError={actionError}
       busy={busy}
       showHidden={showHidden}

@@ -10,6 +10,7 @@ import {
 import { listWindow, rowOffsets } from "../lib/listWindow";
 import { noteName } from "../lib/utils";
 import { Menu, MenuButton, MenuSeparator, type MenuPosition } from "../shell/Menu";
+import { ModalDialog } from "../shell/ModalDialog";
 import { EmptyState, JournalTrouble } from "./journalChrome";
 import { Row } from "./JournalRow";
 import { JournalPanelHeader } from "./JournalPanelHeader";
@@ -454,38 +455,37 @@ export function JournalPanel({
         </Menu>
       )}
       {pendingDelete && (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40"
-          onClick={() => setPendingDelete(null)}
+        <ModalDialog
+          title="Delete this entry?"
+          description={
+            <>
+              <span className="break-all">{pendingDelete}</span>
+              <br />
+              This cannot be undone.
+            </>
+          }
+          onDismiss={() => setPendingDelete(null)}
         >
-          <div
-            className="max-w-xs rounded-small border border-border bg-popover p-4 shadow-soft"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="m-0 mb-1 text-sm font-semibold">Delete this entry?</p>
-            <p className="m-0 mb-3 text-xs text-muted-foreground break-all">{pendingDelete}</p>
-            <p className="m-0 mb-3 text-xs text-muted-foreground">This cannot be undone.</p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-small border border-border px-3 py-1 text-xs cursor-pointer hover:bg-secondary"
-                onClick={() => setPendingDelete(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded-small bg-danger px-3 py-1 text-xs text-danger-foreground cursor-pointer"
-                onClick={() => {
-                  onDeleteEntry?.(pendingDelete);
-                  setPendingDelete(null);
-                }}
-              >
-                Delete
-              </button>
-            </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className="min-h-11 rounded-small border border-border px-3 text-xs cursor-pointer hover:bg-secondary"
+              onClick={() => setPendingDelete(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="min-h-11 rounded-small bg-danger px-3 text-xs text-danger-foreground cursor-pointer"
+              onClick={() => {
+                onDeleteEntry?.(pendingDelete);
+                setPendingDelete(null);
+              }}
+            >
+              Delete
+            </button>
           </div>
-        </div>
+        </ModalDialog>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { memo, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Folder, FolderOpen, GripVertical } from "lucide-react";
 import type { WorkspaceTreeNode } from "./workspaceExplorerModel";
 import { WorkspaceFileIcon } from "./WorkspaceFileIcon";
@@ -51,7 +51,6 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
     handleFileSelected,
     showContextMenu,
     toggleFolder,
-    collapseFolder,
     submitRename,
     submitCreate,
     setRenaming,
@@ -81,44 +80,6 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
       buttonRef.current?.focus();
     }
   }, [isActive]);
-
-  const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    switch (event.key) {
-      case "ArrowRight":
-        event.preventDefault();
-        event.stopPropagation();
-        if (isDirectory) {
-          if (!isExpanded) {
-            toggleFolder(node.entry.relative_path);
-          } else {
-            const firstChild = node.children[0];
-            if (firstChild) {
-              setActivePath(firstChild.entry.relative_path);
-            }
-          }
-        }
-        break;
-      case "ArrowLeft":
-        event.preventDefault();
-        event.stopPropagation();
-        if (isDirectory && isExpanded) {
-          collapseFolder(node.entry.relative_path);
-        } else if (node.entry.parent_path) {
-          setActivePath(node.entry.parent_path);
-        }
-        break;
-      case "Enter":
-      case " ":
-        event.preventDefault();
-        event.stopPropagation();
-        if (isDirectory) {
-          toggleFolder(node.entry.relative_path);
-        } else if (isFile) {
-          handleFileSelected(node.entry.relative_path);
-        }
-        break;
-    }
-  }, [isDirectory, isExpanded, isFile, node, toggleFolder, collapseFolder, setActivePath, handleFileSelected]);
 
   return (
     <li className="m-0 p-0" role="treeitem" aria-level={depth + 1} aria-expanded={isDirectory ? isExpanded : undefined}>
@@ -176,7 +137,9 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             type="button"
             style={{ paddingLeft: `${0.75 + depth * 0.875}rem` }}
             tabIndex={isFocusable ? 0 : -1}
-            onKeyDown={handleKeyDown}
+            // The row's key contract lives in useWorkspaceTreeNavigation
+            // with the list-level map, not here.
+            onKeyDown={(event) => actions.handleRowKeyDown(event, node)}
             onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
             onTouchStart={(event) => drag?.onRowTouchStart(event, node.entry)}
             onClick={() => {
