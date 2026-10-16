@@ -1,6 +1,6 @@
 # Story: One chrome row per panel
 
-**Status:** ⬜ pending · **Urgency:** med · **Difficulty:** med
+**Status:** ⬜ pending · **Urgency:** low · **Difficulty:** med
 
 > From `docs/reviews/2026-10-03/panels-one-chrome-row-rule` (finding deleted;
 > this is the tracked work).

@@ -1,4 +1,4 @@
-import { resolveWikiLinkTarget } from "@thinkbrain/core";
+import { resolveMarkdownLinkTarget, resolveWikiLinkTarget } from "@thinkbrain/core";
 import { Decoration } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import type { Text } from "@codemirror/state";
@@ -15,8 +15,11 @@ import { ImageWidget } from "../widgets";
  * first mark's end and everything from the second mark's start leaves exactly
  * the link text visible.
  *
- * Following a link is deliberately not implemented — resolving a target to a
- * workspace file is separate work with its own rules.
+ * A link reads as resolved — `cm-link-resolved`, Obsidian's pointer cursor —
+ * only when its target resolves AND `onOpenLink` exists to follow it; a
+ * pointer that lies is worse than no styling. Unresolved targets get
+ * `cm-link-broken`. Revealed links add `cm-link-revealed`, which swaps the
+ * click affordance back to the editing cursor.
  */
 
 /**
@@ -69,9 +72,25 @@ const link: NodeHandler = (node, ctx) => {
   const pair = brackets(node);
   if (!pair) return;
 
-  ctx.present(Decoration.mark({ class: "cm-link-text" }), pair.open.to, pair.close.from);
-
+  const urlNode = node.node.getChild("URL");
+  const rawTarget = urlNode ? ctx.state.doc.sliceString(urlNode.from, urlNode.to) : null;
+  // Reference-style links ([text][label]) have no inline URL — the target
+  // lives in a definition elsewhere, so there is nothing here to classify.
+  const resolution =
+    rawTarget === null
+      ? undefined
+      : resolveMarkdownLinkTarget(
+          rawTarget,
+          ctx.options.relativePath,
+          ctx.options.noteIndex ?? []
+        );
   const revealed = selectionTouchesRange(ctx.state, node.from, node.to);
+  const classes = ["cm-link-text"];
+  if (resolution === null) classes.push("cm-link-broken");
+  else if (resolution !== undefined && ctx.options.onOpenLink) classes.push("cm-link-resolved");
+  if (revealed) classes.push("cm-link-revealed");
+  ctx.present(Decoration.mark({ class: classes.join(" ") }), pair.open.to, pair.close.from);
+
   concealBrackets(ctx, node, pair, revealed);
 };
 
@@ -107,7 +126,9 @@ const image: NodeHandler = (node, ctx) => {
  * without one, only the brackets are concealed.
  *
  * Resolved links (target matches a note in the index) get `cm-link-resolved`
- * and are clickable; unresolved links get `cm-link-broken` and are not.
+ * and are clickable; unresolved links get `cm-link-broken` and are not. While
+ * the syntax is revealed both additionally carry `cm-link-revealed`, which
+ * swaps the click affordance for the editing one.
  */
 const wikiLink: NodeHandler = (node, ctx) => {
   const parts = wikiLinkParts(node.node);
@@ -121,11 +142,14 @@ const wikiLink: NodeHandler = (node, ctx) => {
   const { noteIndex } = ctx.options;
   const resolved =
     target !== null && noteIndex !== undefined && resolveWikiLinkTarget(target, noteIndex) !== null;
-  const linkClass = resolved ? "cm-link-text cm-link-resolved" : "cm-link-text cm-link-broken";
-
-  ctx.present(Decoration.mark({ class: linkClass }), textFrom, textTo);
 
   const revealed = selectionTouchesRange(ctx.state, node.from, node.to);
+  const classes = ["cm-link-text"];
+  if (resolved && ctx.options.onOpenLink) classes.push("cm-link-resolved");
+  else if (!resolved) classes.push("cm-link-broken");
+  if (revealed) classes.push("cm-link-revealed");
+  ctx.present(Decoration.mark({ class: classes.join(" ") }), textFrom, textTo);
+
   ctx.conceal(open.from, textFrom, revealed);
   ctx.conceal(textTo, close.to, revealed);
 };

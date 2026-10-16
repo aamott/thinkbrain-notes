@@ -3,7 +3,6 @@
  * both docks dispatch into the shell. Split out of {@link useShellState}.
  */
 
-import { inferTabKind } from "@thinkbrain/core";
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { sectionAnchorId } from "../settings/sectionUtils";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -28,7 +27,10 @@ interface UseSyncActionsOptions {
   readonly tabStateRef: RefObject<DesktopTabState>;
   readonly setRightPanel: Dispatch<SetStateAction<RightPanel | null>>;
   readonly selectLeftPanel: (panel: LeftPanel) => void;
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string) => void;
+  /**
+   * Opens a file in the tab kind its extension implies — `openFileDocument`
+   * already routes `.md` to the Markdown editor and media to a viewer.
+   */
   readonly openFileDocument: (rootPath: string, relativePath: string) => void;
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
@@ -41,7 +43,6 @@ export function useSyncActions({
   tabStateRef,
   setRightPanel,
   selectLeftPanel,
-  openMarkdownDocument,
   openFileDocument,
   saveDocument,
   loadDocumentIntoView,
@@ -69,14 +70,10 @@ export function useSyncActions({
    */
   const showVersionsOf = useCallback(
     (rootPath: string, relativePath: string) => {
-      if (inferTabKind(relativePath) === "editor") {
-        openMarkdownDocument(rootPath, relativePath);
-      } else {
-        openFileDocument(rootPath, relativePath);
-      }
+      openFileDocument(rootPath, relativePath);
       setRightPanel("history");
     },
-    [openMarkdownDocument, openFileDocument, setRightPanel]
+    [openFileDocument, setRightPanel]
   );
 
   // Conflicts are an attention list — they belong on the left with the other

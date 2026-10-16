@@ -123,6 +123,11 @@ export const themeRules = {
     textDecoration: "line-through",
     cursor: "default"
   },
+  // Syntax revealed = editing, not following — the I-beam says so even over a
+  // resolved link (Mod+click still follows; the pointer would lie otherwise).
+  ".cm-link-revealed": {
+    cursor: "text"
+  },
   ".cm-image-text": {
     color: "var(--tn-color-muted-foreground)",
     fontStyle: "italic"

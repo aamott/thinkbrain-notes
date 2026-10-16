@@ -1,8 +1,9 @@
-import { inferTabKind } from "@thinkbrain/core";
+import type { MarkdownLinkTarget } from "@thinkbrain/core";
 import { useCallback, useMemo } from "react";
 
 import type { DesktopCommand } from "../../commands/commandRegistry";
-import { editorTabId, fileTabId, type DesktopTab } from "../../tabs/tabModel";
+import { openUrl } from "../../native/opener";
+import { documentTabId, editorTabId, type DesktopTab } from "../../tabs/tabModel";
 import type { WorkspaceExplorerProps } from "../../workspace/WorkspaceExplorer";
 import type { ShellState } from "../useShellState";
 import type { PhoneNavigation } from "./usePhoneNavigation";
@@ -26,6 +27,8 @@ export interface UsePhoneOpenersParams {
 export interface PhoneOpeners {
   readonly openNewTab: () => void;
   readonly openNote: (relativePath: string) => void;
+  /** Follows a resolved `[[wiki]]` or `[text](target)` link from the editor. */
+  readonly onOpenLink: (target: MarkdownLinkTarget) => void;
   readonly createNewNote: () => void;
   readonly explorerProps: WorkspaceExplorerProps;
 }
@@ -74,11 +77,14 @@ export function usePhoneOpeners({
     },
     [openMarkdownDocument, navigation, flushThen]
   );
+  // The pushed route must name the tab `openFileDocument` actually creates —
+  // `documentTabId` — so a `.md` tap lands on its `editor:` id, not a `file:`
+  // route that misses the tab that was just made.
   const openFile = useCallback(
     (rootPath: string, relativePath: string) => {
       flushThen(() => {
         openFileDocument(rootPath, relativePath, "replace-active");
-        navigation.push({ kind: "tab", tabId: fileTabId({ rootPath, relativePath }) });
+        navigation.push({ kind: "tab", tabId: documentTabId({ rootPath, relativePath }) });
       });
     },
     [openFileDocument, navigation, flushThen]
@@ -95,6 +101,19 @@ export function usePhoneOpeners({
     [restoredWorkspacePath, openMarkdown]
   );
 
+  // A resolved link either leaves the vault — the OS opens it — or lands on a
+  // vault-relative path `openFile` already routes to the right tab kind.
+  const onOpenLink = useCallback(
+    (target: MarkdownLinkTarget) => {
+      if (target.kind === "external") {
+        void openUrl(target.url).catch(() => undefined);
+        return;
+      }
+      if (restoredWorkspacePath) openFile(restoredWorkspacePath, target.relativePath);
+    },
+    [restoredWorkspacePath, openFile]
+  );
+
   // "Previous versions…" opens the file's inspector over the just-opened tab.
   // The desktop's shell callback only sets `rightPanel`, which phone chrome
   // does not read — inspectors exist here as navigation overlays. `push`
@@ -102,11 +121,10 @@ export function usePhoneOpeners({
   // on top of the new tab route rather than underneath it.
   const showVersions = useCallback(
     (rootPath: string, relativePath: string) => {
-      if (inferTabKind(relativePath) === "editor") openMarkdown(rootPath, relativePath);
-      else openFile(rootPath, relativePath);
+      openFile(rootPath, relativePath);
       navigation.showOverlay({ kind: "inspector", panel: "history", parent: "content" });
     },
-    [openMarkdown, openFile, navigation]
+    [openFile, navigation]
   );
 
   // The popup's create path runs the canonical command — the existing
@@ -136,6 +154,7 @@ export function usePhoneOpeners({
   return {
     openNewTab,
     openNote,
+    onOpenLink,
     createNewNote,
     explorerProps: mergedExplorerProps
   };

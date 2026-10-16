@@ -13,7 +13,7 @@ const payload = (
   onSave: () => undefined,
   livePreviewCompartment: new Compartment(),
   wikiLinkAutocompleteCompartment: new Compartment(),
-  livePreviewEnabled: true,
+  linkOptions: {},
   ...overrides
 });
 
@@ -46,12 +46,12 @@ describe("markdownEditorHookRegistry", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("still assembles extensions when live preview is disabled", () => {
-    // The hook contributes an empty compartment rather than dropping out, so
-    // it can be reconfigured on later without remounting the view.
+  it("still assembles extensions in source mode", () => {
+    // The hook contributes a compartment-mounted extension rather than
+    // dropping out, so it can be reconfigured on later without remounting.
     expect(
       markdownEditorHookRegistry.getExtensions(
-        payload({ livePreviewEnabled: false }),
+        payload({ linkOptions: { sourceMode: true } }),
         undefined
       ).length
     ).toBeGreaterThan(0);

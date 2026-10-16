@@ -3,13 +3,12 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import type { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import type { NoteIndexEntry } from "@thinkbrain/core";
 
 import {
   createDesktopEditorHookRegistry,
   type DesktopEditorHookRegistry
 } from "./editorHookRegistry";
-import { livePreview } from "./livePreview";
+import { livePreview, type LivePreviewOptions } from "./livePreview";
 import { wikiLinkExtension } from "./livePreview/wikiLink";
 import { wikiLinkAutocomplete } from "./wikiLinkAutocomplete";
 
@@ -33,14 +32,15 @@ export interface MarkdownEditorHookPayload {
    * the current set of notes.
    */
   readonly wikiLinkAutocompleteCompartment: Compartment;
-  /** Whether live preview is on at mount time. */
-  readonly livePreviewEnabled: boolean;
-  /** Resolves relative image sources; omitted outside a workspace. */
-  readonly resolveAssetUrl?: (src: string) => string | null;
-  /** Vault note index for resolving `[[Target]]` wiki links. */
-  readonly noteIndex?: readonly NoteIndexEntry[];
-  /** Called when the user clicks a resolved `[[Target]]` wiki link. */
-  readonly onOpenNote?: (relativePath: string) => void;
+  /**
+   * Live-preview / link-follow options for this editor instance.
+   *
+   * Built once by `MarkdownEditor` and shared by every consumer — mount and
+   * compartment reconfiguration pass it through unchanged. `sourceMode` in it
+   * says whether the syntax is always visible (live preview off); its
+   * `noteIndex` also feeds the wiki-link autocomplete.
+   */
+  readonly linkOptions: LivePreviewOptions;
 }
 
 /** The context is intentionally empty because these hooks need no host state. */
@@ -87,15 +87,7 @@ export const markdownEditorHookRegistry: MarkdownEditorHookRegistry =
       id: "markdown-live-preview",
       order: 25,
       extensions: (payload) => [
-        payload.livePreviewCompartment.of(
-          payload.livePreviewEnabled
-            ? livePreview({
-                resolveAssetUrl: payload.resolveAssetUrl,
-                noteIndex: payload.noteIndex,
-                onOpenNote: payload.onOpenNote
-              })
-            : []
-        )
+        payload.livePreviewCompartment.of(livePreview(payload.linkOptions))
       ]
     },
     {
@@ -103,7 +95,7 @@ export const markdownEditorHookRegistry: MarkdownEditorHookRegistry =
       order: 26,
       extensions: (payload) => [
         payload.wikiLinkAutocompleteCompartment.of(
-          wikiLinkAutocomplete(payload.noteIndex ?? [])
+          wikiLinkAutocomplete(payload.linkOptions.noteIndex ?? [])
         )
       ]
     },
