@@ -35,14 +35,34 @@ A conflict is `(ours, theirs, base?, confidence)` regardless of producer.
 
 ## Acceptance Criteria
 
-- Git-sourced `ConflictCopy` names the exact base blob the merge computed.
-- Daemon conflicts select among pre-arrival recorded versions by risky-hunk
+- [x] Git-sourced `ConflictCopy` names the exact base blob the merge computed.
+- [x] Daemon conflicts select among pre-arrival recorded versions by risky-hunk
   minimization, tie-breaking older; post-arrival snapshots are never
   candidates.
-- Confidence travels with the conflict; ambiguous or absent bases leave both
+- [x] Confidence travels with the conflict; ambiguous or absent bases leave both
   versions for manual review. No silently dropped edits.
-- Tests: two devices from a shared baseline, offline edits, conflict after
+- [x] Tests: two devices from a shared baseline, offline edits, conflict after
   restart, missing/ambiguous base, multiple copies of one file.
+
+## Decisions
+
+- Selection lives in `merge_base.rs`; `judge` is the pure scorer. Risky hunks
+  use the text merge's own diff (Myers over byte lines, `gix::diff::blob`) and
+  its touching rule; no new dependency.
+- Confidence is `proven` only at zero risky hunks, else `ambiguous`; no base
+  is `None`. This narrows "deletes nothing → high confidence": against a base
+  that already lacks a line we deleted, theirs looks like it only adds, and
+  taking it would undo our deletion. Provenance is a separate `source`
+  (`merge`/`recorded`). Only `proven` may ever skip review (`mergeIsProven`).
+- Arrival is the copy's mtime less a 2-minute skew margin, compared in whole
+  seconds with a strict `<`; anything near the boundary is excluded.
+- A pull's base is held in memory on the engine with the blob id of the copy
+  it was computed for, and is used only while the copy still has that
+  content. Sightings by name (scan, watcher) never overwrite an entry; a later
+  pull into the same slot does. After a restart a git copy falls back to
+  recorded selection.
+- A base that cannot be derived is logged and reported as none; the conflict
+  still opens.
 
 ## Known gaps (deferred)
 

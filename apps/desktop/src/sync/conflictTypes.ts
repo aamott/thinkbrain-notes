@@ -1,7 +1,7 @@
 /**
  * The shapes the native side sends when two versions of a note exist.
  *
- * Mirrors `src-tauri/src/commands/sync/{merge,resolve}.rs`. The native side
+ * Mirrors `src-tauri/src/commands/sync/{merge,merge_base,resolve}.rs`. The native side
  * never sends a conflict marker or a diff — only the two complete documents,
  * which is what lets this UI compare them with its own differ rather than
  * explain a serialisation format.
@@ -56,12 +56,35 @@ interface ConflictText {
 }
 
 /**
+ * The version both sides grew from, and how far a merge against it can be
+ * trusted.
+ *
+ * `confidence` describes what merging against this base would do, not where
+ * the base came from: `proven` means it cannot drop a line of ours, while
+ * `ambiguous` means it might take theirs somewhere ours never changed, so a
+ * person has to look.
+ */
+export interface ConflictBase {
+  /** Opaque handle. */
+  readonly id: string;
+  /** The pull's own merge, or a version this vault recorded before the copy arrived. */
+  readonly source: "merge" | "recorded";
+  readonly confidence: "proven" | "ambiguous";
+  /** Places the merge would take theirs where ours equals the base. */
+  readonly riskyHunks: number;
+}
+
+/**
  * A conflict with its comparison. `text` is `null` when `kind` is binary:
  * there is nothing to compare line by line, and the choice is between whole
  * files.
+ *
+ * `base` is `null` when there is no base to name; absent on older payloads.
+ * Either way both versions are left for the user to compare.
  */
-export type ConflictComparison = Omit<ConflictSummary, "kind"> &
-  (
+export type ConflictComparison = Omit<ConflictSummary, "kind"> & {
+  readonly base?: ConflictBase | null;
+} & (
     | { readonly kind: "text"; readonly text: ConflictText }
     | { readonly kind: "binary"; readonly text: null }
   );

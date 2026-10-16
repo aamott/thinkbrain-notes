@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { lineDelta } from "./mergeModel";
+import type { ConflictBase } from "./conflictTypes";
+import { lineDelta, mergeIsProven } from "./mergeModel";
 
 describe("lineDelta", () => {
   it("counts identical texts as no change", () => {
@@ -32,5 +33,28 @@ describe("lineDelta", () => {
 
   it("counts an emptied file as every line removed", () => {
     expect(lineDelta("a\nb\n", "")).toEqual({ added: 0, removed: 2 });
+  });
+});
+
+describe("mergeIsProven", () => {
+  const base = (confidence: ConflictBase["confidence"]): ConflictBase => ({
+    id: "9a8d80c",
+    source: "recorded",
+    confidence,
+    riskyHunks: confidence === "proven" ? 0 : 2
+  });
+
+  it("trusts a base the native side proved cannot drop our text", () => {
+    expect(mergeIsProven(base("proven"))).toBe(true);
+  });
+
+  // Ambiguous or missing: both versions stay for a person to compare.
+  it("leaves an ambiguous base for review", () => {
+    expect(mergeIsProven(base("ambiguous"))).toBe(false);
+  });
+
+  it("leaves a conflict with no base, or an older payload without one, for review", () => {
+    expect(mergeIsProven(null)).toBe(false);
+    expect(mergeIsProven(undefined)).toBe(false);
   });
 });
