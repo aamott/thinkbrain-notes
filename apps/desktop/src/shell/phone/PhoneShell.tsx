@@ -117,6 +117,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const {
     openNewTab,
     openNote,
+    onOpenLink,
     createNewNote,
     explorerProps
   } = usePhoneOpeners({
@@ -359,7 +360,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
               onChange={shell.updateDocument}
               onSave={shell.saveDocument}
               noteIndex={shell.noteIndex}
-              onOpenNote={openNote}
+              onOpenLink={onOpenLink}
               onReopenNote={shell.loadDocumentIntoView}
               unsavedNoteContents={shell.unsavedNoteContents}
               onRestoreVersion={shell.restoreVersionSafely}

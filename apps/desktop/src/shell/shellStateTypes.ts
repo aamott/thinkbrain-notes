@@ -8,6 +8,7 @@
  */
 
 import type { Dispatch, SetStateAction } from "react";
+import type { MarkdownLinkTarget } from "@thinkbrain/core";
 import type { DesktopCommand } from "../commands/commandRegistry";
 import type { NativeMarkdownFileEntry } from "../native/commands";
 import type { SyncStatus } from "../sync/historyTypes";
@@ -48,6 +49,12 @@ export interface ShellState {
   readonly dismissEmptied: (tabId: string) => void;
   readonly renameDocument: (rootPath: string, relativePath: string, newRelativePath: string) => Promise<void>;
   readonly onOpenNote: (relativePath: string) => void;
+  /**
+   * Follows a resolved `[[wiki]]` or `[text](target)` link — internal
+   * targets open the vault file in the tab kind its extension implies,
+   * external ones go to the OS.
+   */
+  readonly onOpenLink: (target: MarkdownLinkTarget) => void;
 
   // panels
   readonly leftPanel: LeftPanel | null;

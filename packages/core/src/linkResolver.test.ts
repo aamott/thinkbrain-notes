@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveWikiLinkTarget, type NoteIndexEntry } from "./linkResolver";
+import { resolveMarkdownLinkTarget, resolveWikiLinkTarget, type NoteIndexEntry } from "./linkResolver";
 
 /** Helper: builds a NoteIndexEntry with sensible defaults. */
 function entry(
@@ -120,5 +120,123 @@ describe("resolveWikiLinkTarget", () => {
 
   it("trims whitespace in the target", () => {
     expect(resolveWikiLinkTarget("  My Note  ", notes)).toBe("My Note.md");
+  });
+});
+
+describe("resolveMarkdownLinkTarget", () => {
+  const notes: readonly NoteIndexEntry[] = [
+    entry("My Note.md"),
+    entry("folder/Project.md"),
+    entry("folder/sub/Deep.md")
+  ];
+
+  it("hands external schemes back as URLs", () => {
+    expect(resolveMarkdownLinkTarget("https://example.com/x", "a/b.md", notes)).toEqual({
+      kind: "external",
+      url: "https://example.com/x"
+    });
+    expect(resolveMarkdownLinkTarget("mailto:a@b.c", "a/b.md", notes)).toEqual({
+      kind: "external",
+      url: "mailto:a@b.c"
+    });
+  });
+
+  it("upgrades protocol-relative URLs to https", () => {
+    expect(resolveMarkdownLinkTarget("//example.com/x", "a/b.md", notes)).toEqual({
+      kind: "external",
+      url: "https://example.com/x"
+    });
+  });
+
+  it("refuses schemes the OS should never open", () => {
+    // javascript:/data:/file: et al. must not reach an OS handler that could
+    // run or open them — they resolve to nothing and render as broken.
+    expect(resolveMarkdownLinkTarget("javascript:alert(1)", "a.md", notes)).toBeNull();
+    expect(resolveMarkdownLinkTarget("data:text/html,<b>x</b>", "a.md", notes)).toBeNull();
+    expect(resolveMarkdownLinkTarget("file:///etc/passwd", "a.md", notes)).toBeNull();
+    expect(resolveMarkdownLinkTarget("ftp://example.com/x", "a.md", notes)).toBeNull();
+  });
+
+  it("allows phone-call and mail schemes", () => {
+    expect(resolveMarkdownLinkTarget("tel:+15551234", "a.md", notes)).toEqual({
+      kind: "external",
+      url: "tel:+15551234"
+    });
+  });
+
+  it("resolves a target relative to the containing note's folder", () => {
+    expect(resolveMarkdownLinkTarget("Project.md", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/Project.md"
+    });
+    expect(resolveMarkdownLinkTarget("sub/Deep.md", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/sub/Deep.md"
+    });
+  });
+
+  it("prefers the same-folder file over a root one with the same name", () => {
+    const both: readonly NoteIndexEntry[] = [entry("note.md"), entry("folder/note.md")];
+    expect(resolveMarkdownLinkTarget("note.md", "folder/home.md", both)).toEqual({
+      kind: "internal",
+      relativePath: "folder/note.md"
+    });
+  });
+
+  it("still finds notes the relative join misses via vault-wide lookup", () => {
+    // Bare-name link inside a folder: the join `folder/My Note` misses, but
+    // the fileName match on the verbatim target finds the root note.
+    expect(resolveMarkdownLinkTarget("My Note", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "My Note.md"
+    });
+    // A verbatim vault-relative path joins to itself and matches.
+    expect(resolveMarkdownLinkTarget("folder/Project.md", "other/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/Project.md"
+    });
+  });
+
+  it("climbs out of the folder with .. and treats / as vault root", () => {
+    expect(resolveMarkdownLinkTarget("../My Note.md", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "My Note.md"
+    });
+    expect(resolveMarkdownLinkTarget("/folder/Project.md", "deep/in/here.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/Project.md"
+    });
+  });
+
+  it("drops the #anchor suffix before resolving the file part", () => {
+    expect(resolveMarkdownLinkTarget("Project.md#section", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/Project.md"
+    });
+  });
+
+  it("unwraps angle-bracketed targets and decodes %20", () => {
+    expect(resolveMarkdownLinkTarget("<Project.md>", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/Project.md"
+    });
+    expect(resolveMarkdownLinkTarget("My%20Note.md", "x.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "My Note.md"
+    });
+  });
+
+  it("resolves non-Markdown files optimistically", () => {
+    expect(resolveMarkdownLinkTarget("img/logo.png", "folder/home.md", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/img/logo.png"
+    });
+  });
+
+  it("returns null for empty, anchor-only, and escaping targets", () => {
+    expect(resolveMarkdownLinkTarget("", "a.md", notes)).toBeNull();
+    expect(resolveMarkdownLinkTarget("   ", "a.md", notes)).toBeNull();
+    expect(resolveMarkdownLinkTarget("#section", "a.md", notes)).toBeNull();
+    expect(resolveMarkdownLinkTarget("../../outside.md", "a/b.md", notes)).toBeNull();
   });
 });

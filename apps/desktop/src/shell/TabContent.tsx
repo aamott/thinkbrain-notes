@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from "react";
-import type { NoteIndexEntry } from "@thinkbrain/core";
+import type { MarkdownLinkTarget, NoteIndexEntry } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { createVaultAssetResolver } from "../native/assets";
 import { useSettingsStore } from "../settings/settingsStore";
@@ -42,7 +42,8 @@ type TabContentProps = {
   readonly onChange: (tabId: string, contents: string) => void;
   readonly onSave: (tab: DesktopTab) => Promise<boolean>;
   readonly noteIndex?: readonly NoteIndexEntry[];
-  readonly onOpenNote?: (relativePath: string) => void;
+  /** Follows a resolved `[[wiki]]` or `[text](target)` link from the editor. */
+  readonly onOpenLink?: (target: MarkdownLinkTarget) => void;
   /**
    * Re-opens a note after a kept version was put back over it.
    *
@@ -99,7 +100,7 @@ export function TabContent({
   onChange,
   onSave,
   noteIndex,
-  onOpenNote,
+  onOpenLink,
   onReopenNote,
   unsavedNoteContents,
   onRestoreVersion,
@@ -307,7 +308,7 @@ export function TabContent({
         livePreview={livePreview}
         resolveAssetUrl={resolveAssetUrl}
         noteIndex={noteIndex}
-        onOpenNote={onOpenNote}
+        onOpenLink={onOpenLink}
         // Switching tabs unmounts this editor; the id is how the next mount
         // finds the cursor, scroll and undo history it left behind.
         stateKey={tab.id}

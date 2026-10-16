@@ -30,21 +30,23 @@ follow at all (`livePreview/nodes/links.ts` — "deliberately not implemented").
 - [x] Tap on a concealed resolved wiki link follows it (current behavior kept);
       tap on the same link while its syntax is revealed places the cursor and
       does not follow.
-- [ ] Tap on a concealed `[text](target)` link follows: vault-relative target →
+- [x] Tap on a concealed `[text](target)` link follows: vault-relative target →
       preview tab (Markdown or file viewer); `http(s)`/other external scheme →
       `openUrl` native adapter. Revealed link → tap edits.
-- [ ] A drag that ends on a link (selection gesture) never follows, even when
+- [x] A drag that ends on a link (selection gesture) never follows, even when
       the link was concealed at gesture start.
-- [ ] Broken/unresolved links and links inside code spans/blocks are never
+- [x] Broken/unresolved links and links inside code spans/blocks are never
       followable; tapping them edits.
-- [ ] Mod+click (Ctrl/Cmd) follows either link type even when revealed;
+- [x] Mod+click (Ctrl/Cmd) follows either link type even when revealed;
       `Mod-Enter` inside a Markdown link follows like it already does for wiki
-      links.
-- [ ] With live preview off (source mode), plain click always edits; Mod+click
+      links — source mode keeps the binding too.
+- [x] With live preview off (source mode), plain click always edits; Mod+click
       still follows.
-- [ ] `openUrl` reaches the OS through `native/` only; unit tests mock the
-      bridge and assert dispatch (real-browser verification stays manual).
-- [ ] Live-preview tests cover follow-vs-edit for wiki and Markdown links at
+- [x] `openUrl` reaches the OS through `native/` only; `native/opener.test.ts`
+      mocks the bridge and asserts dispatch + normalized rejection. Only
+      `https?`/`mailto`/`tel` schemes reach the OS — `javascript:`/`data:`/
+      `file:`/`ftp:` resolve to nothing and render broken.
+- [x] Live-preview tests cover follow-vs-edit for wiki and Markdown links at
       the reveal boundary; `pnpm qa` green.
 
 Relevant seams: `apps/desktop/src/tabs/livePreview/index.ts` (click + Mod-Enter
