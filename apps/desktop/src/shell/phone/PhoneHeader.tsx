@@ -7,8 +7,9 @@ import { PhoneBreadcrumb } from "./PhoneBreadcrumb";
 /**
  * Universal phone header — browser chrome.
  *
- * Back stays dimmed at the stack root; Forward appears only while the
- * navigation history has a forward entry. Between the navigation controls
+ * Back and Forward stay dimmed at their stack ends — Forward renders
+ * disabled rather than disappearing so the breadcrumb doesn't reflow when a
+ * forward entry appears or clears. Between the navigation controls
  * and the right-hand controls sits the location pill: a breadcrumb that
  * keeps the current file visible and opens the full scrollable path on tap.
  *
@@ -58,16 +59,15 @@ export function PhoneHeader({
         >
           <ArrowLeft aria-hidden="true" className="size-5" />
         </button>
-        {canGoForward && (
-          <button
-            type="button"
-            aria-label="Forward"
-            className={button}
-            onClick={onForward}
-          >
-            <ArrowRight aria-hidden="true" className="size-5" />
-          </button>
-        )}
+        <button
+          type="button"
+          aria-label="Forward"
+          disabled={!canGoForward}
+          className={button}
+          onClick={onForward}
+        >
+          <ArrowRight aria-hidden="true" className="size-5" />
+        </button>
       </div>
 
       <PhoneBreadcrumb segments={breadcrumbs} />

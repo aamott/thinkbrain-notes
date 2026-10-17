@@ -9,7 +9,7 @@ import { useSettingsStore } from "../settings/settingsStore";
 import { DEFAULT_PINNED_ACTION_ITEMS } from "./actionItemsModel";
 import { TitleBar } from "./TitleBar";
 import type { RightPanel } from "./shellTypes";
-import { createVersionDiffTab, type DesktopTab } from "../tabs/tabModel";
+import { createEditorTab, createVersionDiffTab, type DesktopTab } from "../tabs/tabModel";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -19,6 +19,8 @@ const render = async (props: {
   readonly tabs?: readonly DesktopTab[];
   readonly canGoBack?: boolean;
   readonly canGoForward?: boolean;
+  readonly backDestination?: DesktopTab | null;
+  readonly forwardDestination?: DesktopTab | null;
   readonly onBack?: () => void;
   readonly onForward?: () => void;
   readonly onToggleRightPanel?: (panel: RightPanel) => void;
@@ -38,6 +40,8 @@ const render = async (props: {
         showWorkspaceSelector={false}
         canGoBack={props.canGoBack ?? false}
         canGoForward={props.canGoForward ?? false}
+        backDestination={props.backDestination ?? null}
+        forwardDestination={props.forwardDestination ?? null}
         onBack={props.onBack ?? (() => undefined)}
         onForward={props.onForward ?? (() => undefined)}
         onSelectTab={() => undefined}
@@ -296,6 +300,18 @@ describe("TitleBar", () => {
     expect(forward).not.toBeNull();
     await act(async () => forward.click());
     expect(onForward).toHaveBeenCalledOnce();
+  });
+
+  it("names the destination in the Back and Forward tooltips", async () => {
+    const host = await render({
+      canGoBack: true,
+      canGoForward: true,
+      backDestination: createEditorTab({ rootPath: "/notes", relativePath: "old.md" }),
+      forwardDestination: createEditorTab({ rootPath: "/notes", relativePath: "new.md" })
+    });
+
+    expect(host.querySelector('[aria-label="Back"]')?.getAttribute("title")).toBe("Back to old.md");
+    expect(host.querySelector('[aria-label="Forward"]')?.getAttribute("title")).toBe("Forward to new.md");
   });
 
   it("keeps a restore tab's visible title short while tooltip and names carry the version", async () => {
