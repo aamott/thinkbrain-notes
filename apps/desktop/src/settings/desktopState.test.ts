@@ -114,7 +114,7 @@ describe("desktop state persistence", () => {
       )
     ).toEqual({
       ...DEFAULT_DESKTOP_STATE,
-      leftPanelWidth: 224,
+      leftPanelWidth: 148,
       rightPanelWidth: 480,
       bottomPanelOpen: true
     });

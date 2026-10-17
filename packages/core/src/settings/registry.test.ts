@@ -450,6 +450,7 @@ describe("extractDefaults", () => {
       "editor.fontSize": 16,
       "editor.lineWrapping": true,
       "editor.livePreview": true,
+      "editor.tabCycleOrder": "tab order",
       "settings.autosave": false,
       "settings.showAdvanced": false,
       "sync.automatically": true,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, MoreHorizontal, Pin, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pin, Plus, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
@@ -8,6 +8,7 @@ import { useSettingsStore } from "../settings/settingsStore";
 import { mediaQueryList, useMediaQuery } from "../lib/useMediaQuery";
 import { IconButton } from "./IconButton";
 import { Menu, MenuButton, MenuSeparator, MENU_ITEM, type MenuCloseReason, type MenuPosition } from "./Menu";
+import { TabContextMenu, type TabMenuState } from "./TabContextMenu";
 import { PanelIcon } from "./panelIcons";
 import { type RightPanel } from "./shellTypes";
 import {
@@ -16,6 +17,7 @@ import {
   serializePinnedActionItems
 } from "./actionItemsModel";
 import { WorkspaceSwitchingSelector } from "../workspace/WorkspaceSwitching";
+import { useTabStripDrag } from "./useTabStripDrag";
 
 /**
  * Back/Forward chrome: the ⌘ command-palette button's sizing, with hover
@@ -59,8 +61,13 @@ type TitleBarProps = {
   readonly onSelectTab: (tabId: string) => void;
   /** Called when the user clicks a tab's close affordance. */
   readonly onRequestCloseTab: (tabId: string) => void;
+  /** Called for "Close other tabs": every clean tab except `tabId` goes. */
+  readonly onCloseOtherTabs: (tabId: string) => void;
+  /** Called for "Close tabs to the right": clean tabs after `tabId` go. */
+  readonly onCloseTabsToRight: (tabId: string) => void;
   /** Called when the user double-clicks a tab, keeping a preview open. */
   readonly onKeepTab: (tabId: string) => void;
+  readonly onReorderTab: (tabId: string, toIndex: number) => void;
   /** Called when the user clicks the strip's "+" affordance. */
   readonly onNewTab: () => void;
   /** Called when the user toggles a right-dock panel button. */
@@ -106,7 +113,10 @@ export function TitleBar({
   onForward,
   onSelectTab,
   onRequestCloseTab,
+  onCloseOtherTabs,
+  onCloseTabsToRight,
   onKeepTab,
+  onReorderTab,
   onNewTab,
   onToggleRightPanel,
   onOpenCommandPalette,
@@ -117,6 +127,8 @@ export function TitleBar({
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   // Right-click on a bar icon raises this pointer-placed menu for pin control.
   const [pinMenu, setPinMenu] = useState<(MenuPosition & { panel: RightPanelContribution }) | null>(null);
+  // Right-click on a tab raises its context menu the same way.
+  const [tabMenu, setTabMenu] = useState<TabMenuState | null>(null);
 
   // The ⋯ menu shows every panel below 900px (the icon row is hidden there)
   // and only the unpinned remainder above it — the pinned icons are already
@@ -175,6 +187,7 @@ export function TitleBar({
   // non-passive native listener so preventDefault works (React's onWheel is
   // passive at the root and would warn / no-op on preventDefault).
   const tabStripRef = useRef<HTMLElement>(null);
+  const tabDrag = useTabStripDrag(tabStripRef, tabs, onReorderTab);
   useEffect(() => {
     const el = tabStripRef.current;
     if (!el) return;
@@ -293,8 +306,17 @@ export function TitleBar({
           className="tn-scrollbar-none flex items-end gap-0.5 h-full min-w-0 overflow-x-auto"
           aria-label="Open tabs"
           onScroll={measureScrollEdges}
+          onClickCapture={(event) => {
+            if (event.detail > 0 && tabDrag.suppressClick()) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          onDoubleClickCapture={(event) => {
+            if (tabDrag.suppressClick()) event.stopPropagation();
+          }}
         >
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
           // Restore previews of one file share a title; the accessible name
           // and tooltip carry the version's date so they stay distinct.
@@ -303,19 +325,29 @@ export function TitleBar({
             <div
               key={tab.id}
               data-tab-id={tab.id}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                // One pointer-placed menu at a time.
+                setPinMenu(null);
+                setTabMenu({ x: event.clientX, y: event.clientY, tabId: tab.id });
+              }}
+              style={tabDrag.tabStyle(index)}
               ref={(el) => {
                 if (el) tabElementsRef.current.set(tab.id, el);
                 else tabElementsRef.current.delete(tab.id);
               }}
               className={cn(
                 "flex items-center bg-tab-inactive text-tab-inactive-foreground border-t-2 border-t-transparent rounded-t-small flex-[0_0_clamp(7.5rem,15vw,12.5rem)] max-[760px]:flex-basis-[7.25rem] text-xs h-[calc(100%-3px)] min-w-0 hover:bg-secondary",
-                isActive && "bg-tab-active border-t-primary text-tab-active-foreground"
+                isActive && "bg-tab-active border-t-primary text-tab-active-foreground",
+                tabDrag.draggedTabId === tab.id && "relative z-10 opacity-90 shadow-md ring-1 ring-border"
               )}
             >
               <button
                 type="button"
                 className="flex flex-1 items-center min-w-0 gap-[0.45rem] h-full border-0 py-0 pr-1 pl-[0.65rem] text-inherit bg-transparent cursor-pointer font-inherit text-left focus-visible:text-foreground focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
                 onClick={() => onSelectTab(tab.id)}
+                onPointerDown={(event) => tabDrag.onPointerDown(event, tab.id)}
+                onDragStart={(event) => event.preventDefault()}
                 onDoubleClick={() => onKeepTab(tab.id)}
                 // Only restore tabs get an explicit name: an explicit
                 // aria-label would override the dirty dot's "Unsaved changes"
@@ -330,13 +362,17 @@ export function TitleBar({
                 <span className={cn("truncate", tab.preview && "italic")}>{tab.title}</span>
                 {tab.isDirty && <span className="bg-primary rounded-full h-[0.35rem] w-[0.35rem]" aria-label="Unsaved changes" />}
               </button>
+              {/* Square hover chip, matching the back/forward/menu buttons:
+                  the fill makes the hitbox visible and the fixed size keeps
+                  the target easy to hit. Sits a step from the tab's right
+                  edge rather than inside the title's padding. */}
               <button
                 type="button"
-                className="border-0 py-0 pr-[0.55rem] pl-[0.2rem] text-inherit bg-transparent cursor-pointer text-base opacity-65 hover:text-foreground hover:opacity-100 focus-visible:text-foreground focus-visible:opacity-100 focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
+                className="mr-[0.3rem] flex size-[1.6rem] shrink-0 items-center justify-center rounded-small border-0 bg-transparent text-inherit cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
                 aria-label={`Close ${accessibleName}`}
                 onClick={() => onRequestCloseTab(tab.id)}
               >
-                ×
+                <X aria-hidden="true" className="size-3.5" />
               </button>
             </div>
           );
@@ -394,6 +430,7 @@ export function TitleBar({
                 onClick={() => onToggleRightPanel(action.id)}
                 onContextMenu={(event) => {
                   event.preventDefault();
+                  setTabMenu(null);
                   setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
                 }}
               />
@@ -407,6 +444,7 @@ export function TitleBar({
                 className="inline-flex w-[1.6rem] h-[1.6rem] items-center justify-center rounded-small text-titlebar-foreground opacity-40"
                 onContextMenu={(event) => {
                   event.preventDefault();
+                  setTabMenu(null);
                   setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
                 }}
               >
@@ -517,6 +555,17 @@ export function TitleBar({
           </Menu>
         )}
       </div>
+
+      {tabMenu && (
+        <TabContextMenu
+          menu={tabMenu}
+          tabs={tabs}
+          onClose={() => setTabMenu(null)}
+          onRequestCloseTab={onRequestCloseTab}
+          onCloseOtherTabs={onCloseOtherTabs}
+          onCloseTabsToRight={onCloseTabsToRight}
+        />
+      )}
     </header>
   );
 }

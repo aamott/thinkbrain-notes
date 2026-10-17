@@ -150,7 +150,7 @@ export function SettingsHeaderBar({
 
   return (
     <header
-      className="flex min-h-8 flex-none items-center justify-between gap-3 border-b border-border bg-editor px-[0.9rem] py-1 text-[0.72rem] text-muted-foreground max-[760px]:min-h-11 max-[760px]:gap-2 max-[760px]:px-2"
+      className="flex h-9 flex-none items-center justify-between gap-3 border-b border-border bg-editor px-[0.9rem] text-[0.72rem] text-muted-foreground max-[760px]:h-11 max-[760px]:gap-2 max-[760px]:px-2"
       data-testid="settings-header-bar"
       aria-label="Settings header"
     >

@@ -5,9 +5,14 @@ import { cn } from "../lib/utils";
 /**
  * Thin draggable divider between shell panels.
  *
- * Renders a 1px column-resize handle. Pointer and keyboard events are delegated
- * to the parent so it can drive the resize logic. Hidden below the 760px
- * breakpoint where the multi-column layout collapses.
+ * Renders a 1px column-resize handle whose *grab area* is wider than its
+ * visual line: an invisible pseudo-element overhangs 4px into the panels on
+ * both sides, so the edge is easy to hit without shifting any layout (the
+ * same overhang VS Code uses). On hover the line thickens via box-shadow —
+ * also layout-neutral — so the target is visible as well as hittable.
+ * Pointer and keyboard events are delegated to the parent so it can drive
+ * the resize logic. Hidden below the 760px breakpoint where the
+ * multi-column layout collapses.
  */
 export function ResizeHandle({
   label,
@@ -29,7 +34,10 @@ export function ResizeHandle({
     <button
       type="button"
       className={cn(
-        "relative flex-[0_0_1px] select-none touch-none p-0 border-0 bg-border cursor-col-resize hover:bg-primary focus-visible:bg-primary focus-visible:outline-none max-[760px]:hidden",
+        "relative flex-[0_0_1px] select-none touch-none p-0 border-0 bg-border cursor-col-resize hover:bg-primary focus-visible:bg-primary focus-visible:outline-none",
+        "after:absolute after:inset-y-0 after:-left-1 after:-right-1 after:content-['']",
+        "hover:shadow-[0_0_0_1px_var(--tn-color-primary)]",
+        "max-[760px]:hidden",
         className
       )}
       aria-label={`${label}. Use arrow keys to resize.`}

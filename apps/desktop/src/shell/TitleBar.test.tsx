@@ -25,6 +25,9 @@ const render = async (props: {
   readonly onForward?: () => void;
   readonly onToggleRightPanel?: (panel: RightPanel) => void;
   readonly onKeepTab?: (tabId: string) => void;
+  readonly onRequestCloseTab?: (tabId: string) => void;
+  readonly onCloseOtherTabs?: (tabId: string) => void;
+  readonly onCloseTabsToRight?: (tabId: string) => void;
   readonly onNewTab?: () => void;
   readonly isPanelAvailable?: (panelId: string) => boolean;
 } = {}): Promise<HTMLDivElement> => {
@@ -45,8 +48,11 @@ const render = async (props: {
         onBack={props.onBack ?? (() => undefined)}
         onForward={props.onForward ?? (() => undefined)}
         onSelectTab={() => undefined}
-        onRequestCloseTab={() => undefined}
+        onRequestCloseTab={props.onRequestCloseTab ?? (() => undefined)}
+        onCloseOtherTabs={props.onCloseOtherTabs ?? (() => undefined)}
+        onCloseTabsToRight={props.onCloseTabsToRight ?? (() => undefined)}
         onKeepTab={props.onKeepTab ?? (() => undefined)}
+        onReorderTab={() => undefined}
         onNewTab={props.onNewTab ?? (() => undefined)}
         onToggleRightPanel={props.onToggleRightPanel ?? (() => undefined)}
         onOpenCommandPalette={() => undefined}
@@ -488,5 +494,150 @@ describe("TitleBar", () => {
       activate!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     });
     expect(onKeepTab).toHaveBeenCalledWith("t1");
+  });
+
+  describe("tab context menu", () => {
+    // Pointer-placed menus portal to document.body; find this tab's there.
+    const tabMenuFor = (name: string): HTMLElement | null =>
+      [...document.querySelectorAll<HTMLElement>('[role="menu"]')]
+        .find((el) => el.getAttribute("aria-label") === `${name} options`) ?? null;
+
+    const rightClickTab = async (host: HTMLElement, tabId: string): Promise<void> => {
+      const chip = host.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
+      if (!chip) throw new Error(`Tab ${tabId} missing`);
+      await act(async () => {
+        chip.dispatchEvent(
+          new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 15, clientY: 9 })
+        );
+      });
+    };
+
+    const menuItem = (menu: HTMLElement, label: string): HTMLButtonElement | undefined =>
+      [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+        .find((item) => item.textContent === label);
+
+    const editorTab = (name: string) =>
+      createEditorTab({ rootPath: "/notes", relativePath: `dir/${name}.md` });
+
+    it("opens on right-click with the tab's actions in order", async () => {
+      const host = await render({ tabs: [editorTab("a")] });
+
+      await rightClickTab(host, editorTab("a").id);
+
+      const menu = tabMenuFor("a.md");
+      expect(menu).not.toBeNull();
+      expect([...menu!.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent))
+        .toEqual([
+          "Close",
+          "Close other tabs",
+          "Close tabs to the right",
+          "Copy path",
+          "Reveal in explorer",
+          "Pin tab"
+        ]);
+    });
+
+    it("routes Close through the same request-close path as the close chip", async () => {
+      const onRequestCloseTab = vi.fn();
+      const tab = editorTab("a");
+      const host = await render({ tabs: [tab], onRequestCloseTab });
+
+      await rightClickTab(host, tab.id);
+      await act(async () => menuItem(tabMenuFor("a.md")!, "Close")!.click());
+
+      expect(onRequestCloseTab).toHaveBeenCalledWith(tab.id);
+      expect(tabMenuFor("a.md")).toBeNull();
+    });
+
+    it("closes every clean tab except the clicked one via the shell callback", async () => {
+      const onCloseOtherTabs = vi.fn();
+      const tabs = [editorTab("a"), editorTab("b"), editorTab("c")];
+      const host = await render({ tabs, onCloseOtherTabs });
+
+      await rightClickTab(host, tabs[0]!.id);
+      await act(async () => menuItem(tabMenuFor("a.md")!, "Close other tabs")!.click());
+
+      expect(onCloseOtherTabs).toHaveBeenCalledWith(tabs[0]!.id);
+      expect(tabMenuFor("a.md")).toBeNull();
+    });
+
+    it("closes clean tabs to the right via the shell callback", async () => {
+      const onCloseTabsToRight = vi.fn();
+      const tabs = [editorTab("a"), editorTab("b"), editorTab("c")];
+      const host = await render({ tabs, onCloseTabsToRight });
+
+      await rightClickTab(host, tabs[0]!.id);
+      await act(async () => menuItem(tabMenuFor("a.md")!, "Close tabs to the right")!.click());
+
+      expect(onCloseTabsToRight).toHaveBeenCalledWith(tabs[0]!.id);
+      expect(tabMenuFor("a.md")).toBeNull();
+    });
+
+    it("stubs the multi-close items when a dirty tab sits in their target set", async () => {
+      const dirty = { id: "settings", title: "Settings", kind: "settings", isDirty: true } as const;
+      const tabs = [editorTab("a"), dirty, editorTab("c")];
+      const host = await render({ tabs });
+
+      await rightClickTab(host, tabs[0]!.id);
+      const menu = tabMenuFor("a.md")!;
+
+      for (const label of ["Close other tabs", "Close tabs to the right"]) {
+        const item = menuItem(menu, label)!;
+        expect(item.disabled).toBe(true);
+        expect(item.getAttribute("title")).toBe("Not implemented yet");
+      }
+    });
+
+    it("copies the file's absolute path for an editor tab", async () => {
+      const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+      vi.stubGlobal("navigator", { clipboard: { writeText } });
+      const tab = editorTab("a");
+      const host = await render({ tabs: [tab] });
+
+      await rightClickTab(host, tab.id);
+      await act(async () => menuItem(tabMenuFor("a.md")!, "Copy path")!.click());
+
+      expect(writeText).toHaveBeenCalledWith("/notes/dir/a.md");
+      expect(tabMenuFor("a.md")).toBeNull();
+    });
+
+    it("hides the file actions on a tab with no file behind it", async () => {
+      const host = await render({
+        tabs: [{ id: "settings", title: "Settings", kind: "settings" }]
+      });
+
+      await rightClickTab(host, "settings");
+      const menu = tabMenuFor("Settings")!;
+
+      expect(menuItem(menu, "Copy path")).toBeUndefined();
+      expect(menuItem(menu, "Reveal in explorer")).toBeUndefined();
+      expect(menuItem(menu, "Pin tab")).not.toBeUndefined();
+    });
+
+    it("renders Pin tab and Reveal in explorer disabled as not implemented", async () => {
+      const host = await render({ tabs: [editorTab("a")] });
+
+      await rightClickTab(host, editorTab("a").id);
+      const menu = tabMenuFor("a.md")!;
+
+      for (const label of ["Reveal in explorer", "Pin tab"]) {
+        const item = menuItem(menu, label)!;
+        expect(item.disabled).toBe(true);
+        expect(item.getAttribute("title")).toBe("Not implemented yet");
+      }
+    });
+
+    it("closes on Escape", async () => {
+      const host = await render({ tabs: [editorTab("a")] });
+
+      await rightClickTab(host, editorTab("a").id);
+      expect(tabMenuFor("a.md")).not.toBeNull();
+
+      await act(async () => {
+        tabMenuFor("a.md")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      });
+
+      expect(tabMenuFor("a.md")).toBeNull();
+    });
   });
 });

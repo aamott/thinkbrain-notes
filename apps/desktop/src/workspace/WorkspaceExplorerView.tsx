@@ -150,8 +150,7 @@ export function WorkspaceExplorerView({
       <p className="sr-only" aria-live="polite">{drag.announcement}</p>
       {/* One chrome row: the selector trigger when it lives in panel
           headers, otherwise the plain "Files" label — the root path survives
-          as its tooltip. Create icons hover-reveal on fine pointers; the ⋯
-          menu is always visible so the row never looks action-less. */}
+          as its tooltip. */}
       <header className="group/explorer-header flex min-h-9 items-center justify-between gap-2 border-b border-border px-3 pointer-coarse:min-h-12 pointer-coarse:px-4">
         <div className="flex min-w-0 flex-1 items-center">
           {showInlineSelector ? (
@@ -166,10 +165,7 @@ export function WorkspaceExplorerView({
           )}
         </div>
         <div className="flex flex-none items-center gap-0.5">
-          <div
-            className="tn-explorer-create-reveal flex items-center gap-0.5"
-            data-open={moreMenuOpen || undefined}
-          >
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
               className={HEADER_ACTION_CLASSES}
@@ -191,8 +187,7 @@ export function WorkspaceExplorerView({
               <FolderPlus aria-hidden="true" />
             </button>
           </div>
-          {/* Always visible, unlike the hover-reveal create icons: ordering
-              is a standing preference, not an occasional action. */}
+          {/* Ordering is a standing preference, not an occasional action. */}
           <ExplorerSortMenu
             sort={explorerSort}
             disabled={state.phase !== "ready"}
