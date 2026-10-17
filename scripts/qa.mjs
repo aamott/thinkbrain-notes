@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 const steps = [
   ["Version consistency", "version:check", [], false],
   ["Lint", "lint", [], false],
+  ["Dead code", "knip", ["--no-progress"], false],
   ["Typecheck", "typecheck", [], false],
   ["Format (Rust)", "format:rust", [], false],
   ["Test (TypeScript)", "test", [], true],

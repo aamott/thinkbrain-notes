@@ -19,7 +19,7 @@ import {
 // The history model lives in tabHistory.ts; re-exported so shell code has a
 // single import surface for everything visit-shaped.
 export { currentVisit, findVisit } from "./tabHistory";
-export type { DesktopTabHistory, EditorLocation, HistoryVisit } from "./tabHistory";
+export type { EditorLocation } from "./tabHistory";
 
 export interface DesktopTab extends Tab {
   readonly kind: TabKind;

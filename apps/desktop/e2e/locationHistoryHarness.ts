@@ -13,7 +13,7 @@ import { expect, type Page } from "@playwright/test";
  * {@link expectNoNativeFailures}.
  */
 
-export const HISTORY_VAULT_ROOT = "/workspace/history-vault";
+const HISTORY_VAULT_ROOT = "/workspace/history-vault";
 
 type InvokeArgs = Record<string, unknown>;
 
@@ -41,7 +41,7 @@ const SYNC_STATUS_OFF = {
  * opening and resizing the editor cannot reflow line heights between
  * measurements.
  */
-export const GUIDE_DOC = [
+const GUIDE_DOC = [
   "# Guide Alpha",
   "",
   ...Array.from({ length: 300 }, (_, i) => `guide filler line ${i + 1}`),
@@ -56,7 +56,7 @@ export const GUIDE_DOC = [
 ].join("\n");
 
 /** A short note that links to `bravo.md` near the top of the first viewport. */
-export const ALPHA_DOC = [
+const ALPHA_DOC = [
   "# Alpha Doc",
   "",
   "[Open bravo](bravo.md)",
@@ -64,14 +64,14 @@ export const ALPHA_DOC = [
   ...Array.from({ length: 80 }, (_, i) => `alpha filler line ${i + 1}`)
 ].join("\n");
 
-export const BRAVO_DOC = [
+const BRAVO_DOC = [
   "# Bravo Doc",
   "",
   ...Array.from({ length: 60 }, (_, i) => `bravo filler line ${i + 1}`)
 ].join("\n");
 
 /** The default document set for the fake vault. */
-export function historyVaultDocs(): Record<string, string> {
+function historyVaultDocs(): Record<string, string> {
   return { "guide.md": GUIDE_DOC, "alpha.md": ALPHA_DOC, "bravo.md": BRAVO_DOC };
 }
 
@@ -241,7 +241,7 @@ export interface EditorSpot {
  * sits. Returns `null` when no editor is mounted — which itself is the
  * signal some Back destinations produce.
  */
-export function editorSpot(page: Page): Promise<EditorSpot | null> {
+function editorSpot(page: Page): Promise<EditorSpot | null> {
   return page.evaluate(() => {
     const scroller = document.querySelector<HTMLElement>(".cm-scroller");
     if (!scroller) return null;

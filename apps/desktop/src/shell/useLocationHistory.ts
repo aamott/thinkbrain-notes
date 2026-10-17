@@ -68,7 +68,7 @@ const DEPARTURE_ACTIONS: ReadonlySet<DesktopTabAction["type"]> = new Set([
  * `state` *now* (named by id, since batched actions can move the cursor
  * before the reducer processes the capture).
  */
-export function dispatchWithDepartureCapture(
+function dispatchWithDepartureCapture(
   dispatch: Dispatch<DesktopTabAction>,
   action: DesktopTabAction,
   state: DesktopTabState
