@@ -175,7 +175,7 @@ test("command palette opens workspace files, runs commands, and restores focus",
   await page.keyboard.press("Control+p");
   await query.fill("graph");
   await page.keyboard.press("Enter");
-  await expect(page.getByText("Graph is unavailable until link indexing is connected.")).toBeVisible();
+  await expect(page.getByText("Graph is unavailable until a graph view is implemented.")).toBeVisible();
 });
 
 test("opens, saves, protects, and creates Markdown notes through the fresh shell", async ({ page }) => {
