@@ -17,7 +17,7 @@ import { inputClassName, type ControlProps } from "../controlRegistry";
  *   - the parsed value is outside the declared `min`/`max` range, so we never
  *     stage a value that would fail validation on save.
  */
-export function NumberControl({ definition, value, onChange, disabled }: ControlProps) {
+export function NumberControl({ definition, value, onChange }: ControlProps) {
   const numericValue = typeof value === "number" ? value : Number(value ?? 0);
 
   return (
@@ -27,7 +27,6 @@ export function NumberControl({ definition, value, onChange, disabled }: Control
       value={Number.isNaN(numericValue) ? "" : numericValue}
       min={definition.min}
       max={definition.max}
-      disabled={disabled}
       onChange={(e) => {
         // Empty input: the user is clearing the field. Don't stage `0`
         // (Number("") === 0); leave the staged value untouched.

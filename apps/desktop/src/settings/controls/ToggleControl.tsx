@@ -15,7 +15,7 @@ import type { ControlProps } from "../controlRegistry";
  * Clicking flips the value and calls `onChange(!value)`. Uses ARIA
  * `role="switch"` + `aria-checked` for screen-reader compatibility.
  */
-export function ToggleControl({ definition, value, onChange, disabled }: ControlProps) {
+export function ToggleControl({ definition, value, onChange }: ControlProps) {
   // Treat only true booleans as checked; any non-boolean (corrupted state,
   // stale value, undefined) defaults to false rather than coercing truthy
   // non-booleans (e.g. the string "false", the number 1) to true. This keeps
@@ -29,7 +29,6 @@ export function ToggleControl({ definition, value, onChange, disabled }: Control
       role="switch"
       id={definition.key}
       aria-checked={checked}
-      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
         "flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors",
@@ -37,8 +36,7 @@ export function ToggleControl({ definition, value, onChange, disabled }: Control
         // On touch screens, pad the tappable area to ≥44px without stretching
         // the visual switch itself.
         "max-[760px]:m-2.5",
-        checked ? "bg-primary" : "bg-secondary",
-        disabled && "opacity-50"
+        checked ? "bg-primary" : "bg-secondary"
       )}
     >
       <span

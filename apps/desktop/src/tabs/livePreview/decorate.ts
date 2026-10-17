@@ -74,7 +74,7 @@ export function decorateLines(
 const SYNTAX_MARK = Decoration.mark({ class: "cm-syntax-mark" });
 const CONCEALED = Decoration.replace({});
 
-export interface LivePreviewDecorations {
+interface LivePreviewDecorations {
   readonly content: DecorationSet;
   readonly atomic: DecorationSet;
 }

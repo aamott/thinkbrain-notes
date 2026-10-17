@@ -56,8 +56,7 @@ const ROW = "flex items-center gap-2 px-2 py-1.5 border-b border-border last:bor
 export function JournalFieldDefinitionsControl({
   definition,
   value,
-  onChange,
-  disabled
+  onChange
 }: ControlProps) {
   const stored = typeof value === "string" ? value : "[]";
   const parsed = parseFieldDefinitions(stored);
@@ -143,7 +142,6 @@ export function JournalFieldDefinitionsControl({
       <FieldDefinitionsJson
         definition={definition}
         stored={stored}
-        disabled={disabled}
         onChange={onChange}
         onBack={() => setJson(false)}
       />
@@ -263,7 +261,6 @@ export function JournalFieldDefinitionsControl({
           <button
             type="button"
             aria-label="Add a field"
-            disabled={disabled}
             onClick={() => setDraft(blankDraft())}
             className={PRIMARY}
           >

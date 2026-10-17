@@ -16,7 +16,7 @@ import type { EditorView } from "@codemirror/view";
  * are the whole point.
  */
 
-export interface RememberedEditor {
+interface RememberedEditor {
   readonly state: EditorState;
   /**
    * DOM scroll state as a measurement-aware CodeMirror snapshot, so it has to

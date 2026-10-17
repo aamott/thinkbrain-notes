@@ -5,9 +5,10 @@
  * window on success so closing this one cannot lose a finished import.
  */
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { NativeCommandError } from "../native/commands";
+import { ModalDialog } from "../shell/ModalDialog";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { pickDirectoryPath } from "../native/dialogs";
 import { readSignInStatus, saveSyncCredentials } from "../sync/syncService";
@@ -35,20 +36,17 @@ import {
 const inputClassName =
   "w-full rounded-small border border-border bg-surface px-2 py-1 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
-export interface GitLinkImportDialogProps {
+interface GitLinkImportDialogProps {
   readonly managedDestination?: boolean;
   readonly onClose: () => void;
   readonly onImported?: (rootPath: string) => void;
 }
 
 export function GitLinkImportDialog({ managedDestination = false, onClose, onImported }: GitLinkImportDialogProps) {
-  const dialogRef = useRef<HTMLElement>(null);
-  const linkInputRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
   const onImportedRef = useRef(onImported);
   const requestRef = useRef<string | null>(null);
   const earlyProgress = useRef(new Map<string, WorkspaceImportProgress>());
-  const titleId = useId();
   const [destination, setDestination] = useState("");
   const [parentPath, setParentPath] = useState("");
   const [profileId, setProfileId] = useState("");
@@ -84,10 +82,6 @@ export function GitLinkImportDialog({ managedDestination = false, onClose, onImp
     preview !== null &&
     (!isHttps || profileId === "" || profileId === "new" || (!selectedMissing && selectedInList)) &&
     (!isNewProfile || (username.trim() !== "" && token !== ""));
-
-  useEffect(() => {
-    linkInputRef.current?.focus();
-  }, []);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -175,22 +169,6 @@ export function GitLinkImportDialog({ managedDestination = false, onClose, onImp
     };
   }, [managedDestination]);
 
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape" && !busy) {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(
-      dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled])") ?? []
-    );
-    if (focusable.length === 0) return;
-    const index = focusable.indexOf(document.activeElement as HTMLElement);
-    event.preventDefault();
-    focusable[(index + (event.shiftKey ? focusable.length - 1 : 1)) % focusable.length]?.focus();
-  };
-
   const chooseParent = async (): Promise<void> => {
     const selected = await pickDirectoryPath("Choose a parent folder");
     if (selected) {
@@ -250,24 +228,11 @@ export function GitLinkImportDialog({ managedDestination = false, onClose, onImp
   };
 
   return (
-    <div className="fixed z-30 inset-0 flex items-start justify-center pt-[12vh] bg-overlay" role="presentation">
-      <section
-        ref={dialogRef}
-        tabIndex={-1}
-        className="grid gap-3 w-[min(28rem,calc(100vw-2rem))] p-[1.15rem] border border-border rounded-medium text-foreground bg-popover shadow-soft"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-busy={busy}
-        onKeyDown={handleKeyDown}
-      >
-        <h2 id={titleId} className="m-0 text-base font-semibold">
-          {IMPORT_DIALOG_TITLE}
-        </h2>
+    <ModalDialog title={IMPORT_DIALOG_TITLE} busy={busy} onDismiss={onClose}>
         <label className="flex flex-col gap-1 text-xs text-foreground" htmlFor="git-link-import-url">
           Git link
           <input
-            ref={linkInputRef}
+            data-initial-focus
             id="git-link-import-url"
             type="url"
             value={destination}
@@ -421,8 +386,7 @@ export function GitLinkImportDialog({ managedDestination = false, onClose, onImp
             Bring in
           </button>
         </div>
-      </section>
-    </div>
+    </ModalDialog>
   );
 }
 

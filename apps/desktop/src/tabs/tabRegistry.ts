@@ -41,7 +41,7 @@ export interface DesktopTabView extends TabRegistration {
   readonly placeholder?: boolean;
 }
 
-export interface DesktopTabRegistry {
+interface DesktopTabRegistry {
   /** Registers a tab kind and returns a handle that unregisters it. */
   register(view: DesktopTabView): Disposable;
   get(kind: TabKind): DesktopTabView | undefined;

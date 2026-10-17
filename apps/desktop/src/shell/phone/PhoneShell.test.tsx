@@ -539,7 +539,7 @@ describe("PhoneShell", () => {
             source: "test",
             title,
             message: "m",
-            severity: "silent",
+            severity: "transient",
             panel: "outline"
           });
         }

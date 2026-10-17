@@ -101,7 +101,8 @@ function render() {
       expandFolder,
       moveEntry,
       openContextMenu,
-      containerRef
+      containerRef,
+      html5Active: false
     });
     latestDrag = drag;
     return (

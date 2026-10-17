@@ -21,7 +21,7 @@ import { useSettleNotificationAdapter } from "./settleNotificationAdapter";
 import { useSyncStatus } from "./useSyncStatus";
 
 /** Props for {@link useSyncSurfaces}. */
-export interface SyncSurfacesProps {
+interface SyncSurfacesProps {
   /** Workspace root path, or null when no workspace is open. */
   readonly rootPath: string | null;
   /** Opens a sync panel, for notification action buttons. */

@@ -26,7 +26,7 @@ describe("command palette filtering", () => {
       activeIndex: 0,
       activeItem: null
     });
-    expect(getCommandPaletteResults({ query: "open", activeIndex: 8 }, builtInDesktopCommands, []).activeIndex).toBe(3);
+    expect(getCommandPaletteResults({ query: "open", activeIndex: 8 }, builtInDesktopCommands, []).activeIndex).toBe(2);
   });
 
   it("resets selection when changing the query", () => {

@@ -86,13 +86,9 @@ interface LazyExtensionPanelProps {
   readonly context: DesktopPanelContext;
 }
 
-function LazyExtensionPanel(props: LazyExtensionPanelProps) {
-  return <LazyExtensionSurface {...props} />;
-}
-
 /** Factory form, so the bootstrap can stay a plain `.ts` module. */
 export function createLazyExtensionPanel(props: LazyExtensionPanelProps): ReactNode {
-  return <LazyExtensionPanel {...props} />;
+  return <LazyExtensionSurface {...props} />;
 }
 
 /**

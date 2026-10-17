@@ -34,7 +34,6 @@ export function parseNote(markdown: string): ParsedNote {
   return {
     ...frontmatterResult,
     diagnostics,
-    inlineTags,
     tags,
     aliases: frontmatterResult.metadata.aliases,
     indexMetadata: collectIndexMetadata(frontmatterResult.metadata, diagnostics),
@@ -129,11 +128,11 @@ export function serializeNote(note: SerializableNote): string {
   return `${frontmatter}\n${note.body}`;
 }
 
-export function extractInlineTags(markdownBody: string): string[] {
+function extractInlineTags(markdownBody: string): string[] {
   return collectMatches(markdownBody, INLINE_TAG_PATTERN, (match) => match[2]);
 }
 
-export function extractWikiLinks(markdownBody: string): WikiLink[] {
+function extractWikiLinks(markdownBody: string): WikiLink[] {
   const links: WikiLink[] = [];
 
   for (const match of markdownBody.matchAll(WIKI_LINK_PATTERN)) {
@@ -143,16 +142,7 @@ export function extractWikiLinks(markdownBody: string): WikiLink[] {
       continue;
     }
 
-    const displayText = match[2]?.trim();
-    const position = match.index;
-    const startOffset = position;
-    const endOffset = position + match[0].length;
-
-    links.push(
-      displayText
-        ? { target, displayText, position, startOffset, endOffset }
-        : { target, position, startOffset, endOffset }
-    );
+    links.push({ target, startOffset: match.index });
   }
 
   return links;
@@ -212,7 +202,7 @@ function collectMatches(
 /** Replaces every non-newline character with a space (length- and line-preserving mask). */
 const blankNonNewlines = (text: string): string => text.replace(/[^\r\n]/g, " ");
 
-function maskMarkdown(markdown: string, frontmatter: { raw: string; endOffset: number } | null): string {
+function maskMarkdown(markdown: string, frontmatter: { endOffset: number } | null): string {
   let masked = markdown;
 
   if (frontmatter) {

@@ -75,7 +75,7 @@ function parseIsoDate(value: string): JournalDate | null {
   return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
 }
 
-export function sameDate(left: JournalDate, right: JournalDate): boolean {
+function sameDate(left: JournalDate, right: JournalDate): boolean {
   return left.year === right.year && left.month === right.month && left.day === right.day;
 }
 

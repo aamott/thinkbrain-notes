@@ -143,7 +143,7 @@ afterEach(async () => {
 describe("GitLinkImportDialog", () => {
   it("is an accessible focused dialog", async () => {
     await renderDialog();
-    const dialog = host?.querySelector("[role='dialog']");
+    const dialog = document.body.querySelector("[role='dialog']");
     expect(dialog?.getAttribute("aria-modal")).toBe("true");
     expect(dialog?.getAttribute("aria-labelledby")).toBeTruthy();
     expect(document.activeElement?.id).toBe("git-link-import-url");
@@ -152,14 +152,14 @@ describe("GitLinkImportDialog", () => {
   it("picks a parent folder and shows the native child-folder preview", async () => {
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click(host!.querySelector("button") as HTMLButtonElement);
+    await click(document.body.querySelector("button") as HTMLButtonElement);
     expect(pickDirectoryPath).toHaveBeenCalledWith("Choose a parent folder");
     await act(async () => undefined);
     expect(previewWorkspaceFromGitLink).toHaveBeenCalledWith("https://github.com/you/notes.git", "/home/you");
-    expect(host?.textContent).toContain("New folder: notes");
+    expect(document.body.textContent).toContain("New folder: notes");
   });
 
   it("uses managed app storage without a folder picker and opens the imported vault in place", async () => {
@@ -167,15 +167,15 @@ describe("GitLinkImportDialog", () => {
     const onImported = vi.fn();
     await renderDialog(onClose, true, onImported);
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
     await act(async () => undefined);
 
-    expect(host?.textContent).toContain("Managed app storage");
-    expect([...host!.querySelectorAll("button")].some((button) => button.textContent === "Browse…")).toBe(false);
+    expect(document.body.textContent).toContain("Managed app storage");
+    expect([...document.body.querySelectorAll("button")].some((button) => button.textContent === "Browse…")).toBe(false);
     expect(previewManagedWorkspaceFromGitLink).toHaveBeenCalledWith("https://github.com/you/notes.git");
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
     expect(importManagedWorkspaceFromGitLink).toHaveBeenCalledWith(
       "https://github.com/you/notes.git",
       null
@@ -199,11 +199,11 @@ describe("GitLinkImportDialog", () => {
     const onImported = vi.fn();
     await renderDialog(onClose, true, onImported);
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/someone/public.git"
     );
     await act(async () => undefined);
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
     await act(async () => {
       importListener?.({
         requestId: "imp-1",
@@ -234,11 +234,11 @@ describe("GitLinkImportDialog", () => {
     });
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
     await act(async () => undefined);
-    const select = host!.querySelector("#git-link-import-profile") as HTMLSelectElement;
+    const select = document.body.querySelector("#git-link-import-profile") as HTMLSelectElement;
     expect(select.textContent).toContain("No sign-in (public or local)");
     expect(select.textContent).toContain("you@github.com");
     expect(readSignInStatus).toHaveBeenCalledWith("", "https://github.com/you/notes.git", null);
@@ -260,28 +260,28 @@ describe("GitLinkImportDialog", () => {
     });
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
     await act(async () => undefined);
-    const select = host!.querySelector("#git-link-import-profile") as HTMLSelectElement;
+    const select = document.body.querySelector("#git-link-import-profile") as HTMLSelectElement;
     await act(async () => {
       select.value = "p-gone";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await act(async () => undefined);
     expect(select.value).toBe("p-gone");
-    expect(host?.textContent).toMatch(/not available/);
+    expect(document.body.textContent).toMatch(/not available/);
     expect(select.value).not.toBe("p-other");
   });
 
   it("shows validation for a token in the link", async () => {
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://you:secret@github.com/you/notes.git"
     );
-    expect(host?.textContent).toMatch(/token/);
+    expect(document.body.textContent).toMatch(/token/);
   });
 
   it("prevents a second submit while import is running and renders phases", async () => {
@@ -293,16 +293,16 @@ describe("GitLinkImportDialog", () => {
     );
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
     await act(async () => undefined);
-    const bringIn = [...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!;
+    const bringIn = [...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!;
     await click(bringIn);
     await click(bringIn);
     expect(importWorkspaceFromGitLink).toHaveBeenCalledOnce();
-    expect(host?.getAttribute("aria-busy") ?? host?.querySelector("[aria-busy='true']")).toBeTruthy();
+    expect(document.body.querySelector("[aria-busy='true']")).toBeTruthy();
     finish({ requestId: "imp-1", targetPath: "/home/you/notes" });
     await act(async () => undefined);
     await act(async () => {
@@ -313,7 +313,7 @@ describe("GitLinkImportDialog", () => {
         targetPath: "/home/you/notes"
       });
     });
-    expect(host?.textContent).toContain("Checking for updates");
+    expect(document.body.textContent).toContain("Checking for updates");
     await act(async () => {
       importListener?.({
         requestId: "imp-1",
@@ -322,7 +322,7 @@ describe("GitLinkImportDialog", () => {
         targetPath: "/home/you/notes"
       });
     });
-    expect(host?.textContent).toContain("Combining changes");
+    expect(document.body.textContent).toContain("Combining changes");
     await act(async () => {
       importListener?.({
         requestId: "imp-1",
@@ -331,18 +331,18 @@ describe("GitLinkImportDialog", () => {
         targetPath: "/home/you/notes"
       });
     });
-    expect(host?.textContent).toContain("Sending changes");
+    expect(document.body.textContent).toContain("Sending changes");
   });
 
   it("closes on success without opening a second workspace window", async () => {
     const onClose = await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
     await act(async () => undefined);
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
     await act(async () => undefined);
     await act(async () => {
       importListener?.({
@@ -352,7 +352,7 @@ describe("GitLinkImportDialog", () => {
       });
     });
     expect(onClose).toHaveBeenCalledOnce();
-    expect(host?.textContent).not.toContain("openWorkspaceWindow");
+    expect(document.body.textContent).not.toContain("openWorkspaceWindow");
   });
 
   it("does not miss completion that arrives before the start command returns", async () => {
@@ -366,12 +366,12 @@ describe("GitLinkImportDialog", () => {
     });
     const onClose = await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
     await act(async () => undefined);
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
 
     expect(onClose).toHaveBeenCalledOnce();
   });
@@ -379,12 +379,12 @@ describe("GitLinkImportDialog", () => {
   it("keeps the dialog open on failure and names a recovery action", async () => {
     const onClose = await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
     await act(async () => undefined);
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
     await act(async () => undefined);
     await act(async () => {
       importListener?.({
@@ -398,20 +398,20 @@ describe("GitLinkImportDialog", () => {
       });
     });
     expect(onClose).not.toHaveBeenCalled();
-    expect(host?.textContent).toContain("already there");
-    expect(host?.textContent).toMatch(/parent folder/);
-    expect([...host!.querySelectorAll("button")].some((button) => button.textContent === "Bring in")).toBe(true);
+    expect(document.body.textContent).toContain("already there");
+    expect(document.body.textContent).toMatch(/parent folder/);
+    expect([...document.body.querySelectorAll("button")].some((button) => button.textContent === "Bring in")).toBe(true);
   });
 
   it("ignores progress for a different request", async () => {
     const onClose = await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
     await act(async () => undefined);
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!);
     await act(async () => undefined);
     await act(async () => {
       importListener?.({
@@ -434,25 +434,25 @@ describe("GitLinkImportDialog", () => {
     });
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
-    await click([...host!.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
+    await click([...document.body.querySelectorAll("button")].find((button) => button.textContent === "Browse…")!);
     await act(async () => undefined);
 
-    const select = host!.querySelector("#git-link-import-profile") as HTMLSelectElement;
+    const select = document.body.querySelector("#git-link-import-profile") as HTMLSelectElement;
     await act(async () => {
       select.value = "new";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await act(async () => undefined);
 
-    const usernameInput = host!.querySelector("#git-link-import-username") as HTMLInputElement;
-    const tokenInput = host!.querySelector("#git-link-import-token") as HTMLInputElement;
+    const usernameInput = document.body.querySelector("#git-link-import-username") as HTMLInputElement;
+    const tokenInput = document.body.querySelector("#git-link-import-token") as HTMLInputElement;
     expect(usernameInput).toBeTruthy();
     expect(tokenInput).toBeTruthy();
 
-    const bringInButton = [...host!.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!;
+    const bringInButton = [...document.body.querySelectorAll("button")].find((button) => button.textContent === "Bring in")!;
     expect(bringInButton.disabled).toBe(true);
 
     await typeInto(usernameInput, "adam");
@@ -485,11 +485,11 @@ describe("GitLinkImportDialog", () => {
     });
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://gitlab.com/group/notes.git"
     );
     await act(async () => undefined);
-    expect(host?.textContent).toContain("No saved sign-ins for gitlab.com yet.");
+    expect(document.body.textContent).toContain("No saved sign-ins for gitlab.com yet.");
   });
 
   it("surfaces storage errors from readSignInStatus", async () => {
@@ -500,11 +500,11 @@ describe("GitLinkImportDialog", () => {
     });
     await renderDialog();
     await typeInto(
-      host!.querySelector("#git-link-import-url") as HTMLInputElement,
+      document.body.querySelector("#git-link-import-url") as HTMLInputElement,
       "https://github.com/you/notes.git"
     );
     await act(async () => undefined);
-    expect(host?.textContent).toContain("The keychain is locked.");
+    expect(document.body.textContent).toContain("The keychain is locked.");
   });
 });
 

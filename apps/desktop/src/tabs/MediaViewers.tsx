@@ -6,7 +6,7 @@ import { createVaultAssetResolver, loadMediaObjectUrl } from "../native/assets";
 import { NativeCommandError } from "../native/commands";
 import { Unavailable } from "../shell/Unavailable";
 
-export interface MediaViewerProps {
+interface MediaViewerProps {
   readonly rootPath: string | null;
   readonly relativePath: string | null;
 }

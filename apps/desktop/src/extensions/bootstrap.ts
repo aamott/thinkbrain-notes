@@ -40,7 +40,7 @@ import {
 
 /** Maps manifest diagnostics to bootstrap reasons (used for failed manifests and load diagnostics). */
 const toReasons = (diagnostics: readonly ManifestDiagnostic[]): readonly BootstrapReason[] =>
-  diagnostics.map((d) => ({ code: d.code, message: d.message, severity: d.severity }));
+  diagnostics.map((d) => ({ code: d.code, message: d.message }));
 
 /**
  * Registers built-in extensions and activates them lazily.

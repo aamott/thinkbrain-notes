@@ -46,8 +46,6 @@ export interface ControlProps {
   readonly value: unknown;
   /** Called with the new value when the user interacts with the control. */
   readonly onChange: (value: unknown) => void;
-  /** Disables the control when true. */
-  readonly disabled?: boolean;
 }
 
 /** Maps control key strings to their React component implementations. */

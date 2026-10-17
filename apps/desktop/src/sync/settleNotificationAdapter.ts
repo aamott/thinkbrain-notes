@@ -33,7 +33,7 @@ import type { SyncStatus } from "./historyTypes";
 export const SETTLE_SOURCE = "sync-settle";
 
 /** Props for {@link useSettleNotificationAdapter}. */
-export interface SettleNotificationAdapterProps {
+interface SettleNotificationAdapterProps {
   /** Workspace root path, or null when no workspace is open. */
   readonly rootPath: string | null;
   /** Current sync status — re-reading the conflict rate on changes catches

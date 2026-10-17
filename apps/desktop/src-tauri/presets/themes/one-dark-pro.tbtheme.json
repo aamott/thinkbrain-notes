@@ -14,7 +14,6 @@
     "--tn-color-primary": "hsl(210 64% 68%)",
     "--tn-color-primary-foreground": "hsl(220 13% 12%)",
     "--tn-color-secondary": "hsl(220 13% 18%)",
-    "--tn-color-secondary-foreground": "hsl(220 14% 71%)",
     "--tn-color-muted": "hsl(220 13% 18%)",
     "--tn-color-muted-foreground": "hsl(220 9% 55%)",
     "--tn-color-accent": "hsl(220 13% 20%)",

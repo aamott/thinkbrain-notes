@@ -25,7 +25,7 @@ export function normalizeRoot(root: string): string {
 }
 
 /** Returns the `root/YYYY/MM` folder an entry for this date belongs in (D17). */
-export function journalEntryFolder(root: string, date: JournalDate): string {
+function journalEntryFolder(root: string, date: JournalDate): string {
   const month = String(date.month).padStart(2, "0");
   return `${normalizeRoot(root)}/${date.year}/${month}`;
 }

@@ -14,7 +14,6 @@ import type {
   HistoryUsage as NativeHistoryUsage,
   SavedSignIn as NativeSavedSignIn,
   SignInStatus as NativeSignInStatus,
-  Synced as NativeSynced,
   SyncStatus as NativeSyncStatus,
   VersionDiff as NativeVersionDiff
 } from "../sync/historyTypes";
@@ -292,11 +291,6 @@ export interface NativeCommandMap {
   readonly sync_conflict_rate: {
     readonly args: { readonly rootPath: string };
     readonly result: NativeConflictRate;
-  };
-  /** One round trip to wherever this workspace syncs to. */
-  readonly sync_now: {
-    readonly args: { readonly rootPath: string };
-    readonly result: NativeSynced;
   };
   /** Saves a username and access token in the OS keychain, never settings. */
   readonly save_sync_credentials: {

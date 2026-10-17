@@ -25,7 +25,7 @@ import { describeSignInStatus } from "./signInCopy";
 const PROFILE_KEY = "sync.signInProfile";
 const NEW_VALUE = "new";
 
-export function GitLinkControl({ definition, value, onChange, disabled }: ControlProps) {
+export function GitLinkControl({ definition, value, onChange }: ControlProps) {
   const [username, setUsername] = useState("");
   const [token, setToken] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -54,14 +54,12 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
   const selectedForHost =
     status?.selected?.saved === true && status.selected.host === status.host;
   const canSaveLink =
-    !disabled &&
     busy === null &&
     rootPath !== null &&
     validation === null &&
     isHttps &&
     selectedForHost;
   const canUpdate =
-    !disabled &&
     busy === null &&
     rootPath !== null &&
     validation === null &&
@@ -73,7 +71,7 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
     (selectValue === NEW_VALUE || selectedForHost) &&
     username.trim() !== "" &&
     token !== "";
-  const canForget = !disabled && busy === null && selectedId !== "";
+  const canForget = busy === null && selectedId !== "";
 
   useEffect(() => {
     if (destination === rawDestination) return;
@@ -173,7 +171,6 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
         type="url"
         id={definition.key}
         value={destination}
-        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         placeholder="https://github.com/you/notes.git"
         aria-describedby={`${definition.key}-help`}
@@ -198,14 +195,14 @@ export function GitLinkControl({ definition, value, onChange, disabled }: Contro
         </p>
       )}
 
-      <fieldset className="m-0 flex flex-col gap-2 rounded-small border border-border p-3" disabled={disabled}>
+      <fieldset className="m-0 flex flex-col gap-2 rounded-small border border-border p-3">
         <legend className="px-1 text-xs font-semibold text-foreground">Sign in to this git link</legend>
         <label className="flex flex-col gap-1 text-xs text-foreground" htmlFor={`${definition.key}-profile`}>
           Saved sign-in
           <select
             id={`${definition.key}-profile`}
             value={selectValue}
-            disabled={disabled || busy !== null}
+            disabled={busy !== null}
             onChange={(event) => {
               const next = event.target.value;
               if (next === NEW_VALUE) {

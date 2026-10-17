@@ -11,7 +11,7 @@ import type { Text } from "@codemirror/state";
  */
 
 /** A frontmatter block, covering both fence lines inclusive. */
-export interface FrontmatterRange {
+interface FrontmatterRange {
   readonly from: number;
   readonly to: number;
   /** 1-based line number of the closing `---`. */

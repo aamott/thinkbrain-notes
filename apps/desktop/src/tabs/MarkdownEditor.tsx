@@ -20,7 +20,7 @@ import {
 } from "./useCodeMirrorView";
 import { wikiLinkAutocomplete as wikiLinkAutocompleteExtension } from "./wikiLinkAutocomplete";
 
-export interface MarkdownEditorProps {
+interface MarkdownEditorProps {
   readonly value: string;
   readonly isSaving?: boolean;
   readonly error?: string | null;

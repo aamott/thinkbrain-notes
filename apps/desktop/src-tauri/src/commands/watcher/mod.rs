@@ -40,7 +40,7 @@ mod self_write;
 pub(crate) use classify::{Audience, classify_all};
 pub(crate) use classify::{Changes, collect_changes};
 #[allow(unused_imports)]
-pub use classify::{classify_event, is_in_watched_area, workspace_relative_path};
+pub use classify::{classify_event, workspace_relative_path};
 #[allow(unused_imports)]
 pub use lifecycle::{
     __cmd__unwatch_workspace, __cmd__watch_workspace, __tauri_command_name_unwatch_workspace,

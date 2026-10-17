@@ -30,8 +30,8 @@ export interface NotificationStoreState {
    * Adds (or, when `dedupKey` matches, updates) a notification.
    *
    * Updating an existing entry refreshes its message/details/action/variant,
-   * bumps `createdAt`, un-dismisses it, and re-promotes it to the toast if
-   * its severity is not `silent`. Returns the assigned id.
+   * bumps `createdAt`, un-dismisses it, and re-promotes it to the toast.
+   * Returns the assigned id.
    */
   addNotification(input: NotificationInput): string;
   /** Marks a notification dismissed and clears the toast if it was active. */
@@ -50,20 +50,20 @@ function nextId(): string {
 }
 
 /**
- * Picks the toast: the highest-priority non-dismissed, non-silent notification.
+ * Picks the toast: the highest-priority non-dismissed notification.
  *
  * Priority is `sticky` over `transient` — a sticky notification needs user
  * action and should not be bumped aside by a transient success that will
  * auto-dismiss anyway. Among the same severity, the most recent wins.
  *
  * Computed on each add/dismiss/clear so consumers can read `activeToast`
- * directly without re-deriving it. Silent items only appear in the log.
+ * directly without re-deriving it.
  */
 function pickToast(notifications: readonly NotificationItem[]): NotificationItem | null {
   let best: NotificationItem | null = null;
   for (let i = notifications.length - 1; i >= 0; i -= 1) {
     const item = notifications[i];
-    if (!item || item.dismissed || item.severity === "silent") continue;
+    if (!item || item.dismissed) continue;
     if (best === null) {
       best = item;
       continue;

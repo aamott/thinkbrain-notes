@@ -49,7 +49,6 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
         owner: "user"
       }
     });
-    expect(parsed.inlineTags).toEqual(["inline-tag"]);
     expect(parsed.tags).toEqual(["project", "daily", "inline-tag"]);
     expect(parsed.aliases).toEqual(["Scratchpad"]);
     expect(parsed.indexMetadata).toEqual([
@@ -63,16 +62,11 @@ Body with #inline-tag and [[Some Note]] plus [[Other Note|Display Text]].
     expect(parsed.wikiLinks).toEqual([
       {
         target: "Some Note",
-        position: expect.any(Number),
-        startOffset: expect.any(Number),
-        endOffset: expect.any(Number)
+        startOffset: expect.any(Number)
       },
       {
         target: "Other Note",
-        displayText: "Display Text",
-        position: expect.any(Number),
-        startOffset: expect.any(Number),
-        endOffset: expect.any(Number)
+        startOffset: expect.any(Number)
       }
     ]);
     // Lines 18 and 19 of the source above, counting the 14-line frontmatter
@@ -283,17 +277,17 @@ describe("offsets reported against the original document", () => {
     expect(task!.line).toBe(4);
   });
 
-  it("reports wiki link offsets that slice the link out of the original markdown", () => {
+  it("reports wiki link offsets that point at the link in the original markdown", () => {
     const [link] = parseNote(NOTE).wikiLinks;
 
     expect(link).toBeDefined();
-    expect(NOTE.slice(link!.startOffset, link!.endOffset)).toBe("[[A Link]]");
+    expect(NOTE.startsWith("[[A Link]]", link!.startOffset)).toBe(true);
   });
 
   it("still ignores tags and links inside the frontmatter block", () => {
     const parsed = parseNote("---\nnote: see [[Hidden]] #hiddentag\n---\nbody #real");
 
     expect(parsed.wikiLinks).toHaveLength(0);
-    expect(parsed.inlineTags).toEqual(["real"]);
+    expect(parsed.tags).toEqual(["real"]);
   });
 });

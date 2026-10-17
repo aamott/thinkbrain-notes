@@ -42,7 +42,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
   readonly expandedFolders: ReadonlySet<string>;
   readonly actions: WorkspaceExplorerActions;
   /** Shared drag-and-drop controller from `WorkspaceExplorerView`. */
-  readonly drag: WorkspaceTreeDrag | null;
+  readonly drag: WorkspaceTreeDrag;
   readonly busy: boolean;
   readonly inlineCreateError: string | null;
 }) {
@@ -71,8 +71,8 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
 
   const isActive = activePath === node.entry.relative_path;
   const isFocusable = isActive || (activePath === null && isFirst);
-  const isDragged = drag?.draggedPath === node.entry.relative_path;
-  const isDropTarget = drag?.dropTargetPath === node.entry.relative_path;
+  const isDragged = drag.draggedPath === node.entry.relative_path;
+  const isDropTarget = drag.dropTargetPath === node.entry.relative_path;
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -104,7 +104,7 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           className={cn(
             "group/row flex min-w-0 items-stretch",
             isDragged && "opacity-60",
-            isDropTarget && (drag?.dropTargetValid
+            isDropTarget && (drag.dropTargetValid
               ? "bg-[color-mix(in_srgb,var(--color-accent)_58%,transparent)]"
               : "bg-[color-mix(in_srgb,var(--color-destructive)_18%,transparent)]"),
             // The context-menu target stays outlined for as long as its menu
@@ -114,16 +114,16 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
           )}
           {...{ [WORKSPACE_TREE_ROW_ATTR]: node.entry.relative_path }}
           {...(isDirectory ? { [WORKSPACE_DROP_PARENT_ATTR]: node.entry.relative_path } : {})}
-          draggable={drag?.draggable}
-          onDragStart={(event) => drag?.onRowDragStart?.(event, node.entry)}
-          onDragEnd={(event) => drag?.onRowDragEnd?.(event)}
-          onDragOver={(event) => drag?.onRowDragOver?.(event, node.entry)}
-          onDragLeave={(event) => drag?.onRowDragLeave?.(event, node.entry)}
-          onDrop={(event) => drag?.onRowDrop?.(event, node.entry)}
+          draggable={drag.draggable}
+          onDragStart={(event) => drag.onRowDragStart?.(event, node.entry)}
+          onDragEnd={(event) => drag.onRowDragEnd?.(event)}
+          onDragOver={(event) => drag.onRowDragOver?.(event, node.entry)}
+          onDragLeave={(event) => drag.onRowDragLeave?.(event, node.entry)}
+          onDrop={(event) => drag.onRowDrop?.(event, node.entry)}
           onContextMenu={(event) => {
             // An armed touch hold owns the browser contextmenu event; it opens
             // this same menu on release instead of stealing the drag gesture.
-            if (drag?.onRowContextMenu(event, node.entry)) return;
+            if (drag.onRowContextMenu(event, node.entry)) return;
             setActivePath(node.entry.relative_path);
             showContextMenu(event, { kind: isDirectory ? "folder" : "file", entry: node.entry });
           }}
@@ -140,12 +140,12 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             // The row's key contract lives in useWorkspaceTreeNavigation
             // with the list-level map, not here.
             onKeyDown={(event) => actions.handleRowKeyDown(event, node)}
-            onPointerDown={(event) => drag?.onRowPointerDown(event, node.entry)}
-            onTouchStart={(event) => drag?.onRowTouchStart(event, node.entry)}
+            onPointerDown={(event) => drag.onRowPointerDown(event, node.entry)}
+            onTouchStart={(event) => drag.onRowTouchStart(event, node.entry)}
             onClick={() => {
               // A completed drag ends in a pointerup on the row, which would
               // otherwise also fire this click and open/toggle the entry.
-              if (drag?.consumeSuppressedClick()) return;
+              if (drag.consumeSuppressedClick()) return;
               setActivePath(node.entry.relative_path);
               if (isDirectory) toggleFolder(node.entry.relative_path);
               else if (isFile) handleFileSelected(node.entry.relative_path);
@@ -155,23 +155,21 @@ export const WorkspaceTreeItem = memo(function WorkspaceTreeItem({
             <span className={cn(TREE_ICON_CLASSES, "w-2.5 flex-none text-center")} aria-hidden="true">{isDirectory ? (isExpanded ? <FolderOpen /> : <Folder />) : <WorkspaceFileIcon name={node.entry.name} />}</span>
             <span className="min-w-0 truncate">{node.entry.name}</span>
           </button>
-          {drag && (
-            <button
-              type="button"
-              {...{ [WORKSPACE_DRAG_HANDLE_ATTR]: node.entry.relative_path }}
-              // `touch-none` keeps this handle out of the browser's scroll
-              // gesture so a touch drag can start here while the rest of the
-              // row scrolls normally. Subtle on a pointer-fine desktop, it is
-              // always visible and >=44px on coarse pointers.
-              className="flex w-5 flex-none cursor-grab touch-none items-center justify-center self-stretch border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-70 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 pointer-coarse:w-11 pointer-coarse:min-h-11 pointer-coarse:opacity-70 [&>svg]:size-[0.8rem] [&>svg]:stroke-current"
-              tabIndex={isFocusable ? 0 : -1}
-              aria-label={`Move ${node.entry.name}. Press Enter to pick it up, use the arrow keys to choose a folder, Enter to drop, Escape to cancel.`}
-              onPointerDown={(event) => drag.onHandlePointerDown(event, node.entry)}
-              onKeyDown={(event) => drag.onHandleKeyDown(event, node.entry)}
-            >
-              <GripVertical aria-hidden="true" />
-            </button>
-          )}
+          <button
+            type="button"
+            {...{ [WORKSPACE_DRAG_HANDLE_ATTR]: node.entry.relative_path }}
+            // `touch-none` keeps this handle out of the browser's scroll
+            // gesture so a touch drag can start here while the rest of the
+            // row scrolls normally. Subtle on a pointer-fine desktop, it is
+            // always visible and >=44px on coarse pointers.
+            className="flex w-5 flex-none cursor-grab touch-none items-center justify-center self-stretch border-0 bg-transparent p-0 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-70 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1 pointer-coarse:w-11 pointer-coarse:min-h-11 pointer-coarse:opacity-70 [&>svg]:size-[0.8rem] [&>svg]:stroke-current"
+            tabIndex={isFocusable ? 0 : -1}
+            aria-label={`Move ${node.entry.name}. Press Enter to pick it up, use the arrow keys to choose a folder, Enter to drop, Escape to cancel.`}
+            onPointerDown={(event) => drag.onHandlePointerDown(event, node.entry)}
+            onKeyDown={(event) => drag.onHandleKeyDown(event, node.entry)}
+          >
+            <GripVertical aria-hidden="true" />
+          </button>
         </div>
       )}
       {isDirectory && isExpanded && (

@@ -47,7 +47,7 @@ export interface MarkdownEditorHookPayload {
 type MarkdownEditorHookContext = undefined;
 
 /** The typed registry used to assemble every built-in Markdown editor hook. */
-export type MarkdownEditorHookRegistry = DesktopEditorHookRegistry<
+type MarkdownEditorHookRegistry = DesktopEditorHookRegistry<
   MarkdownEditorHookPayload,
   MarkdownEditorHookContext
 >;

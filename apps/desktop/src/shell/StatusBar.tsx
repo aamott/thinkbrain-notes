@@ -15,7 +15,6 @@
  * - `sticky` notifications never auto-dismiss; only Dismiss or
  *   `clearBySource` clears them.
  * - `transient` notifications auto-dismiss after 8s, paused while hovered.
- * - `silent` notifications never become toasts (the store guarantees this).
  */
 
 import { useEffect, useState } from "react";

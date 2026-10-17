@@ -27,23 +27,21 @@ describe("desktop command registry", () => {
     const registry = createDesktopCommandRegistry();
 
     expect(registry.entries().map((command) => command.id)).toEqual([
-      "open-file", "new-note", "search", "toggle-live-preview", "toggle-theme",
+      "new-note", "search", "toggle-live-preview", "toggle-theme",
       "toggle-explorer", "toggle-outline", "toggle-assistant", "toggle-bottom-panel",
       "open-settings", "open-graph", "open-extensions"
     ]);
     expect(registry.get("toggle-explorer")?.title).toBe("Toggle Files");
-    expect(registry.get("open-file")?.keybinding).toBe("Ctrl/Cmd+P");
+    expect(registry.get("search")?.keybinding).toBe("Ctrl/Cmd+Shift+F");
     expect(registry.get("open-extensions")?.availability).toBe("available");
   });
 
-  it("makes feature-owned commands explicitly unavailable with a message", () => {
+  it("makes the unimplemented command explicitly unavailable with a message", () => {
     const unavailable = builtInDesktopCommands.filter((command) => command.availability === "unavailable");
 
-    expect(unavailable).toHaveLength(2);
-    expect(unavailable).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "open-file" }),
+    expect(unavailable).toEqual([
       expect.objectContaining({ id: "open-graph" })
-    ]));
+    ]);
     expect(unavailable.every((command) => Boolean(command.unavailableMessage))).toBe(true);
   });
 

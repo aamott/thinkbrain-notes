@@ -3,7 +3,6 @@
 // "@thinkbrain/core" which sources from here).
 export {
   parseDynamicAppSettings,
-  serializeDynamicSettings,
   serializeDynamicAppSettings,
   type ParseDynamicAppSettingsResult
 } from "./settings/dynamic";

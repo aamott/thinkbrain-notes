@@ -81,10 +81,12 @@ export function sortWorkspaceTree(
   const timeField = order === "created-desc" || order === "created-asc" ? "created_at" : "updated_at";
   const descending = order !== "created-asc";
   // Memoized per call: a folder's time walks its whole subtree, and the sort
-  // asks for it on every comparison.
-  const times = new Map<string, number | undefined>();
+  // asks for it on every comparison. Built lazily — only the time orders ever
+  // reach the arm that calls `timeOf`, so name/type sorts skip the map.
+  let times: Map<string, number | undefined> | null = null;
   const timeOf = (node: WorkspaceTreeNode): number | undefined => {
     if (node.entry.kind === "file") return node.entry[timeField] ?? undefined;
+    times ??= new Map();
     if (!times.has(node.entry.relative_path)) {
       times.set(node.entry.relative_path, folderTime(node, timeField, descending));
     }

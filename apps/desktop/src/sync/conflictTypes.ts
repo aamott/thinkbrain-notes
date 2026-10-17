@@ -64,7 +64,7 @@ interface ConflictText {
  * `ambiguous` means it might take theirs somewhere ours never changed, so a
  * person has to look.
  */
-export interface ConflictBase {
+interface ConflictBase {
   /** Opaque handle. */
   readonly id: string;
   /** The pull's own merge, or a version this vault recorded before the copy arrived. */

@@ -11,7 +11,7 @@ import type { ConflictSummary } from "./conflictTypes";
 import { noteName } from "../lib/utils";
 
 /** How a card presents itself. */
-export type CardTreatment =
+type CardTreatment =
   /** Two versions, side by side, chunk by chunk. */
   | "review"
   /** Two pictures and their sizes and dates. */

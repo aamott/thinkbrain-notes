@@ -13,7 +13,7 @@ import {
   type MountedEditorView
 } from "./useCodeMirrorView";
 
-export interface CodeEditorProps {
+interface CodeEditorProps {
   readonly value: string;
   readonly isSaving?: boolean;
   readonly error?: string | null;

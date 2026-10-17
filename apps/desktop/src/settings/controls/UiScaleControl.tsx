@@ -17,7 +17,7 @@ import { UI_SCALE_PRESETS } from "../uiModuleDefaults";
  * value outside the presets (staged by keyboard zoom or imported) is inserted
  * in sorted order so the selection always names what is actually applied.
  */
-export function UiScaleControl({ definition, value, onChange, disabled }: ControlProps) {
+export function UiScaleControl({ definition, value, onChange }: ControlProps) {
   const current = typeof value === "number" && Number.isFinite(value) ? value : NaN;
   const options =
     !Number.isNaN(current) && !UI_SCALE_PRESETS.includes(current)
@@ -28,7 +28,6 @@ export function UiScaleControl({ definition, value, onChange, disabled }: Contro
     <select
       id={definition.key}
       value={Number.isNaN(current) ? "" : String(current)}
-      disabled={disabled}
       onChange={(e) => onChange(Number(e.target.value))}
       className={`w-28 max-[760px]:min-h-11 max-[760px]:w-full ${inputClassName}`}
     >

@@ -2,7 +2,7 @@ import { parseNote, type ParsedNote } from "@thinkbrain/core";
 import { invokeNativeCommand } from "./commands";
 
 /** Exact note source paired with its parsed representation. */
-export interface ParsedNoteSource {
+interface ParsedNoteSource {
   readonly contents: string;
   readonly parsedNote: ParsedNote;
 }

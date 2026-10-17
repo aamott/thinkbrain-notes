@@ -31,7 +31,7 @@ function describeCleanup(done: HistoryCleanup): string {
   return `Freed ${formatBytes(done.reclaimed)}.`;
 }
 
-export function HistoryPolicyControl({ definition, disabled }: ControlProps) {
+export function HistoryPolicyControl({ definition }: ControlProps) {
   const rootPath = useSettingsStore((state) => state.workspaceRootPath);
   const [bytes, setBytes] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -102,7 +102,7 @@ export function HistoryPolicyControl({ definition, disabled }: ControlProps) {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={disabled || busy !== null || rootPath === null}
+          disabled={busy !== null || rootPath === null}
           onClick={() => void run("free")}
           className="w-fit rounded-small bg-primary px-2 py-1 text-xs text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -111,7 +111,7 @@ export function HistoryPolicyControl({ definition, disabled }: ControlProps) {
         {!confirmClear ? (
           <button
             type="button"
-            disabled={disabled || busy !== null || rootPath === null}
+            disabled={busy !== null || rootPath === null}
             onClick={() => setConfirmClear(true)}
             className={`${inputClassName} w-fit cursor-pointer text-xs disabled:cursor-not-allowed`}
           >
@@ -126,7 +126,7 @@ export function HistoryPolicyControl({ definition, disabled }: ControlProps) {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={disabled || busy !== null}
+                disabled={busy !== null}
                 onClick={() => void run("clear")}
                 className="w-fit rounded-small bg-destructive px-2 py-1 text-xs text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >

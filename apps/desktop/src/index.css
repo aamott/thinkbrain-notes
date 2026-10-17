@@ -31,7 +31,6 @@
   --color-primary: var(--tn-color-primary);
   --color-primary-foreground: var(--tn-color-primary-foreground);
   --color-secondary: var(--tn-color-secondary);
-  --color-secondary-foreground: var(--tn-color-secondary-foreground);
   --color-muted: var(--tn-color-muted);
   --color-muted-foreground: var(--tn-color-muted-foreground);
   --color-accent: var(--tn-color-accent);
@@ -104,11 +103,6 @@
   to { transform: translateX(0); }
 }
 
-@keyframes tn-slide-in-right {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
 @keyframes tn-slide-in-bottom {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
@@ -116,10 +110,6 @@
 
 @utility tn-slide-in-left {
   animation: tn-slide-in-left var(--tn-duration-overlay) ease-out;
-}
-
-@utility tn-slide-in-right {
-  animation: tn-slide-in-right var(--tn-duration-overlay) ease-out;
 }
 
 @utility tn-slide-in-bottom {

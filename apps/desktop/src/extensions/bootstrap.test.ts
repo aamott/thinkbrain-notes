@@ -34,7 +34,7 @@ const setup = (extension: BuiltInExtension) => {
     mobileNewNoteActions: actions,
     extensions: [extension]
   });
-  return { commands, panels, actions, host, boot };
+  return { commands, panels, actions, boot };
 };
 
 const commandContext = {} as DesktopCommandContext;
@@ -420,7 +420,7 @@ describe("locally loaded extensions", () => {
       mobileNewNoteActions: actions,
       extensions: []
     });
-    return { commands, panels, actions, host, boot };
+    return { commands, panels, actions, boot };
   };
 
   it("stubs a locally loaded extension's commands without activating it", () => {

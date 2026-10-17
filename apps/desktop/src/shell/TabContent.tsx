@@ -150,24 +150,6 @@ export function TabContent({
     return <>{view.factory({ rootPath: rootPath ?? null, tabId: tab.id })}</>;
   }
 
-  if (tab.kind === "browser") {
-    return (
-      <Unavailable
-        title="Browser tab"
-        description="External page rendering is unavailable until the Tauri browser view is connected."
-      />
-    );
-  }
-
-  if (tab.kind === "graph") {
-    return (
-      <Unavailable
-        title="Graph view"
-        description="Graph visualization is planned after link indexing is available."
-      />
-    );
-  }
-
   if (tab.kind === "preview") {
     return (
       <div className="my-8 mx-auto max-w-2xl px-8 leading-1.6">

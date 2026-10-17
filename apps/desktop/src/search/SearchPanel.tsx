@@ -22,7 +22,7 @@ interface SearchCall {
 let requestSeq = 0;
 
 /** Props for the search panel. */
-export interface SearchPanelProps {
+interface SearchPanelProps {
   /** Workspace root path, or `null` when no workspace is open. */
   readonly rootPath: string | null;
   /** Called when a user activates a search result. */

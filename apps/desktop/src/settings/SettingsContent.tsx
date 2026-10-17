@@ -30,7 +30,6 @@ import type {
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { SCROLL_ANCHOR_ATTR, useScrollAnchor } from "../lib/scrollAnchors";
-import { Unavailable } from "../shell/Unavailable";
 import { appSettingsRegistry, useSettingsModules, useSettingsStore } from "./settingsStore";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
@@ -392,15 +391,6 @@ export function SettingsContent({ active = true }: { readonly active?: boolean }
     recompute();
     return () => root.removeEventListener("scroll", recompute);
   }, [sectionIdsKey, setActiveSection]);
-
-  if (renderedSections.length === 0) {
-    return (
-      <Unavailable
-        title="No settings available"
-        description="No settings sections are currently registered."
-      />
-    );
-  }
 
   return (
     <div

@@ -152,15 +152,6 @@ export interface CommandContribution<Payload = void>
   extends IdentifiedContribution {
   /** Human-readable command name. */
   readonly title: string;
-  /**
-   * Host-defined icon identifier, not an icon component.
-   *
-   * Mirrors `PanelContribution.icon`: core is platform-agnostic and extension
-   * manifests are JSON, so an extension can never hand the host a component.
-   * The desktop layer resolves this through `panelIcons`. Optional — a command
-   * without one is palette-only and cannot be surfaced in the phone chrome.
-   */
-  readonly icon?: string;
   /** Optional platform-specific keybinding expression. Display + future global binding; not yet bound globally by the host. */
   readonly keybinding?: string;
   /** Invoked by the host after it supplies the command payload. */

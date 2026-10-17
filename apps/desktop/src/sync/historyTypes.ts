@@ -162,26 +162,6 @@ export const NOT_RECORDING: SyncStatus = Object.freeze({
   maintenanceProblem: null
 });
 
-/** What became of the notes we tried to send on. */
-type SyncLanded =
-  | { readonly state: "moved" }
-  /** Retained as a native diagnostic; the UI gives a stable, actionable message instead. */
-  | { readonly state: "refused"; readonly reason: string };
-
-/** What one round trip to another device did. */
-export interface Synced {
-  /** Notes the other side's work changed here. */
-  readonly broughtDown: number;
-  /** Notes that needed a person, left as copies beside their originals. */
-  readonly askedAbout: number;
-  /**
-   * Objects sent onward. This is intentionally not shown as a note count:
-   * native push reports packed git objects, not notes.
-   */
-  readonly sent: number;
-  readonly landed: SyncLanded;
-}
-
 /** How much the hidden undo history occupies on this computer. */
 export interface HistoryUsage {
   readonly bytes: number;
