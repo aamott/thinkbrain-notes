@@ -13,6 +13,7 @@ export interface UsePhoneOpenersParams {
   readonly beforeNavigate: ShellState["beforeNavigate"];
   readonly openMarkdownDocument: ShellState["openMarkdownDocument"];
   readonly openFileDocument: ShellState["openFileDocument"];
+  readonly navigateToHeading: ShellState["navigateToHeading"];
   readonly openNewTabDocument: ShellState["openNewTab"];
   readonly restoredWorkspacePath: string | null;
   readonly paletteCommands: readonly DesktopCommand[];
@@ -42,6 +43,7 @@ export function usePhoneOpeners({
   beforeNavigate,
   openMarkdownDocument,
   openFileDocument,
+  navigateToHeading,
   openNewTabDocument,
   restoredWorkspacePath,
   paletteCommands,
@@ -101,9 +103,15 @@ export function usePhoneOpeners({
         void openUrl(target.url).catch(() => undefined);
         return;
       }
+      // A same-note anchor jumps inside the visible note — no save, no
+      // history push: the in-file visit lands via navigateToLine itself.
+      if (target.kind === "heading") {
+        navigateToHeading(target.fragment);
+        return;
+      }
       if (restoredWorkspacePath) openFile(restoredWorkspacePath, target.relativePath);
     },
-    [restoredWorkspacePath, openFile]
+    [restoredWorkspacePath, openFile, navigateToHeading]
   );
 
   // "Previous versions…" opens the file's inspector over the just-opened tab.

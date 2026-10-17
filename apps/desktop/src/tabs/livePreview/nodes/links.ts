@@ -1,4 +1,7 @@
-import { resolveMarkdownLinkTarget, resolveWikiLinkTarget } from "@thinkbrain/core";
+import {
+  resolveMarkdownLinkTarget,
+  resolveWikiLinkNavigationTarget
+} from "@thinkbrain/core";
 import { Decoration } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import type { Text } from "@codemirror/state";
@@ -125,10 +128,11 @@ const image: NodeHandler = (node, ctx) => {
  * With an alias, the target and the pipe are concealed and the alias shows;
  * without one, only the brackets are concealed.
  *
- * Resolved links (target matches a note in the index) get `cm-link-resolved`
- * and are clickable; unresolved links get `cm-link-broken` and are not. While
- * the syntax is revealed both additionally carry `cm-link-revealed`, which
- * swaps the click affordance for the editing one.
+ * Resolved links (target matches a note in the index, or a `[[#Heading]]`
+ * same-note anchor) get `cm-link-resolved` and are clickable; unresolved
+ * links get `cm-link-broken` and are not. While the syntax is revealed both
+ * additionally carry `cm-link-revealed`, which swaps the click affordance
+ * for the editing one.
  */
 const wikiLink: NodeHandler = (node, ctx) => {
   const parts = wikiLinkParts(node.node);
@@ -139,9 +143,10 @@ const wikiLink: NodeHandler = (node, ctx) => {
   const textTo = alias ? alias.to : close.from;
 
   const target = extractWikiLinkTarget(node.node, ctx.state.doc);
-  const { noteIndex } = ctx.options;
+  // `noteIndex` defaults to none: `[[#Heading]]` anchors resolve without it.
   const resolved =
-    target !== null && noteIndex !== undefined && resolveWikiLinkTarget(target, noteIndex) !== null;
+    target !== null &&
+    resolveWikiLinkNavigationTarget(target, ctx.options.noteIndex ?? []) !== null;
 
   const revealed = selectionTouchesRange(ctx.state, node.from, node.to);
   const classes = ["cm-link-text"];

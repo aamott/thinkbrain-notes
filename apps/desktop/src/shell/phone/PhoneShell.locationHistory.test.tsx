@@ -226,4 +226,65 @@ describe("PhoneShell location history", () => {
     expect(filesVisible(host)).toBe(true);
     expect(await act(async () => androidBack())).toBe(false);
   });
+
+  it("a heading link jumps in place — no route push, no extra document", async () => {
+    vi.mocked(workspaceDocumentApi.readMarkdownDocument).mockResolvedValueOnce({
+      relative_path: "guide.md",
+      contents:
+        "# Guide\n\nSee [beta](#beta-section).\n\n## Beta Section\n\nBeta text."
+    });
+    await import("../../tabs/MarkdownEditor");
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell, "guide.md");
+    const tabId = shell().tabState.activeTabId!;
+    const depth = () =>
+      (window.history.state as { depth?: number } | null)?.depth ?? 0;
+    const depthBefore = depth();
+    const visitsBefore = shell().tabState.history.entries.length;
+
+    // A same-note heading target jumps the live editor: the opener pushes
+    // no route — only the recorded visit's own entry — and no document load.
+    await act(async () => shell().onOpenLink({ kind: "heading", fragment: "beta-section" }));
+
+    expect(depth()).toBe(depthBefore + 1);
+    expect(noteTitle(host)?.value).toBe("guide");
+    expect(shell().tabState.history.entries).toHaveLength(visitsBefore + 1);
+    const location = captureEditorLocation(tabId);
+    // Line 5, "## Beta Section", starts at offset 37 in the fixture.
+    expect(location?.anchor).toBe(37);
+
+    // Back restores the parked spot, Forward the heading — one entry each.
+    await click(host, "Back");
+    expect(depth()).toBe(depthBefore);
+    expect(captureEditorLocation(tabId)?.anchor).toBe(0);
+    await click(host, "Forward");
+    expect(captureEditorLocation(tabId)?.anchor).toBe(37);
+  });
+
+  it("a missing heading link warns through a dismissible banner and records nothing", async () => {
+    vi.mocked(workspaceDocumentApi.readMarkdownDocument).mockResolvedValueOnce({
+      relative_path: "guide.md",
+      contents: "# Guide\n\nBody."
+    });
+    await import("../../tabs/MarkdownEditor");
+    const { host, shell } = await renderWithShell();
+    await openReadyNote(shell, "guide.md");
+    const visitsBefore = shell().tabState.history.entries.length;
+
+    await act(async () => shell().onOpenLink({ kind: "heading", fragment: "nope" }));
+
+    // The warning surfaces as an alert banner; history and the caret are
+    // untouched — the jump simply did not happen.
+    const banner = host.querySelector('[role="alert"]');
+    expect(banner?.textContent).toContain("Heading not found");
+    expect(banner?.textContent).toContain('"nope"');
+    expect(shell().tabState.history.entries).toHaveLength(visitsBefore);
+
+    const dismiss = banner?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Dismiss navigation warning"]'
+    );
+    expect(dismiss).toBeDefined();
+    await act(async () => dismiss?.click());
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
 });

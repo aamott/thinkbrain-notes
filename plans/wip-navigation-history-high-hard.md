@@ -23,4 +23,6 @@ jumps remain separate work.
 
 `location_centric_history` supplies position capture and outline jumps.
 `tab_local_link_navigation` corrects tab ownership and default link placement.
-`heading_fragment_navigation` and `search_hit_navigation` remain deferred.
+`heading_fragment_navigation` covers same-note links;
+`cross_note_heading_navigation` extends them to other notes.
+`search_hit_navigation` remains separate.

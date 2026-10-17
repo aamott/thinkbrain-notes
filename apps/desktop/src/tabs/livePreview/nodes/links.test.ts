@@ -64,3 +64,23 @@ describe("image live preview", () => {
     expect(preview.lineText(1)).toBe("![cat](https://example.com/c.png)");
   });
 });
+
+describe("same-note heading links", () => {
+  it("marks a wiki heading link resolved even with an empty note index", () => {
+    preview = mountPreview("see [[#Details]] now", 0, {
+      noteIndex: [],
+      relativePath: "home.md",
+      onOpenLink: () => {}
+    });
+    expect(preview.view.dom.querySelector(".cm-link-resolved")).not.toBeNull();
+  });
+
+  it("marks a markdown anchor link resolved", () => {
+    preview = mountPreview("see [docs](#Details) now", 0, {
+      noteIndex: [],
+      relativePath: "home.md",
+      onOpenLink: () => {}
+    });
+    expect(preview.view.dom.querySelector(".cm-link-resolved")).not.toBeNull();
+  });
+});

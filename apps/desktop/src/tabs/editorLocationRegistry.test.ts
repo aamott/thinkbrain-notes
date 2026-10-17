@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   captureEditorLocation,
+  editorHeadingLine,
   editorLinePosition,
   isEditorAtLine,
   notifyEditorMapped,
@@ -258,5 +259,33 @@ describe("subscribeEditorMapping", () => {
     unsubscribe();
     notifyEditorMapped("tab", changes);
     expect(listener).toHaveBeenCalledOnce();
+  });
+});
+
+describe("editorHeadingLine", () => {
+  it("resolves against the live document — unsaved edits count", () => {
+    const view = mount("# Alpha\nbody\n## Beta");
+    register("tab", view);
+
+    expect(editorHeadingLine("tab", "beta")).toBe(3);
+    expect(editorHeadingLine("tab", "missing")).toBeNull();
+    expect(editorHeadingLine("tab", "")).toBe(1);
+
+    // Typed but not yet synced to the documents map — the live view's doc
+    // is what the link points at.
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "\n## Fresh" } });
+    expect(editorHeadingLine("tab", "fresh")).toBe(4);
+  });
+
+  it("answers undefined without a visible live view", () => {
+    expect(editorHeadingLine("missing", "x")).toBeUndefined();
+
+    const view = mount("# Alpha");
+    register("tab", view);
+    view.dom.parentElement!.setAttribute("aria-hidden", "true");
+    expect(editorHeadingLine("tab", "alpha")).toBeUndefined();
+
+    view.dom.parentElement!.removeAttribute("aria-hidden");
+    expect(editorHeadingLine("tab", "alpha")).toBe(1);
   });
 });

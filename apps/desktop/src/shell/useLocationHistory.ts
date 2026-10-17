@@ -30,8 +30,10 @@ import {
   type RefObject
 } from "react";
 
+import { useNotificationStore } from "../notifications/notificationStore";
 import {
   captureEditorLocation,
+  editorHeadingLine,
   editorLinePosition,
   isEditorAtLine,
   restoreEditorLocation,
@@ -196,6 +198,11 @@ export function useHistoryDispatch(
 export interface LocationHistoryApi {
   /** In-file jump to a 1-based line — the outline's heading click. */
   readonly navigateToLine: (line: number) => void;
+  /**
+   * Same-note heading jump from a `#fragment` link — resolves against the
+   * live editor document and warns instead of moving when nothing matches.
+   */
+  readonly navigateToHeading: (fragment: string) => void;
   /**
    * Restores a visit by id within the active trail — the phone's go-to-visit
    * API. The destination takes over the active strip slot; other trails'
@@ -369,6 +376,33 @@ export function useLocationHistory({
     [dispatchNavigation]
   );
 
+  // A heading link jumps inside the note already on screen: the live editor
+  // document resolves the fragment (unsaved headings count), then the
+  // ordinary line jump carries dedupe, departure capture, focus and restore.
+  // A miss surfaces a warning notification — no history, no selection move.
+  const navigateToHeading = useCallback(
+    (fragment: string) => {
+      const state = stateRef.current;
+      const tab = state.tabs.find((candidate) => candidate.id === state.activeTabId);
+      if (!tab || tab.kind !== "editor") return;
+      const line = editorHeadingLine(tab.id, fragment);
+      if (line === undefined) return;
+      if (line === null) {
+        useNotificationStore.getState().addNotification({
+          source: "navigation",
+          dedupKey: `heading:${tab.id}:${fragment}`,
+          title: "Heading not found",
+          message: `No heading matches "${fragment}" in this note.`,
+          severity: "transient",
+          variant: "warning"
+        });
+        return;
+      }
+      navigateToLine(line);
+    },
+    [navigateToLine]
+  );
+
   const goToVisit = useCallback(
     (visitId: number) => {
       dispatchNavigation({ type: "restoreVisit", visitId });
@@ -391,5 +425,5 @@ export function useLocationHistory({
     return location;
   }, [dispatchTabs]);
 
-  return { navigateToLine, goToVisit, captureCurrentLocation };
+  return { navigateToLine, navigateToHeading, goToVisit, captureCurrentLocation };
 }

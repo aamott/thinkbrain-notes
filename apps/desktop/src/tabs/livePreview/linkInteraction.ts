@@ -4,7 +4,7 @@ import { EditorView } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 import {
   resolveMarkdownLinkTarget,
-  resolveWikiLinkTarget,
+  resolveWikiLinkNavigationTarget,
   type MarkdownLinkTarget
 } from "@thinkbrain/core";
 
@@ -22,11 +22,13 @@ import { selectionTouchesRange } from "./reveal";
  * once at `pointerdown` (node range, resolved target, button, coordinates,
  * measured rect); `click` follows from that record, never the release DOM.
  *
- * Mouse presses consume `mousedown` so no caret is planted. Touch keeps
- * native behaviour (scroll, long-press — a scroll cancels via pointermove/
- * pointercancel); since its caret may move, a successful touch activation
- * first restores the pre-press selection and scroll so the departure
- * capture records where the user actually was.
+ * Any armed press consumes the compatibility `mousedown` so no caret is
+ * planted — on touch, the browser's compat mousedown is what CodeMirror
+ * sees; `touchstart`/scroll/long-press run natively off pointer events and
+ * still work, a scroll cancels via pointermove/pointercancel, and a long-
+ * press contextmenu cancels the gesture. `touchDeparture` stays as the
+ * fallback so a successful activation restores the pre-press spot for the
+ * departure capture even if a caret move still slipped through.
  */
 
 /** How far the pointer may drift (px, Chebyshev) before a press becomes a drag. */
@@ -42,7 +44,6 @@ interface LinkGesture {
   readonly rect: DOMRect; // press-time rect: validates a release on rebuilt DOM
   readonly x: number;
   readonly y: number;
-  readonly intercept: boolean; // consume mousedown (mouse): no caret plant
   /** Touch only: pre-press selection + viewport, restored on activation. */
   readonly touchDeparture?: {
     readonly anchor: number;
@@ -67,8 +68,8 @@ export function linkTargetAt(
   if (node.name === "WikiLink") {
     const targetText = extractWikiLinkTarget(node, view.state.doc);
     if (!targetText) return null;
-    const relativePath = resolveWikiLinkTarget(targetText, options.noteIndex ?? []);
-    return relativePath ? { kind: "internal", relativePath } : null;
+    // Same resolver the decoration uses: `[[#Heading]]` needs no note index.
+    return resolveWikiLinkNavigationTarget(targetText, options.noteIndex ?? []);
   }
   const urlNode = node.getChild("URL");
   if (!urlNode) return null;
@@ -147,7 +148,6 @@ export function linkFollowHandlers(options: LivePreviewOptions): Extension {
         rect: resolvedEl.getBoundingClientRect(),
         x: pointer.clientX,
         y: pointer.clientY,
-        intercept: mouse,
         ...(!mouse && {
           touchDeparture: { anchor: main.anchor, head: main.head, scroll: view.scrollSnapshot() }
         })
@@ -155,15 +155,18 @@ export function linkFollowHandlers(options: LivePreviewOptions): Extension {
       return false;
     },
 
-    // Consume mousedown before CodeMirror plants the caret: no reveal, no
-    // rebuild. Navigation itself waits for `click` — a press never follows.
+    // Consume mousedown for every armed gesture before CodeMirror plants
+    // the caret: no reveal, no rebuild — touch included, since the compat
+    // mousedown is its caret channel. Navigation waits for `click`.
     mousedown: (event, view) => {
-      if (!gesture || gesture.view !== view || !gesture.intercept || event.button !== 0) {
-        return false;
-      }
+      if (!gesture || gesture.view !== view || event.button !== 0) return false;
       event.preventDefault();
       return true;
     },
+
+    // A long-press context menu means selection, not navigation — drop the
+    // armed gesture so the release can't fire a follow.
+    contextmenu: clear,
 
     pointermove: (event) => (gesture && drifted(gesture, event) ? clear() : false),
     pointercancel: clear,

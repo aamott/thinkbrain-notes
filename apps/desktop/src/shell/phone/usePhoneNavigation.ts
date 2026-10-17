@@ -558,9 +558,10 @@ export function usePhoneNavigation(
 
   const pushEntry = useCallback(
     (nextRoute: PhoneRoute, nextOverlay: PhoneHistoryOverlay | null) => {
-      // Leaving a tab route — for Home, a panel or an inspector — snapshots
-      // the departing editor's location into its visit before the DOM hides.
-      captureDeparture();
+      // Leaving a tab route for a non-tab surface or an overlay — Home, a
+      // panel, an inspector — snapshots the departing location into its
+      // visit. A bare tab push mirrors a visit the core dispatch captured.
+      if (nextRoute.kind !== "tab" || nextOverlay !== null) captureDeparture();
       setEphemeralMenu(null);
       const nextDepth = entryRef.current.depth + 1;
       commit(stamp(nextRoute, nextOverlay, nextDepth), false);

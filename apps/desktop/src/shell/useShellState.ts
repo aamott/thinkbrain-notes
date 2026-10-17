@@ -143,7 +143,7 @@ export function useShellState(): ShellState {
 
   // Location history: pending position restores, position mapping, and the
   // line-jump / go-to-visit / departure-capture APIs the chromes call.
-  const { navigateToLine, goToVisit, captureCurrentLocation } = useLocationHistory({
+  const { navigateToLine, navigateToHeading, goToVisit, captureCurrentLocation } = useLocationHistory({
     tabState,
     dispatchTabs,
     dispatchNavigation,
@@ -301,13 +301,19 @@ export function useShellState(): ShellState {
         void openUrl(target.url).catch(() => undefined);
         return;
       }
+      // A same-note anchor is an in-file jump — it never touches the save
+      // guard or the document loader.
+      if (target.kind === "heading") {
+        navigateToHeading(target.fragment);
+        return;
+      }
       const rootPath = restoredWorkspacePath;
       if (!rootPath) return;
       void beforeNavigate().then((ok) => {
         if (ok) openFileDocument(rootPath, target.relativePath, "replace-active");
       });
     },
-    [restoredWorkspacePath, openFileDocument, beforeNavigate]
+    [restoredWorkspacePath, openFileDocument, beforeNavigate, navigateToHeading]
   );
 
   // Conflict review and version-history actions for the sync surfaces.
@@ -422,6 +428,7 @@ export function useShellState(): ShellState {
     tabState,
     dispatchTabs: dispatchNavigation,
     navigateToLine,
+    navigateToHeading,
     goToVisit,
     captureCurrentLocation,
     activeTab,

@@ -51,6 +51,11 @@ export interface ShellState {
    */
   readonly navigateToLine: (line: number) => void;
   /**
+   * Jumps to a heading inside the active note — a `#fragment` link follow.
+   * In-file only: no document open, no save guard; a miss warns.
+   */
+  readonly navigateToHeading: (fragment: string) => void;
+  /**
    * Restores a recorded visit by its numeric id within the active trail —
    * moves the history cursor and puts the visit's document into the active
    * strip slot, reopening it from its retained descriptor when displaced.
@@ -92,7 +97,8 @@ export interface ShellState {
   /**
    * Follows a resolved `[[wiki]]` or `[text](target)` link — internal
    * targets open the vault file in the tab kind its extension implies,
-   * external ones go to the OS.
+   * `#fragment` anchors jump inside the current note, external ones go to
+   * the OS.
    */
   readonly onOpenLink: (target: MarkdownLinkTarget) => void;
 
