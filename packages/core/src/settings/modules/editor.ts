@@ -52,6 +52,23 @@ export const editorModule: SettingsModule = {
             "Render Markdown formatted inline, showing raw syntax only where the cursor is."
         }
       ]
+    },
+    {
+      id: "editor.tabs",
+      label: "Tabs",
+      settings: [
+        {
+          key: "tabCycleOrder",
+          type: "enum",
+          options: ["tab order", "last visited"],
+          default: "tab order",
+          scope: "app",
+          section: "editor.tabs",
+          label: "Tab cycling order",
+          description:
+            "Order for Ctrl+Tab and Ctrl+Shift+Tab. Last visited is not yet implemented; both modes currently use tab order."
+        }
+      ]
     }
   ]
 };

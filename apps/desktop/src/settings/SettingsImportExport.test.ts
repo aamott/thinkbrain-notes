@@ -47,6 +47,7 @@ const SEEDED_APP_VALUES: Record<string, unknown> = {
   ...BASE_SEEDED_APP_VALUES,
   "appearance.shellMode": "auto",
   "editor.livePreview": true,
+  "editor.tabCycleOrder": "tab order",
   "sync.settleAutomatically": true,
   "sync.historyPolicy": "",
   "sync.automatically": true,
@@ -144,7 +145,7 @@ describe("buildExportPayload", () => {
     expect(keys).toContain("settings.showAdvanced");
     expect(keys).not.toContain("sync.trigger");
     expect(keys).not.toContain("sync.destination");
-    expect(keys).toHaveLength(19);
+    expect(keys).toHaveLength(20);
   });
 });
 
