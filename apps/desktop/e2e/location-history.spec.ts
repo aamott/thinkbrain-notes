@@ -84,8 +84,10 @@ test("an outline heading jump is a location: Back restores scroll and selection,
 
   await backButton(page).click();
   await settledEditorSpot(page);
-  // Reverting the text would clear the dirty marker — it must survive.
-  await expect(page.getByLabel("Unsaved changes")).toBeVisible();
+  // Traversal saves the dirty source before leaving it — the dirty marker
+  // clears because disk now matches; the Forward step below reads the text
+  // itself at Beta, where the viewport renders it again.
+  await expect(page.getByLabel("Unsaved changes")).toHaveCount(0);
 
   await forwardButton(page).click();
   const marked = editor(page).getByText(/TRAIL-MARK/);

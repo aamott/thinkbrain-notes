@@ -127,10 +127,12 @@ describe("PhoneShell navigation", () => {
     expect(shell().tabState.tabs).toHaveLength(1);
   });
 
-  it("walks note history backwards: A then B, Back returns to A", async () => {
+  it("walks note history backwards: A then B in one trail, Back returns to A", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
-    await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
+    await act(async () =>
+      shell().openMarkdownDocument("/vault", "second.md", "replace-active")
+    );
     expect(noteTitle(host)?.value).toBe("second");
 
     await click(host, "Back");
@@ -140,6 +142,20 @@ describe("PhoneShell navigation", () => {
     expect(shell().tabState.activeTabId).toBe(
       shell().tabState.tabs.find((tab) => tab.resource?.relativePath === "first.md")?.id
     );
+  });
+
+  it("a second physical tab's Back is Home, never the other trail's notes", async () => {
+    const { host, shell } = await renderWithShell();
+    await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
+    await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
+    expect(noteTitle(host)?.value).toBe("second");
+    expect(shell().tabState.tabs).toHaveLength(2);
+
+    // second.md opened its own logical trail — its only Back destination is Home.
+    await click(host, "Back");
+
+    expect(filesVisible(host)).toBe(true);
+    expect(noteTitleVisible(host)).toBe(false);
   });
 
   it("Forward returns to the note after Back", async () => {
@@ -228,7 +244,7 @@ describe("PhoneShell navigation", () => {
     expect(pill?.indexOf("Restore")).toBeLessThan(pill!.indexOf("docs"));
   });
 
-  it("adds a history entry when a tab is chosen in the switcher", async () => {
+  it("selecting a tab in the switcher rebases Back to that tab's own trail", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "first.md"));
     await act(async () => shell().openMarkdownDocument("/vault", "second.md"));
@@ -241,9 +257,10 @@ describe("PhoneShell navigation", () => {
 
     expect(noteTitle(host)?.value).toBe("first");
 
-    // The switch was a navigation: Back revisits the tab we came from.
+    // A switch is not a visit: Back inside first.md's trail reaches Home,
+    // never the trail just left.
     await click(host, "Back");
-    expect(noteTitle(host)?.value).toBe("second");
+    expect(filesVisible(host)).toBe(true);
   });
 
   it("keeps the tab switcher out of history: Back closes it and Forward cannot reopen it", async () => {

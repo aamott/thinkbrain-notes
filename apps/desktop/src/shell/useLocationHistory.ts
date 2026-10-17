@@ -41,10 +41,10 @@ import {
 import {
   currentVisit,
   isDocumentBackedKind,
+  tabTrailId,
   type DesktopTabAction,
   type DesktopTabState,
-  type EditorLocation,
-  type TabOpenPlacement
+  type EditorLocation
 } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 
@@ -94,21 +94,101 @@ function dispatchWithDepartureCapture(
 }
 
 /**
+ * Traversal actions that must save a dirty document before moving it: the
+ * user stays put — nothing appended, nothing discarded — when the guard
+ * declines. Explicit opens and tab switches carry their own policy.
+ */
+const GUARDED_ACTIONS: ReadonlySet<DesktopTabAction["type"]> = new Set([
+  "goBack",
+  "goForward",
+  "restoreVisit"
+]);
+
+/**
+ * What a pending navigation is leaving: the active view, its logical trail
+ * and the visit the cursor is on. Bookkeeping dispatches — dirty flags,
+ * location captures, edit mappings — hand back a new state object but keep
+ * this identity; only a real move changes it.
+ */
+export interface NavigationSource {
+  readonly viewId: string;
+  readonly trailId: string;
+  readonly visitId: number | null;
+}
+
+/** The navigation source of `state`, or `null` while nothing is on screen. */
+export function navigationSource(state: DesktopTabState): NavigationSource | null {
+  const tab = state.tabs.find((candidate) => candidate.id === state.activeTabId);
+  if (!tab) return null;
+  return {
+    viewId: tab.id,
+    trailId: tabTrailId(tab),
+    visitId: currentVisit(state.history)?.id ?? null
+  };
+}
+
+/** Whether two sources name the same departure. */
+export function sameNavigationSource(
+  a: NavigationSource | null,
+  b: NavigationSource | null
+): boolean {
+  return (
+    a === b ||
+    (a !== null &&
+      b !== null &&
+      a.viewId === b.viewId &&
+      a.trailId === b.trailId &&
+      a.visitId === b.visitId)
+  );
+}
+
+/**
  * The departure-enriched dispatch every tab action should flow through.
  *
  * A hook rather than a factory because the state read must happen when the
  * callback *fires*, not while a `useMemo` factory is being evaluated during
  * render — which is exactly where it would trip the react-hooks refs rule.
+ *
+ * When `beforeNavigateRef` holds the shell's save guard, a traversal started
+ * on a dirty document awaits it first. `navigationSeqRef` counts navigation
+ * *requests*: a departure action bumps it the moment it is asked for, so a
+ * newer open, activation or traversal cancels an older pending hop — while
+ * the guard's own save bookkeeping (a `setDirty` committing mid-await)
+ * leaves the request untouched. The source identity is the backstop for
+ * changes no request sequence can see (a close swapping the active view).
  */
 export function useHistoryDispatch(
   dispatch: Dispatch<DesktopTabAction>,
-  stateRef: RefObject<DesktopTabState>
+  stateRef: RefObject<DesktopTabState>,
+  beforeNavigateRef?: RefObject<(() => Promise<boolean>) | null>,
+  navigationSeqRef?: RefObject<number>
 ): Dispatch<DesktopTabAction> {
   return useCallback(
     (action: DesktopTabAction) => {
-      dispatchWithDepartureCapture(dispatch, action, stateRef.current);
+      const departing = DEPARTURE_ACTIONS.has(action.type);
+      if (departing && navigationSeqRef) navigationSeqRef.current += 1;
+      const state = stateRef.current;
+      const guard = beforeNavigateRef?.current;
+      const dirty =
+        GUARDED_ACTIONS.has(action.type) &&
+        state.tabs.some((tab) => tab.id === state.activeTabId && tab.isDirty);
+      if (dirty && guard) {
+        const source = navigationSource(state);
+        const pending = guard();
+        // The shared guard registers its own request before yielding.
+        const seq = navigationSeqRef?.current;
+        void pending.then((ok) => {
+          if (!ok) return;
+          const latest = stateRef.current;
+          if (seq !== undefined && navigationSeqRef?.current !== seq) return;
+          if (!sameNavigationSource(source, navigationSource(latest))) return;
+          dispatchWithDepartureCapture(dispatch, action, latest);
+        });
+        return;
+      }
+      dispatchWithDepartureCapture(dispatch, action, state);
     },
-    [dispatch, stateRef]
+    [dispatch, stateRef, beforeNavigateRef, navigationSeqRef]
   );
 }
 
@@ -117,12 +197,11 @@ export interface LocationHistoryApi {
   /** In-file jump to a 1-based line — the outline's heading click. */
   readonly navigateToLine: (line: number) => void;
   /**
-   * Restores an arbitrary visit by id — the phone's go-to-visit API.
-   * `placement` governs how an absent destination rejoins the strip; the
-   * desktop default keeps the displaced-preview refill behavior, while the
-   * phone passes `"replace-active"` to land it on the tab in use.
+   * Restores a visit by id within the active trail — the phone's go-to-visit
+   * API. The destination takes over the active strip slot; other trails'
+   * visits are refused (switching tabs is a separate explicit activation).
    */
-  readonly goToVisit: (visitId: number, placement?: TabOpenPlacement) => void;
+  readonly goToVisit: (visitId: number) => void;
   /**
    * Snapshots the live editor's position into the current visit and returns
    * it — for callers about to hide the tab surface (the phone leaving a tab
@@ -291,8 +370,8 @@ export function useLocationHistory({
   );
 
   const goToVisit = useCallback(
-    (visitId: number, placement?: TabOpenPlacement) => {
-      dispatchNavigation({ type: "restoreVisit", visitId, placement });
+    (visitId: number) => {
+      dispatchNavigation({ type: "restoreVisit", visitId });
     },
     [dispatchNavigation]
   );

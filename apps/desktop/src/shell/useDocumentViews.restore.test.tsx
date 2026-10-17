@@ -26,7 +26,10 @@ vi.mock("../workspace/workspaceDocumentModel", async (importOriginal) => {
 });
 vi.mock("../workspace/workspaceDocumentAdapter", () => ({ workspaceDocumentApi: {} }));
 vi.mock("../events/appEvents", () => ({ appEvents: { emit: () => {} } }));
-vi.mock("../tabs/editorStateCache", () => ({ releaseEditorStatesExcept: () => {} }));
+const releaseEditorStatesExcept = vi.fn();
+vi.mock("../tabs/editorStateCache", () => ({
+  releaseEditorStatesExcept: (ids: ReadonlySet<string>) => releaseEditorStatesExcept(ids)
+}));
 
 const TAB_ID = "editor:/vault:note.md";
 const TAB = {
@@ -48,6 +51,7 @@ let views: DocumentViews | null = null;
 
 beforeEach(() => {
   loadWorkspaceDocument.mockReset();
+  releaseEditorStatesExcept.mockReset();
 });
 
 afterEach(async () => {
@@ -58,9 +62,9 @@ afterEach(async () => {
   views = null;
 });
 
-async function mountViews(): Promise<DocumentViews> {
+async function mountViews(tabState: DesktopTabState = TABS): Promise<DocumentViews> {
   function Host() {
-    views = useDocumentViews({ tabState: TABS, dispatchTabs: () => {} });
+    views = useDocumentViews({ tabState, dispatchTabs: () => {} });
     return null;
   }
   host = document.createElement("div");
@@ -86,6 +90,34 @@ async function openDamaged(): Promise<DocumentViews> {
   });
   return mounted;
 }
+
+describe("parked editor state across a link replacement", () => {
+  it("sweeps only ids no open tab or retained visit still names", async () => {
+    // A's view left the strip when B replaced it — but its visit is retained,
+    // so the cache sweep keeps its parked undo history for Back to land on.
+    const displaced = { ...TAB, id: "editor:/vault:a.md" };
+    const showing = { ...TAB, id: "editor:/vault:b.md", trailId: "trail-1" };
+    const state: DesktopTabState = {
+      tabs: [showing],
+      activeTabId: showing.id,
+      closeRequest: null,
+      history: {
+        entries: [
+          { id: 1, tab: { ...displaced, trailId: "trail-1" } },
+          { id: 2, tab: showing }
+        ],
+        cursor: 1,
+        nextVisitId: 3
+      }
+    };
+
+    await mountViews(state);
+
+    const swept = releaseEditorStatesExcept.mock.lastCall?.[0] as ReadonlySet<string>;
+    expect(swept.has(showing.id)).toBe(true);
+    expect(swept.has(displaced.id)).toBe(true);
+  });
+});
 
 describe("showing a note again after a version is restored over it", () => {
   it("leaves a damaged tab damaged when re-read in place", async () => {

@@ -10,7 +10,7 @@ import { restoreVersion } from "../sync/syncService";
 import {
   createConflictTab,
   createVersionDiffTab,
-  documentTabId,
+  isFileResourceTab,
   type DesktopTab,
   type DesktopTabAction,
   type DesktopTabState
@@ -118,24 +118,35 @@ export function useSyncActions({
       if (!restoredWorkspacePath) {
         throw new Error("Open a workspace before restoring an earlier version.");
       }
-      // A dirty editor open on this file is holding edits the restore would
-      // overwrite. Save it first; when the save cannot happen — refused
-      // because something else wrote the file, or failed outright — the
-      // restore does not run and the edits stay put.
-      const sourceId = documentTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
-      const sourceTab = tabStateRef.current.tabs.find((tab) => tab.id === sourceId);
-      if (sourceTab?.isDirty && !(await saveDocument(sourceTab))) {
-        throw new Error("Save the current file before restoring an earlier version.");
+      // Every dirty view of this file is holding edits the restore would
+      // overwrite — a resource may be open in several trails under different
+      // view ids, so match by resource, never the canonical id. Save them
+      // all; any save that cannot happen — refused because something else
+      // wrote the file, or failed outright — stops the restore and the
+      // edits stay put.
+      const viewsOfFile = () =>
+        tabStateRef.current.tabs.filter(
+          (tab) =>
+            isFileResourceTab(tab) &&
+            tab.resource?.rootPath === restoredWorkspacePath &&
+            tab.resource.relativePath === notePath
+        );
+      for (const tab of viewsOfFile()) {
+        if (tab.isDirty && !(await saveDocument(tab))) {
+          throw new Error("Save the current file before restoring an earlier version.");
+        }
       }
       await restoreVersion(restoredWorkspacePath, notePath, changeId);
-      // Re-read what the restore wrote into the open tab, if there is one.
-      // A fresh load rather than the in-place path: the restore already saved
-      // any dirty edits above, and the loader must match the tab's kind —
-      // `loadDocumentIntoView` picks the text-file reader for code editors,
-      // where `reloadDocumentInPlace` would ask the Markdown reader for a
-      // `.ts` file. Media viewers hold no document state to refresh.
-      if (sourceTab?.kind === "editor" || sourceTab?.kind === "code-editor") {
-        loadDocumentIntoView(sourceId, restoredWorkspacePath, notePath, sourceTab.kind);
+      // Re-read what the restore wrote into every open view of the file.
+      // A fresh load rather than the in-place path: the restore already
+      // saved any dirty edits above, and the loader must match the tab's
+      // kind — `loadDocumentIntoView` picks the text-file reader for code
+      // editors, where `reloadDocumentInPlace` would ask the Markdown
+      // reader for a `.ts` file. Media viewers hold no document state.
+      for (const tab of viewsOfFile()) {
+        if (tab.kind === "editor" || tab.kind === "code-editor") {
+          loadDocumentIntoView(tab.id, restoredWorkspacePath, notePath, tab.kind);
+        }
       }
     },
     [restoredWorkspacePath, tabStateRef, saveDocument, loadDocumentIntoView]

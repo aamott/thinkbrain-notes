@@ -128,3 +128,40 @@ test("a link follow replaces the note's tab: Back reopens the replaced document"
   await page.screenshot({ path: `${ARTIFACTS}/phone-03-back-reopens-alpha.png` });
   await expectNoNativeFailures(page);
 });
+
+test("switching tabs hands Back/Forward to the selected trail", async ({ page }) => {
+  await installHistoryVault(page);
+  await page.goto("/");
+  const headerForward = page.locator('header [aria-label="Forward"]');
+  const tabSheet = page.getByRole("dialog", { name: "Open tabs" });
+
+  // Trail A: alpha → bravo, then Back leaves bravo as A's pending Forward.
+  await page.getByRole("button", { name: "Open alpha.md" }).tap();
+  await expect(editor(page).getByText(/Alpha Doc/)).toBeVisible();
+  await editor(page).getByText("Open bravo", { exact: true }).tap();
+  await expect(editor(page).getByText(/Bravo Doc/)).toBeVisible();
+  await headerBack(page).tap();
+  await expect(editor(page).getByText(/Alpha Doc/)).toBeVisible();
+  await expect(headerForward).toBeEnabled();
+
+  // A second physical tab gets its own trail — A's pending Forward must not
+  // leak across once the browser stack belongs to the new trail.
+  await page.getByRole("button", { name: "Open tabs (1)" }).tap();
+  await tabSheet.getByRole("button", { name: "New tab" }).tap();
+  await page.getByRole("button", { name: "Browse files" }).tap();
+  await page.getByRole("button", { name: "Open bravo.md" }).tap();
+  await expect(editor(page).getByText(/Bravo Doc/)).toBeVisible();
+  await expect(headerForward).toBeDisabled();
+
+  // Selecting A's card rebases the browser segment to A's trail: Forward is
+  // still armed and walks back to bravo inside the same tab.
+  await page.getByRole("button", { name: "Open tabs (2)" }).tap();
+  await tabSheet.getByRole("button", { name: /^alpha/ }).tap();
+  await expect(editor(page).getByText(/Alpha Doc/)).toBeVisible();
+  await expect(headerForward).toBeEnabled();
+  await headerForward.tap();
+  await expect(editor(page).getByText(/Bravo Doc/)).toBeVisible();
+  await expect(headerBack(page)).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Open tabs (2)" })).toBeVisible();
+  await expectNoNativeFailures(page);
+});

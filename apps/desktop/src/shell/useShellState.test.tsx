@@ -297,7 +297,135 @@ describe("useShellState", () => {
     expect(state().tabState.tabs.find((candidate) => candidate.id === tab.id)?.isDirty).toBe(true);
   });
 
-  it("walks Back and Forward over tab activations, rebased on workspace switch", async () => {
+  it("does not open the link target into a tab the user switched to mid-save", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+    await act(async () => state().openMarkdownDocument("/vault", "a.md"));
+    await act(async () => state().openMarkdownDocument("/vault", "c.md"));
+    const [aId, cId] = state().tabState.tabs.map((tab) => tab.id) as [string, string];
+    await act(async () => state().dispatchTabs({ type: "activate", tabId: aId }));
+    await act(async () => state().updateDocument(aId, "unsaved"));
+
+    // Hold the native write: the link open is now waiting on the save.
+    let releaseWrite: ((value: unknown) => void) | null = null;
+    const heldWrite = new Promise<unknown>((resolve) => {
+      releaseWrite = resolve;
+    });
+    invokeShim.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "write_markdown_file") return heldWrite;
+      if (command === "read_markdown_file") {
+        return { relative_path: args?.relativePath, contents: "# Note\n\nSome text." };
+      }
+      if (command === "sync_status") return { ...NOT_RECORDING, state: "idle" };
+      if (command === "sync_conflict_rate") return { decisions: 0, settled: 0, recorded: 0 };
+      if (command === "list_conflicts") return [];
+      if (command === "quarantined_settings") return [];
+      return null;
+    });
+    await act(async () => state().onOpenNote("b.md"));
+
+    // The user picks another tab while the write is still in flight — the
+    // deferred answer must not displace C with B.
+    await act(async () => state().dispatchTabs({ type: "activate", tabId: cId as string }));
+    await act(async () => {
+      releaseWrite?.({ relative_path: "a.md" });
+    });
+
+    expect(state().tabState.activeTabId).toBe(cId);
+    expect(state().tabState.tabs.map((tab) => tab.id)).toEqual([aId, cId]);
+  });
+
+  it("keeps the dirty source when its save reports newer edits", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+    await act(async () => state().openMarkdownDocument("/vault", "a.md"));
+    const aId = state().tabState.activeTabId!;
+    await act(async () => state().updateDocument(aId, "unsaved"));
+
+    let releaseWrite: ((value: unknown) => void) | null = null;
+    const heldWrite = new Promise<unknown>((resolve) => {
+      releaseWrite = resolve;
+    });
+    invokeShim.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "write_markdown_file") return heldWrite;
+      if (command === "read_markdown_file") {
+        return { relative_path: args?.relativePath, contents: "# Note\n\nSome text." };
+      }
+      if (command === "sync_status") return { ...NOT_RECORDING, state: "idle" };
+      if (command === "sync_conflict_rate") return { decisions: 0, settled: 0, recorded: 0 };
+      if (command === "list_conflicts") return [];
+      if (command === "quarantined_settings") return [];
+      return null;
+    });
+    await act(async () => state().onOpenNote("b.md"));
+    // Text typed while the write was in flight still needs another save —
+    // the guard answers false and the link follow abandons.
+    await act(async () => state().updateDocument(aId, "unsaved plus more"));
+    await act(async () => {
+      releaseWrite?.({ relative_path: "a.md" });
+    });
+
+    const state_after = state().tabState;
+    expect(state_after.tabs.map((tab) => tab.id)).toEqual([aId]);
+    expect(state_after.tabs[0]?.isDirty).toBe(true);
+    expect(state_after.activeTabId).toBe(aId);
+  });
+
+  it("latest link intent wins when two follows queue behind the same guard", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+    await act(async () => state().openMarkdownDocument("/vault", "a.md"));
+
+    // Clean source — nothing to write — but the guard is still async, so
+    // both follows land in one window and only the newest may proceed.
+    await act(async () => {
+      state().onOpenLink({ kind: "internal", relativePath: "b.md" });
+      state().onOpenLink({ kind: "internal", relativePath: "c.md" });
+    });
+
+    const after = state().tabState;
+    expect(after.tabs).toHaveLength(1);
+    expect(after.tabs[0]?.resource?.relativePath).toBe("c.md");
+    // B never became a visit — the superseded request was cancelled, not deferred.
+    expect(
+      after.history.entries.some((visit) => visit.tab.resource?.relativePath === "b.md")
+    ).toBe(false);
+  });
+
+  it("saves a dirty document before Back returns to the previous visit", async () => {
+    const state = await renderShellState();
+    await openWorkspace(state);
+    await act(async () => state().openMarkdownDocument("/vault", "a.md"));
+    await act(async () => state().onOpenLink({ kind: "internal", relativePath: "b.md" }));
+    const bId = state().tabState.activeTabId!;
+    expect(state().tabState.tabs).toHaveLength(1);
+    await act(async () => state().updateDocument(bId, "b edits"));
+
+    // The real guard path: Back on a dirty view saves through the native
+    // write first, then walks the trail.
+    invokeShim.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "write_markdown_file") {
+        return { relative_path: args?.relativePath, file_name: args?.relativePath };
+      }
+      if (command === "read_markdown_file") {
+        return { relative_path: args?.relativePath, contents: "# Note\n\nSome text." };
+      }
+      if (command === "sync_status") return { ...NOT_RECORDING, state: "idle" };
+      if (command === "sync_conflict_rate") return { decisions: 0, settled: 0, recorded: 0 };
+      if (command === "list_conflicts") return [];
+      if (command === "quarantined_settings") return [];
+      return null;
+    });
+    await act(async () => state().dispatchTabs({ type: "goBack" }));
+
+    const after = state().tabState;
+    expect(invokeMock).toHaveBeenCalledWith("write_markdown_file", expect.anything());
+    expect(after.tabs).toHaveLength(1);
+    expect(after.tabs[0]?.resource?.relativePath).toBe("a.md");
+    expect(after.tabs[0]?.isDirty).toBeFalsy();
+  });
+
+  it("keeps Back inside the active tab's trail, rebased on workspace switch", async () => {
     const state = await renderShellState();
     await openWorkspace(state);
 
@@ -305,11 +433,16 @@ describe("useShellState", () => {
     await act(async () => state().openMarkdownDocument("/vault", "b.md"));
     const first = state().tabState.history.entries[0]!.tab.id;
 
+    // Each physical tab owns its trail: Back on b's trail has nowhere to go —
+    // it never switches to a's activated tab.
+    await act(async () => state().dispatchTabs({ type: "goBack" }));
+    expect(state().tabState.activeTabId).not.toBe(first);
+
+    // Switching to a's tab selects its trail; Back stays inside it too.
+    await act(async () => state().dispatchTabs({ type: "activate", tabId: first }));
+    expect(state().tabState.activeTabId).toBe(first);
     await act(async () => state().dispatchTabs({ type: "goBack" }));
     expect(state().tabState.activeTabId).toBe(first);
-
-    await act(async () => state().dispatchTabs({ type: "goForward" }));
-    expect(state().tabState.activeTabId).not.toBe(first);
 
     // Switching vaults drops the old workspace's visits: Back has nowhere
     // to go afterwards.

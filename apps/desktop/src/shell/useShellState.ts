@@ -35,8 +35,8 @@ import { useTheme } from "../settings/ThemeProvider";
 import { useSyncSurfaces } from "../sync/useSyncSurfaces";
 import {
   desktopTabReducer,
-  documentTabId,
-  initialDesktopTabState
+  initialDesktopTabState,
+  isFileResourceTab
 } from "../tabs/tabModel";
 import { useWikiLinkIndexStore } from "../wikiLinks/wikiLinkIndexStore";
 import { useWorkspaceSwitching } from "../workspace/useWorkspaceSwitching";
@@ -48,7 +48,12 @@ import type { RightPanel } from "./shellTypes";
 import { useAppUpdate } from "./useAppUpdate";
 import { useDocumentViews } from "./useDocumentViews";
 import { useExternalDocumentSync } from "./useExternalDocumentSync";
-import { useHistoryDispatch, useLocationHistory } from "./useLocationHistory";
+import {
+  navigationSource,
+  sameNavigationSource,
+  useHistoryDispatch,
+  useLocationHistory
+} from "./useLocationHistory";
 import { usePanelResize } from "./usePanelResize";
 import { useShellCommands } from "./useShellCommands";
 import { useShellShortcuts } from "./useShellShortcuts";
@@ -63,11 +68,26 @@ export function useShellState(): ShellState {
   // tabs and must not be rebuilt every time one opens or closes.
   const tabStateRef = useRef(tabState);
   /**
+   * The save-first guard shared by every navigation that could displace the
+   * document on screen — link follows, Back/Forward, visit restores. Filled
+   * in once `saveDocument` exists below; traversal dispatch waits on it.
+   */
+  const beforeNavigateRef = useRef<(() => Promise<boolean>) | null>(null);
+  // Counts navigation requests so a pending save-guarded hop can tell a
+  // newer departure apart from bookkeeping that merely touched state.
+  const navigationSeqRef = useRef(0);
+  /**
    * The dispatch every caller shares: before any action that moves the user
    * somewhere it snapshots the departing editor's position into the visit
    * being left. The reducer stays pure — the live-view read happens here.
+   * Dirty-document traversal also waits for the navigation guard above.
    */
-  const dispatchNavigation = useHistoryDispatch(dispatchTabs, tabStateRef);
+  const dispatchNavigation = useHistoryDispatch(
+    dispatchTabs,
+    tabStateRef,
+    beforeNavigateRef,
+    navigationSeqRef
+  );
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null);
   const { theme, setTheme } = useTheme();
 
@@ -219,14 +239,56 @@ export function useShellState(): ShellState {
     toggleBottomPanel
   });
 
-  // Opens a note by vault-relative path when a wiki link is clicked. Delegates
-  // to `openMarkdownDocument` with the current workspace root.
+  // Latest-root mirror for the navigation guard: an async save must still
+  // be answered for the workspace it started in.
+  const workspaceRootRef = useRef<string | null>(null);
+  useEffect(() => {
+    workspaceRootRef.current = restoredWorkspacePath;
+  }, [restoredWorkspacePath]);
+
+  /**
+   * Saves the active tab's document when dirty, so a navigation that is about
+   * to replace it never carries unsaved text away. `false` — a failed save,
+   * edits newer than the write, or a context that moved on while the save was
+   * in flight (another tab activated, another workspace opened, a newer
+   * navigation requested) — means stay in place: no new tab, no discard.
+   * The save's own `setDirty` bookkeeping may land mid-await; it keeps the
+   * departure's identity, so the guard still answers for it.
+   */
+  const beforeNavigate = useCallback(async (): Promise<boolean> => {
+    const seq = ++navigationSeqRef.current;
+    const state = tabStateRef.current;
+    const tab = state.tabs.find((candidate) => candidate.id === state.activeTabId);
+    const source = navigationSource(state);
+    const root = workspaceRootRef.current;
+    // Even a clean navigation yields before checking: a newer request in
+    // the same event batch must supersede this one too.
+    const saved = await (tab?.isDirty ? saveDocument(tab) : true);
+    return (
+      saved &&
+      navigationSeqRef.current === seq &&
+      workspaceRootRef.current === root &&
+      sameNavigationSource(source, navigationSource(tabStateRef.current))
+    );
+  }, [saveDocument]);
+
+  // Populated once the guard exists; the dispatch hook reads through the ref.
+  useEffect(() => {
+    beforeNavigateRef.current = beforeNavigate;
+  }, [beforeNavigate]);
+
+  // A link replaces the document *in the current tab* — browser/Obsidian
+  // same-tab semantics — after the dirty source has been saved. Explorer and
+  // explicit tab UI keep their own placement policy.
   const onOpenNote = useCallback(
     (relativePath: string) => {
-      if (!restoredWorkspacePath) return;
-      openMarkdownDocument(restoredWorkspacePath, relativePath, "preview");
+      const rootPath = restoredWorkspacePath;
+      if (!rootPath) return;
+      void beforeNavigate().then((ok) => {
+        if (ok) openMarkdownDocument(rootPath, relativePath, "replace-active");
+      });
     },
-    [restoredWorkspacePath, openMarkdownDocument]
+    [restoredWorkspacePath, openMarkdownDocument, beforeNavigate]
   );
 
   // A resolved link either leaves the vault — the OS opens it — or lands on a
@@ -239,11 +301,13 @@ export function useShellState(): ShellState {
         void openUrl(target.url).catch(() => undefined);
         return;
       }
-      if (restoredWorkspacePath) {
-        openFileDocument(restoredWorkspacePath, target.relativePath, "preview");
-      }
+      const rootPath = restoredWorkspacePath;
+      if (!rootPath) return;
+      void beforeNavigate().then((ok) => {
+        if (ok) openFileDocument(rootPath, target.relativePath, "replace-active");
+      });
     },
-    [restoredWorkspacePath, openFileDocument]
+    [restoredWorkspacePath, openFileDocument, beforeNavigate]
   );
 
   // Conflict review and version-history actions for the sync surfaces.
@@ -298,10 +362,18 @@ export function useShellState(): ShellState {
         ? activeTab.comparedNotePath
         : undefined;
     if (!notePath || !restoredWorkspacePath) return null;
-    const sourceId = documentTabId({ rootPath: restoredWorkspacePath, relativePath: notePath });
-    const sourceTab = tabState.tabs.find((tab) => tab.id === sourceId);
-    return sourceTab?.isDirty ? documents[sourceId]?.contents ?? null : null;
-  }, [activeTab, documents, restoredWorkspacePath, tabState.tabs]);
+    // Resource matching, not the canonical id: the file may be open under a
+    // collision view id in any trail — prefer the dirty one when several
+    // views show it, since its contents are the unsaved text being offered.
+    const matches = (tab: (typeof tabState.tabs)[number]) =>
+      isFileResourceTab(tab) &&
+      tab.resource?.rootPath === restoredWorkspacePath &&
+      tab.resource.relativePath === notePath;
+    const tabs = tabState.tabs;
+    const sourceTab =
+      tabs.find((tab) => matches(tab) && tab.isDirty) ?? tabs.find(matches);
+    return sourceTab?.isDirty ? documents[sourceTab.id]?.contents ?? null : null;
+  }, [activeTab, documents, restoredWorkspacePath, tabState]);
 
   const activeDocument = activeTab ? documents[activeTab.id] : undefined;
 
@@ -358,6 +430,7 @@ export function useShellState(): ShellState {
     conflicts,
     unsavedNoteContents,
     saveDocument,
+    beforeNavigate,
     updateDocument,
     loadDocumentIntoView,
     openMarkdownDocument,

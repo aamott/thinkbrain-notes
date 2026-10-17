@@ -129,8 +129,16 @@ describe("file.renamed retargeting", () => {
   it("rewrites a retained displaced visit when its file is renamed", async () => {
     // A preview takeover keeps the displaced note's visit — the descriptor
     // still names the old path even though no open tab shows it.
-    const noteA = { ...createEditorTab({ rootPath: ROOT, relativePath: "a.md" }), preview: true };
-    const noteB = { ...createEditorTab({ rootPath: ROOT, relativePath: "b.md" }), preview: true };
+    const noteA = {
+      ...createEditorTab({ rootPath: ROOT, relativePath: "a.md" }),
+      preview: true,
+      trailId: "trail-1"
+    };
+    const noteB = {
+      ...createEditorTab({ rootPath: ROOT, relativePath: "b.md" }),
+      preview: true,
+      trailId: "trail-1"
+    };
     const { moveDocument, dispatchTabs, tabStateRef } = await mount({
       tabs: [noteB],
       activeTabId: noteB.id,

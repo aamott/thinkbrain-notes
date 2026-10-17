@@ -8,7 +8,6 @@ import {
   filesVisible,
   forwardButton,
   locationPill,
-  noteTitle,
   noteTitleVisible,
   renderWithShell,
   tapBubble,
@@ -106,22 +105,22 @@ describe("PhoneShell drawer destinations", () => {
     expect(searchVisible(host)).toBe(true);
   });
 
-  it("Files → note → drawer Settings → Back → note → Back → Files", async () => {
+  it("Files → note → drawer Settings → Back → Files", async () => {
     const { host, shell } = await renderWithShell();
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     expect(noteTitleVisible(host)).toBe(true);
 
+    // Settings is its own logical trail: the browser segment rebases to
+    // Home + Settings rather than stacking over the note's entries.
     await drawerPick(host, "Settings");
     expect(settingsVisible(host)).toBe(true);
-    expect(depth()).toBe(2);
-
-    await click(host, "Back");
-    expect(noteTitleVisible(host)).toBe(true);
-    expect(noteTitle(host)?.value).toBe("note");
+    expect(depth()).toBe(1);
 
     await click(host, "Back");
     expect(filesVisible(host)).toBe(true);
     expect(backButton(host)?.disabled).toBe(true);
+    // The note's trail was never truncated — the tab switcher still leads back.
+    expect(shell().tabState.tabs.some((tab) => tab.resource?.relativePath === "note.md")).toBe(true);
   });
 
   it("Files → Search → note → Back → Search → Back → Files", async () => {
