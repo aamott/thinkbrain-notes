@@ -89,7 +89,7 @@ export function WorkspaceHeaderBar({
 
   return (
     <div
-      className="flex min-h-8 flex-none items-center justify-between gap-3 border-b border-border bg-editor px-[0.9rem] py-1 text-muted-foreground text-[0.72rem]"
+      className="flex h-9 flex-none items-center justify-between gap-3 border-b border-border bg-editor px-[0.9rem] text-muted-foreground text-[0.72rem]"
       data-testid="workspace-header-bar"
     >
       <div className="flex min-w-0 items-center truncate">
