@@ -2,7 +2,7 @@ import { activateExistingTab, removeTab } from "./tabHistory";
 import type { DesktopTabState } from "./tabModel";
 
 /** Which neighbours of `tabId` a multi-close targets. */
-export type TabCloseScope = "others" | "right";
+type TabCloseScope = "others" | "right";
 
 export interface TabCloseMultipleAction {
   readonly type: "closeMultiple";
