@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, MoreHorizontal, Pin, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pin, Plus, X } from "lucide-react";
 import { cn } from "../lib/utils";
 import { tabAccessibleName, type DesktopTab } from "../tabs/tabModel";
 import { useRightPanelContributions, type RightPanelContribution } from "../panels/panelRegistryModel";
@@ -330,13 +330,17 @@ export function TitleBar({
                 <span className={cn("truncate", tab.preview && "italic")}>{tab.title}</span>
                 {tab.isDirty && <span className="bg-primary rounded-full h-[0.35rem] w-[0.35rem]" aria-label="Unsaved changes" />}
               </button>
+              {/* Square hover chip, matching the back/forward/menu buttons:
+                  the fill makes the hitbox visible and the fixed size keeps
+                  the target easy to hit. Sits a step from the tab's right
+                  edge rather than inside the title's padding. */}
               <button
                 type="button"
-                className="border-0 py-0 pr-[0.55rem] pl-[0.2rem] text-inherit bg-transparent cursor-pointer text-base opacity-65 hover:text-foreground hover:opacity-100 focus-visible:text-foreground focus-visible:opacity-100 focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
+                className="mr-[0.3rem] flex size-[1.6rem] shrink-0 items-center justify-center rounded-small border-0 bg-transparent text-inherit cursor-pointer hover:bg-[color-mix(in_srgb,var(--tn-color-accent)_60%,transparent)] hover:text-activitybar-active focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-1"
                 aria-label={`Close ${accessibleName}`}
                 onClick={() => onRequestCloseTab(tab.id)}
               >
-                ×
+                <X aria-hidden="true" className="size-3.5" />
               </button>
             </div>
           );
