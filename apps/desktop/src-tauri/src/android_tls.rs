@@ -7,10 +7,10 @@
 //! "Expect rustls-platform-verifier to be initialized" — which is exactly what
 //! cloning a repository on a device did before this module existed.
 //!
-//! Nothing hands it those pointers for us. The usual route, `ndk-context`, is
-//! not an option here: neither `tao` nor `wry` initialise it, and the crate is
-//! not in the dependency tree at all. So the handles come from Java —
-//! `MainActivity.onCreate` calls the native method exported below.
+//! `tao` publishes the app `Context` through `ndk-context` before Rust
+//! startup, but `rustls-platform-verifier` additionally needs its own
+//! `init_with_env` hook — so the handles still come from Java, via the
+//! `MainActivity.onCreate` call to the native method exported below.
 //!
 //! Two details worth keeping in mind if this ever needs touching:
 //!

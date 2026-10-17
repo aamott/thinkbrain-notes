@@ -86,8 +86,8 @@ fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::
 
 // Secrets go into SharedPreferences encrypted under a dedicated Android
 // Keystore entry, so this app never writes or owns the encryption. The store
-// reads the app `Context` from `ndk-context`, which Tauri populates nowhere —
-// `android_context.rs` must have run first, and does, from `MainActivity`.
+// reads the app `Context` from `ndk-context`, which Tauri/tao populates
+// before Rust startup inside `MainActivity.onCreate`.
 #[cfg(target_os = "android")]
 fn platform_store() -> Option<keyring_core::Result<std::sync::Arc<keyring_core::CredentialStore>>> {
     Some(
