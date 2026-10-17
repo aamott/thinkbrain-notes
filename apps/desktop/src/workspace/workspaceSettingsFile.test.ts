@@ -1,150 +1,87 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../native/commands", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../native/commands")>()),
-  invokeNativeCommand: vi.fn()
+import type { DocumentChain, DocumentChainOptions } from "../native/documentChain";
+
+/**
+ * Wiring tests only. The chain's ordering/conflict semantics are covered by
+ * native/documentChain.test.ts; here we prove this module forwards the right
+ * command names, rootPath, contents, precondition, and conflict code — and that
+ * its exported functions reach the singleton chain.
+ */
+
+const mocks = vi.hoisted(() => ({
+  options: undefined as DocumentChainOptions | undefined,
+  chainRead: vi.fn<DocumentChain["read"]>(),
+  chainUpdate: vi.fn<DocumentChain["update"]>(),
+  invoke: vi.fn<(command: string, args?: Record<string, unknown>) => Promise<unknown>>()
 }));
 
-import { invokeNativeCommand, NativeCommandError } from "../native/commands";
+vi.mock("../native/documentChain", () => ({
+  createDocumentChain: vi.fn((options: DocumentChainOptions): DocumentChain => {
+    mocks.options = options;
+    return { read: mocks.chainRead, update: mocks.chainUpdate };
+  })
+}));
+
+vi.mock("../native/commands", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/commands")>()),
+  invokeNativeCommand: mocks.invoke
+}));
+
 import {
   readWorkspaceSettingsDocument,
   updateWorkspaceSettingsDocument
 } from "./workspaceSettingsFile";
 
-const invoke = vi.mocked(invokeNativeCommand);
-
-/** A stand-in for the file on disk, so a write is visible to the next read. */
-let disk = new Map<string, string>();
+const options = mocks.options!;
 
 beforeEach(() => {
-  disk = new Map();
-  invoke.mockReset();
-  invoke.mockImplementation((async (command: string, args: Record<string, string>) => {
-    if (command === "read_workspace_settings") return disk.get(args.rootPath!) ?? null;
-    if (command === "write_workspace_settings") {
-      disk.set(args.rootPath!, args.contents!);
-      return null;
-    }
-    throw new Error(`unexpected command ${command}`);
-  }) as unknown as typeof invokeNativeCommand);
+  // Clear call state without dropping the captured singleton options.
+  mocks.chainRead.mockReset();
+  mocks.chainUpdate.mockReset();
+  mocks.invoke.mockReset();
 });
 
-const parse = (raw: string | null): Record<string, unknown> =>
-  raw === null ? {} : (JSON.parse(raw) as Record<string, unknown>);
-
-const patch = (key: string, value: unknown) => (raw: string | null) =>
-  JSON.stringify({ ...parse(raw), [key]: value });
-
 describe("the workspace settings document", () => {
-  it("reads what was written", async () => {
-    await updateWorkspaceSettingsDocument("/vault", patch("showHidden", true));
+  it("reads through the singleton chain under the exact workspace rootPath", async () => {
+    mocks.chainRead.mockResolvedValue("doc");
 
-    expect(parse(await readWorkspaceSettingsDocument("/vault"))).toEqual({ showHidden: true });
+    await expect(readWorkspaceSettingsDocument("/vault-a")).resolves.toBe("doc");
+    await readWorkspaceSettingsDocument("/vault-b");
+
+    expect(mocks.chainRead).toHaveBeenNthCalledWith(1, "/vault-a");
+    expect(mocks.chainRead).toHaveBeenNthCalledWith(2, "/vault-b");
   });
 
-  /**
-   * The bug this exists to prevent: two writers each read, merge their own key
-   * and write back. Interleaved, the second revises a document the first has
-   * already replaced, and the first writer's key is gone — which is how the
-   * journal's field definitions disappeared on restart.
-   */
-  it("shows each writer the previous writer's result", async () => {
-    await Promise.all([
-      updateWorkspaceSettingsDocument("/vault", patch("showHidden", true)),
-      updateWorkspaceSettingsDocument("/vault", patch("fieldDefinitions", ["mood"]))
-    ]);
+  it("updates through the singleton chain and forwards the revise callback unchanged", async () => {
+    mocks.chainUpdate.mockResolvedValue("written-doc");
+    const revise = (current: string | null): string => current ?? "";
 
-    expect(parse(disk.get("/vault") ?? null)).toEqual({
-      showHidden: true,
-      fieldDefinitions: ["mood"]
+    await expect(updateWorkspaceSettingsDocument("/vault-a", revise)).resolves.toBe(
+      "written-doc"
+    );
+    expect(mocks.chainUpdate).toHaveBeenCalledWith("/vault-a", revise);
+  });
+
+  it("configures the workspace settings conflict code", () => {
+    expect(options.conflictCode).toBe("settings.workspace_conflict");
+  });
+
+  it("reads through read_workspace_settings with the workspace rootPath", async () => {
+    mocks.invoke.mockResolvedValue("doc");
+
+    await expect(options.read("/vault")).resolves.toBe("doc");
+    expect(mocks.invoke).toHaveBeenCalledWith("read_workspace_settings", {
+      rootPath: "/vault"
     });
   });
 
-  it("keeps one workspace's writes from waiting on another's", async () => {
-    await Promise.all([
-      updateWorkspaceSettingsDocument("/one", patch("showHidden", true)),
-      updateWorkspaceSettingsDocument("/two", patch("showHidden", false))
-    ]);
-
-    expect(parse(disk.get("/one") ?? null)).toEqual({ showHidden: true });
-    expect(parse(disk.get("/two") ?? null)).toEqual({ showHidden: false });
-  });
-
-  /** One writer's failure must not strand every writer behind it. */
-  it("carries on after an update fails", async () => {
-    const failed = updateWorkspaceSettingsDocument("/vault", () => {
-      throw new Error("nope");
-    });
-    const after = updateWorkspaceSettingsDocument("/vault", patch("showHidden", true));
-
-    await expect(failed).rejects.toThrow("nope");
-    await expect(after).resolves.toContain("showHidden");
-    expect(parse(disk.get("/vault") ?? null)).toEqual({ showHidden: true });
-  });
-
-  /**
-   * Another window can land a write between this window's read and its own
-   * write. The host rejects the stale write rather than letting it through, so
-   * the revision has to be recomputed against what is actually there now.
-   */
-  it("recomputes the revision when another window wrote first", async () => {
-    disk.set("/vault", JSON.stringify({ fieldDefinitions: ["mood"] }));
-    let interfered = false;
-    invoke.mockImplementation((async (command: string, args: Record<string, string>) => {
-      if (command === "read_workspace_settings") return disk.get(args.rootPath!) ?? null;
-      if (command === "write_workspace_settings") {
-        if (!interfered) {
-          interfered = true;
-          // The other window's write lands, so this one's `expected` is stale.
-          disk.set(args.rootPath!, JSON.stringify({ fieldDefinitions: ["mood", "sleep"] }));
-          throw new NativeCommandError({
-            code: "settings.workspace_conflict",
-            message: "The workspace settings changed while this one was being saved."
-          });
-        }
-        disk.set(args.rootPath!, args.contents!);
-        return null;
-      }
-      throw new Error(`unexpected command ${command}`);
-    }) as unknown as typeof invokeNativeCommand);
-
-    await updateWorkspaceSettingsDocument("/vault", patch("showHidden", true));
-
-    expect(parse(disk.get("/vault") ?? null)).toEqual({
-      fieldDefinitions: ["mood", "sleep"],
-      showHidden: true
-    });
-  });
-
-  it("sends what it read as the write's precondition", async () => {
-    disk.set("/vault", JSON.stringify({ showHidden: false }));
-
-    await updateWorkspaceSettingsDocument("/vault", patch("showHidden", true));
-
-    expect(invoke).toHaveBeenCalledWith("write_workspace_settings", {
+  it("writes through write_workspace_settings with rootPath, contents, and precondition", async () => {
+    await options.write("/vault", "next-doc", "current-doc");
+    expect(mocks.invoke).toHaveBeenCalledWith("write_workspace_settings", {
       rootPath: "/vault",
-      contents: JSON.stringify({ showHidden: true }),
-      expected: JSON.stringify({ showHidden: false })
+      contents: "next-doc",
+      expected: "current-doc"
     });
-  });
-
-  it("gives up rather than retrying a conflict for ever", async () => {
-    invoke.mockImplementation((async (command: string, args: Record<string, string>) => {
-      if (command === "read_workspace_settings") return disk.get(args.rootPath!) ?? null;
-      throw new NativeCommandError({
-        code: "settings.workspace_conflict",
-        message: "The workspace settings changed while this one was being saved."
-      });
-    }) as unknown as typeof invokeNativeCommand);
-
-    await expect(
-      updateWorkspaceSettingsDocument("/vault", patch("showHidden", true))
-    ).rejects.toThrow("changed while this one was being saved");
-  });
-
-  it("returns the document it wrote", async () => {
-    const written = await updateWorkspaceSettingsDocument("/vault", patch("showHidden", true));
-
-    expect(written).toBe(disk.get("/vault"));
   });
 });

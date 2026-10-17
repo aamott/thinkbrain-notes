@@ -302,6 +302,24 @@ describe("SettingsHeaderBar export/import outcomes", () => {
     await flushPromises();
   };
 
+  it("writes the export payload to the chosen path and says so", async () => {
+    vi.mocked(saveAndWriteTextFile).mockResolvedValue(true);
+    const host = await harness.render(<SettingsHeaderBar />);
+
+    await clickExport(host);
+
+    expect(saveAndWriteTextFile).toHaveBeenCalledWith(
+      "Export settings",
+      "thinkbrain-settings.json",
+      expect.any(String)
+    );
+    const contents = vi.mocked(saveAndWriteTextFile).mock.calls[0]![2];
+    expect(JSON.parse(contents)).toEqual(
+      expect.objectContaining({ version: expect.any(Number), settings: expect.any(Object) })
+    );
+    expect(statusOf(host)).toBe("Settings exported.");
+  });
+
   it("says so when the settings file cannot be written", async () => {
     vi.mocked(saveAndWriteTextFile).mockRejectedValue(
       new Error("The chosen file could not be written.")

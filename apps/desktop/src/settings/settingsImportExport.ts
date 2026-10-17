@@ -9,8 +9,8 @@
  *      Returns the pretty-printed JSON string plus a list of non-portable
  *      settings whose current values differ from their defaults (so the UI can
  *      show a warning dialog before writing the file).
- *   2. `writeExportFile(json)` — opens a native save dialog and writes the JSON
- *      to the chosen path. Returns `true` if written, `false` if cancelled.
+ *   2. The caller writes the JSON via `saveAndWriteTextFile` in `native/fs` —
+ *      there is no per-module wrapper for a one-line save-dialog call.
  *
  * Import flow:
  *   `importSettings()` — opens a native open dialog, reads the JSON file,
@@ -29,8 +29,9 @@ import {
   validateSettings
 } from "@thinkbrain/core";
 
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
-import { pickAndReadTextFile, saveAndWriteTextFile } from "../native/fs";
+import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry } from "./settingsRegistry";
+import { pickAndReadTextFile } from "../native/fs";
 
 // ---------------------------------------------------------------------------
 // Export.
@@ -51,7 +52,7 @@ interface ExportPayload {
  * the registry, then returns the JSON string and a list of non-portable
  * settings whose current values differ from their defaults. The caller decides
  * whether to proceed (after showing a warning) and writes the file via
- * `writeExportFile`.
+ * `saveAndWriteTextFile`.
  *
  * Only app-scoped settings are included (per epic design decision #6).
  *
@@ -89,22 +90,6 @@ export function buildExportPayload(): ExportPayload {
     json: `${JSON.stringify(payload, null, 2)}\n`,
     portableWarnings
   };
-}
-
-/**
- * Opens a native save dialog and writes the export JSON to the chosen path.
- *
- * Args:
- *   json: The JSON string to write (from `buildExportPayload`).
- *
- * Returns:
- *   `true` if the file was written, `false` if the user cancelled the dialog.
- *
- * Throws:
- *   Error if a path was chosen and the write failed, so the caller can say so.
- */
-export async function writeExportFile(json: string): Promise<boolean> {
-  return await saveAndWriteTextFile("Export settings", "thinkbrain-settings.json", json);
 }
 
 // ---------------------------------------------------------------------------

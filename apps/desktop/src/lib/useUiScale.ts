@@ -21,7 +21,8 @@ import {
   captureRegisteredScrollAnchors,
   restoreRegisteredScrollAnchors
 } from "./scrollAnchors";
-import { appSettingsRegistry, useSettingsStore } from "../settings/settingsStore";
+import { useSettingsStore } from "../settings/settingsStore";
+import { appSettingsRegistry } from "../settings/settingsRegistry";
 import { resolveEffectiveValue } from "../settings/settingsHelpers";
 import { useEffectiveValue } from "../settings/useEffectiveValue";
 

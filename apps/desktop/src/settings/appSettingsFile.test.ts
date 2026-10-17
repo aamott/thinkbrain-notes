@@ -1,137 +1,84 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../native/commands", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../native/commands")>()),
-  invokeNativeCommand: vi.fn()
+import type { DocumentChain, DocumentChainOptions } from "../native/documentChain";
+
+/**
+ * Wiring tests only. The chain's ordering/conflict semantics are covered by
+ * native/documentChain.test.ts; here we prove this module forwards the right
+ * command names, contents, precondition, key, and conflict code — and that its
+ * exported functions reach the singleton chain.
+ */
+
+const mocks = vi.hoisted(() => ({
+  options: undefined as DocumentChainOptions | undefined,
+  chainRead: vi.fn<DocumentChain["read"]>(),
+  chainUpdate: vi.fn<DocumentChain["update"]>(),
+  invoke: vi.fn<(command: string, args?: Record<string, unknown>) => Promise<unknown>>()
 }));
 
-import { invokeNativeCommand, NativeCommandError } from "../native/commands";
+vi.mock("../native/documentChain", () => ({
+  createDocumentChain: vi.fn((options: DocumentChainOptions): DocumentChain => {
+    mocks.options = options;
+    return { read: mocks.chainRead, update: mocks.chainUpdate };
+  })
+}));
+
+vi.mock("../native/commands", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/commands")>()),
+  invokeNativeCommand: mocks.invoke
+}));
+
 import { readAppSettingsDocument, updateAppSettingsDocument } from "./appSettingsFile";
 
-const invoke = vi.mocked(invokeNativeCommand);
-
-/** A stand-in for the app-settings file on disk, so a write is visible to the next read. */
-let disk: string | null = null;
+const options = mocks.options!;
 
 beforeEach(() => {
-  disk = null;
-  invoke.mockReset();
-  invoke.mockImplementation((async (command: string, args?: Record<string, string>) => {
-    if (command === "read_app_settings") return disk;
-    if (command === "write_app_settings") {
-      disk = args!.contents!;
-      return null;
-    }
-    throw new Error(`unexpected command ${command}`);
-  }) as unknown as typeof invokeNativeCommand);
+  // Clear call state without dropping the captured singleton options.
+  mocks.chainRead.mockReset();
+  mocks.chainUpdate.mockReset();
+  mocks.invoke.mockReset();
 });
 
-const parse = (raw: string | null): Record<string, unknown> =>
-  raw === null ? {} : (JSON.parse(raw) as Record<string, unknown>);
-
-const patch = (key: string, value: unknown) => (raw: string | null) =>
-  JSON.stringify({ ...parse(raw), [key]: value });
-
 describe("the app settings document", () => {
-  it("reads what was written", async () => {
-    await updateAppSettingsDocument(patch("appearance.theme", "dark"));
+  it("reads through the singleton chain under the constant app key", async () => {
+    mocks.chainRead.mockResolvedValue("doc");
 
-    expect(parse(await readAppSettingsDocument())).toEqual({ "appearance.theme": "dark" });
+    await expect(readAppSettingsDocument()).resolves.toBe("doc");
+    expect(mocks.chainRead).toHaveBeenCalledWith("app");
   });
 
-  /**
-   * The bug this exists to prevent: `update_desktop_state` lands (a tab opens)
-   * between the store's read and its write, so a save must not revise a copy
-   * that write has already superseded — that is how a save reverted every
-   * desktop-state change made since the app started.
-   */
-  it("shows each writer the previous writer's result", async () => {
-    await Promise.all([
-      updateAppSettingsDocument(patch("appearance.theme", "dark")),
-      updateAppSettingsDocument(patch("desktopState", { openTabs: ["a"] }))
-    ]);
+  it("updates through the singleton chain and forwards the revise callback unchanged", async () => {
+    mocks.chainUpdate.mockResolvedValue("written-doc");
+    const revise = (current: string | null): string => current ?? "";
 
-    expect(parse(disk)).toEqual({
-      "appearance.theme": "dark",
-      desktopState: { openTabs: ["a"] }
+    await expect(updateAppSettingsDocument(revise)).resolves.toBe("written-doc");
+    expect(mocks.chainUpdate).toHaveBeenCalledWith("app", revise);
+  });
+
+  it("configures the app settings conflict code", () => {
+    expect(options.conflictCode).toBe("settings.app_conflict");
+  });
+
+  it("reads through read_app_settings", async () => {
+    mocks.invoke.mockResolvedValue("doc");
+
+    await expect(options.read("app")).resolves.toBe("doc");
+    expect(mocks.invoke).toHaveBeenCalledWith("read_app_settings");
+  });
+
+  it("writes through write_app_settings with contents and precondition", async () => {
+    await options.write("app", "next-doc", "current-doc");
+    expect(mocks.invoke).toHaveBeenCalledWith("write_app_settings", {
+      contents: "next-doc",
+      expected: "current-doc"
     });
   });
 
-  /** One writer's failure must not strand every writer behind it. */
-  it("carries on after an update fails", async () => {
-    const failed = updateAppSettingsDocument(() => {
-      throw new Error("nope");
+  it("passes a null precondition through", async () => {
+    await options.write("app", "next-doc", null);
+    expect(mocks.invoke).toHaveBeenCalledWith("write_app_settings", {
+      contents: "next-doc",
+      expected: null
     });
-    const after = updateAppSettingsDocument(patch("appearance.theme", "dark"));
-
-    await expect(failed).rejects.toThrow("nope");
-    await expect(after).resolves.toContain("appearance.theme");
-    expect(parse(disk)).toEqual({ "appearance.theme": "dark" });
-  });
-
-  /**
-   * Another writer — `update_desktop_state` or another window's save — can
-   * land between this write's read and its own write. The
-   * host rejects the stale write rather than letting it through, so the
-   * revision has to be recomputed against what is actually there now.
-   */
-  it("recomputes the revision when another writer landed first", async () => {
-    disk = JSON.stringify({ desktopState: { openTabs: ["a"] } });
-    let interfered = false;
-    invoke.mockImplementation((async (command: string, args?: Record<string, string>) => {
-      if (command === "read_app_settings") return disk;
-      if (command === "write_app_settings") {
-        if (!interfered) {
-          interfered = true;
-          // `update_desktop_state` lands, so this write's `expected` is stale.
-          disk = JSON.stringify({ desktopState: { openTabs: ["a", "b"] } });
-          throw new NativeCommandError({
-            code: "settings.app_conflict",
-            message: "The application settings changed while this one was being saved."
-          });
-        }
-        disk = args!.contents!;
-        return null;
-      }
-      throw new Error(`unexpected command ${command}`);
-    }) as unknown as typeof invokeNativeCommand);
-
-    await updateAppSettingsDocument(patch("appearance.theme", "dark"));
-
-    expect(parse(disk)).toEqual({
-      desktopState: { openTabs: ["a", "b"] },
-      "appearance.theme": "dark"
-    });
-  });
-
-  it("sends what it read as the write's precondition", async () => {
-    disk = JSON.stringify({ "appearance.theme": "light" });
-
-    await updateAppSettingsDocument(patch("appearance.theme", "dark"));
-
-    expect(invoke).toHaveBeenCalledWith("write_app_settings", {
-      contents: JSON.stringify({ "appearance.theme": "dark" }),
-      expected: JSON.stringify({ "appearance.theme": "light" })
-    });
-  });
-
-  it("gives up rather than retrying a conflict for ever", async () => {
-    invoke.mockImplementation((async (command: string) => {
-      if (command === "read_app_settings") return disk;
-      throw new NativeCommandError({
-        code: "settings.app_conflict",
-        message: "The application settings changed while this one was being saved."
-      });
-    }) as unknown as typeof invokeNativeCommand);
-
-    await expect(
-      updateAppSettingsDocument(patch("appearance.theme", "dark"))
-    ).rejects.toThrow("changed while this one was being saved");
-  });
-
-  it("returns the document it wrote", async () => {
-    const written = await updateAppSettingsDocument(patch("appearance.theme", "dark"));
-
-    expect(written).toBe(disk);
   });
 });

@@ -30,8 +30,15 @@ import {
 // bridges. Each test customizes the mock implementations as needed.
 vi.mock("./themeImportExport", () => ({
   buildThemeExport: vi.fn<() => Promise<string>>(),
-  writeThemeExportFile: vi.fn<(json: string) => Promise<boolean>>(),
   importTheme: vi.fn<() => Promise<ImportThemeResult | null>>()
+}));
+
+// The toolbar writes exports through the native fs adapter directly; mock it
+// so each test controls the save-dialog outcome.
+vi.mock("../native/fs", () => ({
+  saveAndWriteTextFile: vi.fn<
+    (title: string, defaultName: string, contents: string) => Promise<boolean>
+  >()
 }));
 
 // Mock the themeAdapter so the picker's listThemes() call is deterministic and
@@ -43,9 +50,9 @@ vi.mock("./themeAdapter", () => ({
 // Import the mocked functions AFTER vi.mock so we get the mock implementations.
 import {
   buildThemeExport,
-  writeThemeExportFile,
   importTheme
 } from "./themeImportExport";
+import { saveAndWriteTextFile } from "../native/fs";
 import { listThemes } from "./themeAdapter";
 
 const harness = createSettingsTestHarness();
@@ -56,7 +63,7 @@ beforeEach(() => {
 
   // Reset mock call counts and default implementations.
   vi.mocked(buildThemeExport).mockReset();
-  vi.mocked(writeThemeExportFile).mockReset();
+  vi.mocked(saveAndWriteTextFile).mockReset();
   vi.mocked(importTheme).mockReset();
   vi.mocked(listThemes).mockReset();
 
@@ -206,7 +213,7 @@ describe("ThemeToolbar", () => {
 
   describe("handleExport", () => {
     it("shows 'Theme exported.' on a successful write", async () => {
-      vi.mocked(writeThemeExportFile).mockResolvedValue(true);
+      vi.mocked(saveAndWriteTextFile).mockResolvedValue(true);
       const el = await harness.render(<ThemeToolbar />);
 
       const exportBtn = el.querySelector<HTMLButtonElement>(
@@ -214,13 +221,17 @@ describe("ThemeToolbar", () => {
       )!;
       await harness.click(exportBtn);
 
-      expect(writeThemeExportFile).toHaveBeenCalledWith('{"name":"x"}');
+      expect(saveAndWriteTextFile).toHaveBeenCalledWith(
+        "Export theme",
+        "theme.tbtheme.json",
+        '{"name":"x"}'
+      );
       expect(getStatus(el)).toBe("Theme exported.");
     });
 
     it("shows no status message when the user cancels the save dialog", async () => {
       // Cancel resolves false — a non-event the toolbar ignores.
-      vi.mocked(writeThemeExportFile).mockResolvedValue(false);
+      vi.mocked(saveAndWriteTextFile).mockResolvedValue(false);
       const el = await harness.render(<ThemeToolbar />);
 
       const exportBtn = el.querySelector<HTMLButtonElement>(
@@ -233,7 +244,7 @@ describe("ThemeToolbar", () => {
 
     it("shows an 'Export failed' status message when the write throws", async () => {
       // Write failures now throw (fail-loudly) and are surfaced via .catch().
-      vi.mocked(writeThemeExportFile).mockRejectedValue(
+      vi.mocked(saveAndWriteTextFile).mockRejectedValue(
         new Error("disk full")
       );
       const el = await harness.render(<ThemeToolbar />);

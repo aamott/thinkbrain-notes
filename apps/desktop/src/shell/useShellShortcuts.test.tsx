@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DesktopCommandContext } from "../commands/commandRegistry";
 import { createEditorTab, initialDesktopTabState, type DesktopTabAction } from "../tabs/tabModel";
-import { appSettingsRegistry, useSettingsStore } from "../settings/settingsStore";
+import { useSettingsStore } from "../settings/settingsStore";
+import { appSettingsRegistry } from "../settings/settingsRegistry";
 import { useCommandSurface } from "./useShellCommands";
 import { useShellShortcuts, type ShellShortcutsProps } from "./useShellShortcuts";
 

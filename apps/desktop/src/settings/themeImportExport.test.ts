@@ -6,8 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * Theme import/export logic tests.
  *
  * The native fs module is mocked via `vi.mock` so tests can control the file
- * paths and contents returned by `saveAndWriteTextFile` and
- * `pickAndReadTextFile`. The DOM-reading helpers
+ * paths and contents returned by `pickAndReadTextFile`. The DOM-reading helpers
  * (`readCurrentTokenValues`, `readCurrentThemeBase`) read from
  * `document.documentElement` and `getComputedStyle`, so tests stub
  * `getComputedStyle` and set the `data-thinkbrain-theme` attribute directly to
@@ -17,9 +16,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the native fs module so we can control dialog+read/write results.
 vi.mock("../native/fs", () => ({
-  saveAndWriteTextFile: vi.fn<
-    (title: string, defaultName: string, contents: string) => Promise<boolean>
-  >(),
   pickAndReadTextFile: vi.fn<
     (
       title: string,
@@ -34,11 +30,10 @@ vi.mock("./themeAdapter", () => ({
 }));
 
 import { readThemeFile } from "./themeAdapter";
-import { saveAndWriteTextFile, pickAndReadTextFile } from "../native/fs";
+import { pickAndReadTextFile } from "../native/fs";
 import {
   buildThemeExport,
   buildThemeExportPayload,
-  writeThemeExportFile,
   importTheme,
   readCurrentTokenValues,
   readCurrentThemeBase
@@ -70,7 +65,6 @@ beforeEach(() => {
   seedSettingsStore();
 
   // Reset mock call counts and default implementations.
-  vi.mocked(saveAndWriteTextFile).mockReset();
   vi.mocked(pickAndReadTextFile).mockReset();
 
   // Default DOM state: light theme with the mock tokens.
@@ -190,39 +184,6 @@ describe("buildThemeExportPayload", () => {
     // Pretty-printed JSON has a newline + 2-space indentation on the first key.
     expect(json).toContain('\n  "name"');
     expect(json.endsWith("\n")).toBe(true);
-  });
-});
-
-describe("writeThemeExportFile", () => {
-  it("writes the file when the user selects a path", async () => {
-    vi.mocked(saveAndWriteTextFile).mockResolvedValue(true);
-
-    const result = await writeThemeExportFile('{"name":"x"}');
-
-    expect(result).toBe(true);
-    expect(saveAndWriteTextFile).toHaveBeenCalledWith(
-      "Export theme",
-      "theme.tbtheme.json",
-      '{"name":"x"}'
-    );
-  });
-
-  it("returns false when the user cancels the save dialog", async () => {
-    vi.mocked(saveAndWriteTextFile).mockResolvedValue(false);
-
-    const result = await writeThemeExportFile('{"name":"x"}');
-
-    expect(result).toBe(false);
-  });
-
-  it("throws when the write fails (fail-loud)", async () => {
-    vi.mocked(saveAndWriteTextFile).mockRejectedValue(
-      new Error("The chosen file could not be written.")
-    );
-
-    // Write failures now throw instead of returning false, so the caller can
-    // surface a destructive status message. Cancel (above) still returns false.
-    await expect(writeThemeExportFile('{"name":"x"}')).rejects.toThrow();
   });
 });
 

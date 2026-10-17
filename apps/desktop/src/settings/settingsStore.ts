@@ -13,22 +13,11 @@
  */
 
 import { create } from "zustand";
-import { useSyncExternalStore } from "react";
 import { readAppSettingsDocument, updateAppSettingsDocument } from "./appSettingsFile";
 import {
   readWorkspaceSettingsDocument,
   updateWorkspaceSettingsDocument
 } from "../workspace/workspaceSettingsFile";
-import {
-  appearanceModule,
-  createSettingsRegistry,
-  editorModule,
-  settingsModule,
-  syncModule,
-  validateSettings,
-  type SettingsDiagnostic,
-  type SettingsRegistry
-} from "@thinkbrain/core";
 import {
   getErrorMessage,
   isRecord,
@@ -36,72 +25,25 @@ import {
   parseDynamicWorkspaceSettings,
   serializeDynamicAppSettings,
   serializeDynamicWorkspaceSettings,
-  type SettingDefinition,
+  validateSettings,
   type SettingScope,
-  type SettingsModule
+  type SettingsRegistry
 } from "@thinkbrain/core";
 import { scheduleAutosave } from "./autosaveScheduler";
-import { uiModuleForFormFactor } from "./uiModuleDefaults";
+import { appSettingsRegistry } from "./settingsRegistry";
 import {
   effectiveSettingValue,
   partitionByScope
 } from "./settingsHelpers";
-
-// ---------------------------------------------------------------------------
-// Registry instance with built-in modules registered.
-// ---------------------------------------------------------------------------
-
-/**
- * Module-scoped registry with the built-in Appearance, Editor, Settings, Sync,
- * and UI modules.
- *
- * Exported so UI components (Story 3+) can look up definitions, sections, and
- * modules for rendering. Extensions will register additional modules here in a
- * follow-up story.
- */
-export const appSettingsRegistry: SettingsRegistry = createSettingsRegistry();
-appSettingsRegistry.register(appearanceModule);
-appSettingsRegistry.register(editorModule);
-appSettingsRegistry.register(settingsModule);
-appSettingsRegistry.register(syncModule);
-appSettingsRegistry.register(uiModuleForFormFactor());
+import type {
+  SaveSettingsResult,
+  SettingsStoreGateway,
+  SettingsStoreState
+} from "./settingsStoreTypes";
 
 // ---------------------------------------------------------------------------
 // Gateway: abstraction over native settings I/O (for testability).
 // ---------------------------------------------------------------------------
-
-/**
- * Gateway interface for reading/writing app and workspace settings.
- *
- * Mirrors the `DesktopStateGateway` pattern from `desktopState.ts`. The default
- * implementation calls native Tauri commands; tests inject a mock.
- */
-export interface SettingsStoreGateway {
-  readAppSettings(): Promise<string | null>;
-  /**
-   * Revises the app-settings document and returns what was written.
-   *
-   * A document rather than a payload: `update_desktop_state` writes to the
-   * same file on every tab open or panel resize, so this store has to
-   * serialize against the document as it
-   * is at the moment of writing rather than the copy it read at load. `revise`
-   * runs inside the document's own update chain (see `appSettingsFile.ts`).
-   */
-  writeAppSettings(revise: (current: string | null) => string): Promise<string>;
-  readWorkspaceSettings(rootPath: string): Promise<string | null>;
-  /**
-   * Revises the workspace document and returns what was written.
-   *
-   * A document rather than a payload: this store is one of two writers to the
-   * file, so it has to serialize against the document as it is at the moment of
-   * writing rather than the copy it read when the workspace opened. `revise`
-   * runs inside the file's own update chain (see `workspaceSettingsFile.ts`).
-   */
-  writeWorkspaceSettings(
-    rootPath: string,
-    revise: (current: string | null) => string
-  ): Promise<string>;
-}
 
 /** Default gateway backed by native Tauri commands. */
 const nativeSettingsGateway: SettingsStoreGateway = {
@@ -111,75 +53,6 @@ const nativeSettingsGateway: SettingsStoreGateway = {
   writeWorkspaceSettings: (rootPath, revise) =>
     updateWorkspaceSettingsDocument(rootPath, revise)
 };
-
-// ---------------------------------------------------------------------------
-// Store types.
-// ---------------------------------------------------------------------------
-
-/** Result of a save attempt: either success or validation diagnostics. */
-export interface SaveSettingsResult {
-  readonly success: boolean;
-  readonly diagnostics: SettingsDiagnostic[];
-}
-
-/** The full Zustand store state shape (state + actions). */
-export interface SettingsStoreState {
-  // --- Loaded values ---
-  /** App-scoped settings keyed by full setting key (defaults merged). */
-  appValues: Record<string, unknown>;
-  /** Workspace-scoped settings, or null when no workspace is open. */
-  workspaceValues: Record<string, unknown> | null;
-  /** The root path of the currently loaded workspace, if any. */
-  workspaceRootPath: string | null;
-
-  // --- Staged changes ---
-  /** Pending changes keyed by full setting key, not yet persisted. */
-  stagedChanges: Record<string, unknown>;
-
-  // --- UI state ---
-  activeSection: string | null;
-  searchQuery: string;
-
-  // --- Errors / validation ---
-  loadError: string | null;
-  saveError: string | null;
-  validationDiagnostics: SettingsDiagnostic[];
-  /** True after the first successful or failed load. */
-  loaded: boolean;
-
-  // --- Actions ---
-  loadSettings(rootPath: string | null): Promise<void>;
-  stageChange(key: string, value: unknown): void;
-  saveSettings(): Promise<SaveSettingsResult>;
-  resetStaged(): void;
-  resetSection(sectionId: string): void;
-  setActiveSection(id: string | null): void;
-  setSearchQuery(query: string): void;
-  getEffectiveValue(key: string): unknown;
-  /**
-   * Stages a single setting and saves immediately.
-   *
-   * Used by palette commands, where there is no Save bar to press. Any other
-   * staged edits are persisted alongside it — acceptable because the Settings
-   * tab and the palette are not usually driven at the same time. Extensions
-   * use {@link setSingleSettingImmediately} instead: a timer- or event-driven
-   * write must not silently flush user edits.
-   */
-  setSettingImmediately(key: string, value: unknown): Promise<void>;
-  /**
-   * Stages a single setting and persists only that key.
-   *
-   * The scoped counterpart to {@link setSettingImmediately}, used by extension
-   * `settings.set` (D81). Unlike the palette path it does not co-persist
-   * unrelated staged edits, and an unrelated staged key that fails validation
-   * cannot strand the write as a phantom-dirty entry.
-   *
-   * On failure — a rejected write, an invalid value, or a workspace-scoped key
-   * with no workspace open — the value stays staged: the session still honours
-   * it and a later `saveSettings()` retries the write.
-   */
-  setSingleSettingImmediately(key: string, value: unknown): Promise<void>;
-}
 
 // ---------------------------------------------------------------------------
 // Store factory + default hook.
@@ -632,59 +505,6 @@ export function createSettingsStore(
  * store with a mock gateway.
  */
 export const useSettingsStore = createSettingsStore();
-
-/**
- * Module-level subscribe for `useSyncExternalStore`: a stable reference so
- * React does not resubscribe on every render.
- */
-const subscribeToSettingsRegistry = (listener: () => void): (() => void) =>
-  appSettingsRegistry.subscribe(listener);
-
-/**
- * Live snapshot of the settings modules contributing to one scope.
- *
- * Subscribing is required, not optional: extension schemas register on
- * activation, which routinely happens while the settings tab is open — a
- * one-shot read during render would leave the nav and content showing a
- * module that was never registered (or was already disposed). The registry
- * keeps the returned array referentially stable between changes, so it can
- * serve as the `useSyncExternalStore` snapshot directly.
- */
-export function useSettingsModules(scope: SettingScope): readonly SettingsModule[] {
-  return useSyncExternalStore(
-    subscribeToSettingsRegistry,
-    () => appSettingsRegistry.getModulesByScope(scope),
-    () => appSettingsRegistry.getModulesByScope(scope)
-  );
-}
-
-/**
- * Live snapshot of every registered settings module, unprojected.
- *
- * Used by the header-bar breadcrumbs, which resolve a section id across all
- * modules rather than one scope's projection.
- */
-export function useAllSettingsModules(): readonly SettingsModule[] {
-  return useSyncExternalStore(
-    subscribeToSettingsRegistry,
-    () => appSettingsRegistry.getAllModules(),
-    () => appSettingsRegistry.getAllModules()
-  );
-}
-
-/**
- * Live snapshot of every resolved setting definition.
- *
- * Used by nav search so a schema registered while settings is open is
- * searchable immediately rather than after the next unrelated re-render.
- */
-export function useSettingDefinitions(): readonly SettingDefinition[] {
-  return useSyncExternalStore(
-    subscribeToSettingsRegistry,
-    () => appSettingsRegistry.getAllDefinitions(),
-    () => appSettingsRegistry.getAllDefinitions()
-  );
-}
 
 /** True when there are any staged (unsaved) changes. */
 export const selectIsDirty = (state: SettingsStoreState): boolean =>

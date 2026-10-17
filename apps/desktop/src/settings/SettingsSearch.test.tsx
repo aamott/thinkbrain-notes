@@ -4,7 +4,8 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsTab } from "./SettingsTab";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry } from "./settingsRegistry";
 import {
   createSettingsTestHarness,
   seedSettingsStore

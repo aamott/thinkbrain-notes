@@ -11,13 +11,14 @@ import { Download, MoreVertical, RotateCcw, Upload } from "lucide-react";
 import type { SettingsModule } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { Menu, MenuButton, MenuCheckbox, MenuSeparator } from "../shell/Menu";
-import { selectDirtyCount, selectIsDirty, useAllSettingsModules, useSettingsStore } from "./settingsStore";
+import { selectDirtyCount, selectIsDirty, useSettingsStore } from "./settingsStore";
+import { useAllSettingsModules } from "./settingsRegistry";
 import {
   buildExportPayload,
   importSettings,
-  writeExportFile,
   type ImportResult
 } from "./settingsImportExport";
+import { saveAndWriteTextFile } from "../native/fs";
 import { findSectionLabelPath, parseQualifiedSectionId } from "./sectionUtils";
 import { useEffectiveValue } from "./useEffectiveValue";
 import { useTransientStatus } from "./useTransientStatus";
@@ -112,7 +113,7 @@ export function SettingsHeaderBar({
       if (!proceed) return;
     }
 
-    void writeExportFile(json)
+    void saveAndWriteTextFile("Export settings", "thinkbrain-settings.json", json)
       .then((written) => {
         if (written) status.show("Settings exported.");
       })

@@ -38,10 +38,8 @@ import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { createExtensionWorkspace, type DesktopExtensionWorkspace } from "./extensionWorkspace";
 import { getWorkspaceBridge, subscribeWorkspaceBridge } from "./workspaceBridge";
 import type { DesktopEditorHookContribution } from "../tabs/editorHookRegistry";
-import {
-  appSettingsRegistry,
-  useSettingsStore
-} from "../settings/settingsStore";
+import { useSettingsStore } from "../settings/settingsStore";
+import { appSettingsRegistry } from "../settings/settingsRegistry";
 import { effectiveSettingValue } from "../settings/settingsHelpers";
 
 /** A command definition whose identifier is relative to the owning extension. */

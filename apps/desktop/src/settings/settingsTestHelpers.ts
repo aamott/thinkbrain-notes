@@ -2,7 +2,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { vi } from "vitest";
 
-import { useSettingsStore, type SettingsStoreState } from "./settingsStore";
+import { useSettingsStore } from "./settingsStore";
+import type { SettingsStoreState } from "./settingsStoreTypes";
 
 /**
  * Shared test helpers for settings component and logic tests — extracted from
