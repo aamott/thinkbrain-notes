@@ -22,10 +22,9 @@ let savedUpdates: Record<string, unknown>[] = [];
 let snapshots: Record<string, Promise<NativeWorkspaceSnapshot>> = {};
 const indexed: string[] = [];
 
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: () => true,
-  invoke: () => Promise.resolve(null),
-  convertFileSrc: (path: string) => path
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: () => true
 }));
 vi.mock("../settings/desktopState", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../settings/desktopState")>()),

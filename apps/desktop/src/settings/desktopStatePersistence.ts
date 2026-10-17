@@ -12,7 +12,7 @@
  * read or write, so attempting the IPC would only produce noise.
  */
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { getErrorMessage } from "@thinkbrain/core";
 
 import { useNotificationStore } from "../notifications/notificationStore";
@@ -39,7 +39,7 @@ const LOAD_FAILURE_DEDUP_KEY = `${DESKTOP_STATE_SOURCE}:load-failed`;
  * Non-Tauri sessions are a no-op.
  */
 export function persistDesktopState(update: DesktopStateUpdate): void {
-  if (!isTauri()) return;
+  if (!isNativeHost()) return;
   void saveDesktopState(update).catch(reportSaveFailure);
 }
 
@@ -54,7 +54,7 @@ export function persistDesktopState(update: DesktopStateUpdate): void {
  * {@link reportDesktopStateReadFailure} in their own `.catch`.
  */
 export function readDesktopState(): Promise<DesktopState> {
-  if (!isTauri()) return Promise.resolve(DEFAULT_DESKTOP_STATE);
+  if (!isNativeHost()) return Promise.resolve(DEFAULT_DESKTOP_STATE);
   return loadDesktopState().catch((error: unknown) => {
     reportDesktopStateReadFailure(error);
     return DEFAULT_DESKTOP_STATE;

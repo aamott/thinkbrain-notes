@@ -506,5 +506,30 @@ describe("GitLinkImportDialog", () => {
     await act(async () => undefined);
     expect(document.body.textContent).toContain("The keychain is locked.");
   });
+
+  /**
+   * The subscription promise is async: if the dialog is gone by the time the
+   * native side answers, the resolved unlisten must still run — exactly once —
+   * or every dismissed dialog would leak a listener.
+   */
+  it("releases a subscription that only resolves after the dialog unmounts", async () => {
+    const stop = vi.fn();
+    let resolveSubscribe!: (unlisten: () => void) => void;
+    subscribeToWorkspaceImport.mockReset().mockImplementation(
+      () =>
+        new Promise<() => void>((resolve) => {
+          resolveSubscribe = resolve;
+        })
+    );
+    await renderDialog();
+    await act(async () => root?.unmount());
+    root = null;
+
+    await act(async () => {
+      resolveSubscribe(stop);
+    });
+
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
 });
 

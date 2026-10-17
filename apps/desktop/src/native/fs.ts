@@ -15,7 +15,7 @@
  * real failures arrive as `NativeCommandError` rejections.
  */
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "./runtime";
 import { invokeNativeCommand, type NativePickedTextFile } from "./commands";
 
 /**
@@ -37,7 +37,7 @@ export async function saveAndWriteTextFile(
   contents: string
 ): Promise<boolean> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
-  if (!isTauri()) return false;
+  if (!isNativeHost()) return false;
 
   return await invokeNativeCommand("save_and_write_text_file", {
     title,
@@ -63,7 +63,7 @@ export async function pickAndReadTextFile(
   extensions?: readonly string[]
 ): Promise<NativePickedTextFile | null> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
-  if (!isTauri()) return null;
+  if (!isNativeHost()) return null;
 
   return await invokeNativeCommand("pick_and_read_text_file", {
     title,

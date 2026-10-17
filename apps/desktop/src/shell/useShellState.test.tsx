@@ -13,8 +13,9 @@ import { useShellState, type ShellState } from "./useShellState";
 // The shell state boots the workspace lifecycle, which reaches for Tauri IPC
 // when it believes it is running under Tauri. Under happy-dom it is not, but
 // mock it explicitly so the restore path is a no-op regardless of environment.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false)
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
 }));
 
 vi.mock("../native/commands", async (importOriginal) => {

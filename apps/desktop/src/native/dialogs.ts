@@ -8,7 +8,7 @@
  * are guarded so the helpers resolve to `null` instead of crashing.
  */
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "./runtime";
 import { open } from "@tauri-apps/plugin-dialog";
 
 /**
@@ -20,7 +20,7 @@ import { open } from "@tauri-apps/plugin-dialog";
  */
 export async function pickFilePath(): Promise<string | null> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
-  if (!isTauri()) return null;
+  if (!isNativeHost()) return null;
 
   const selection = await open({
     title: "Select file",
@@ -44,7 +44,7 @@ export async function pickFilePath(): Promise<string | null> {
  */
 export async function pickDirectoryPath(title: string): Promise<string | null> {
   // Guard non-Tauri contexts (tests, web-only dev) so callers don't crash.
-  if (!isTauri()) return null;
+  if (!isNativeHost()) return null;
 
   const selection = await open({ title, directory: true, multiple: false });
   return typeof selection === "string" ? selection : null;

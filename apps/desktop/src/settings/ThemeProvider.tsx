@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { parseThemeFile, type AppThemeSetting, type ThemeBase } from "@thinkbrain/core";
 import { useSettingsStore } from "./settingsStore";
 import { readThemeFile } from "./themeAdapter";
@@ -142,7 +142,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   // prevents double-load in StrictMode or fast re-mounts.
   const loadStartedRef = useRef(false);
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isNativeHost()) return;
     if (loadStartedRef.current) return;
     loadStartedRef.current = true;
     loadSettings(null).catch((error: unknown) => {

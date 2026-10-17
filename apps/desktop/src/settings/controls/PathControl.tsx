@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../../native/runtime";
 import { FolderOpen } from "lucide-react";
 import { pickFilePath } from "../../native/dialogs";
 import { inputClassName, type ControlProps } from "../controlRegistry";
@@ -23,7 +23,7 @@ import { inputClassName, type ControlProps } from "../controlRegistry";
  */
 export function PathControl({ definition, value, onChange }: ControlProps) {
   // Cache the Tauri check once; it never changes during a session.
-  const [nativeAvailable] = useState(() => isTauri());
+  const [nativeAvailable] = useState(() => isNativeHost());
   const pathValue = typeof value === "string" ? value : String(value ?? "");
 
   async function handleBrowse() {

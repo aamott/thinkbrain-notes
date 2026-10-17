@@ -38,11 +38,10 @@ Three reviewers independently circled the same two seams:
   search-pool lifetime keyed by canonical root. The `detach_engine_on_delete`
   story is the first concrete leak from this gap; a `WorkspaceSession`
   abstraction is the structural fix. Worth one epic, not two.
-- **The `native/` boundary is documented but incomplete.** Both sides flag
-  `@tauri-apps/*` imports escaping into feature folders (events, `isTauri`,
-  platform checks) and the hand-mirrored `NativeCommandMap`. A lint rule +
-  typed event/capability adapters closes most of it; ts-rs/tauri-specta is
-  the heavier answer for contract drift.
+- **The `native/` transport boundary is now enforced.** Typed event/runtime
+  adapters and lint checks cover escaped Tauri imports. Command-name parity
+  is checked separately; argument/result type drift and application-port
+  placement remain distinct follow-ups.
 
 ## Disagreements / judgment calls
 

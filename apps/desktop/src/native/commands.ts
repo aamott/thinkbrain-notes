@@ -1,4 +1,6 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
+
+import { isNativeHost } from "./runtime";
 
 import type { DesktopStateUpdate } from "../settings/desktopState";
 import type {
@@ -743,7 +745,7 @@ interface NativeAppUpdate {
  * a build where the plugin is not wired in.
  */
 export async function checkForAppUpdate(): Promise<NativeAppUpdate | null> {
-  if (!isTauri()) return null;
+  if (!isNativeHost()) return null;
   const { check } = await import("@tauri-apps/plugin-updater");
   return await check();
 }
