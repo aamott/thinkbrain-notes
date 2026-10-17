@@ -325,6 +325,7 @@ jobs:
       # The app version names the assets — GITHUB_REF_NAME is a branch on
       # dispatch runs (e.g. `feature/x` → a slash → unwritable filenames).
       - name: Stage Android bundles
+        id: android-bundles
         run: |
           set -euo pipefail
           out="apps/desktop/src-tauri/gen/android/app/build/outputs"
@@ -339,6 +340,34 @@ jobs:
           find "$out/apk" -name '*universal*.apk' -exec cp {} "staging/ThinkbrainNotes-${version}-android-universal.apk" \;
           echo "Staged bundles:"
           ls -la staging/
+          # Expose the production-signed universal APK so the emulator smoke
+          # test below installs the exact artifact users would download.
+          apk="staging/ThinkbrainNotes-${version}-android-universal.apk"
+          test -s "$apk"
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+
+      # A green compile is not proof the app starts — the v0.5.0 APK built fine
+      # but aborted in Rust_onCreate on every cold launch. Boot an emulator and
+      # smoke-test the production-signed APK BEFORE any artifact or release
+      # upload so a failing startup check blocks Android publication.
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Smoke-test minified Android release
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          ram-size: 2048M
+          disable-animations: true
+          script: |
+            adb install -r "${{ steps.android-bundles.outputs.apk }}"
+            pnpm android:smoke
+        timeout-minutes: 15
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
