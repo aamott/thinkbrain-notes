@@ -15,10 +15,10 @@
  *      the computed values already include its overrides, so the exported file
  *      captures exactly what the user sees — a useful starting point for
  *      customization.
- *   2. `writeThemeExportFile(json)` — opens a native save dialog and writes the
- *      JSON to the chosen path. Returns `true` if written, `false` if the user
- *      cancelled the dialog, and throws on write failure (disk full, permission
- *      denied, etc.) so the caller can surface a status message.
+ *   2. The caller writes the JSON via `saveAndWriteTextFile` in `native/fs` —
+ *      there is no per-module wrapper for a one-line save-dialog call. The
+ *      resolved `false` on cancel is a non-event; a rejection is a real write
+ *      failure (disk full, permission denied) the caller surfaces.
  *
  * Import flow:
  *   `importTheme()` — opens a native open dialog, reads the file, parses it with
@@ -41,11 +41,12 @@ import {
   type ThemeFile
 } from "@thinkbrain/core";
 
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry } from "./settingsRegistry";
 import { resolveEffectiveValue } from "./settingsHelpers";
 import { readThemeFile } from "./themeAdapter";
 import { resolveThemeBase } from "./themeResolution";
-import { pickAndReadTextFile, saveAndWriteTextFile } from "../native/fs";
+import { pickAndReadTextFile } from "../native/fs";
 
 // ---------------------------------------------------------------------------
 // DOM access (split out for testability).
@@ -173,24 +174,6 @@ export async function buildThemeExport(): Promise<string> {
   }
 
   return buildThemeExportPayload();
-}
-
-/**
- * Opens a native save dialog and writes the theme JSON to the chosen path.
- *
- * Args:
- *   json: The `.tbtheme.json` string to write (from `buildThemeExportPayload`).
- *
- * Returns:
- *   `true` if the file was written, `false` if the user cancelled the dialog.
- *
- * Throws:
- *   Error if the write itself failed (disk full, permission denied, etc.) so
- *   the caller can surface a status message. Cancel (above) returns `false` —
- *   a non-event the caller can ignore.
- */
-export async function writeThemeExportFile(json: string): Promise<boolean> {
-  return await saveAndWriteTextFile("Export theme", "theme.tbtheme.json", json);
 }
 
 // ---------------------------------------------------------------------------

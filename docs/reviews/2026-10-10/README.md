@@ -10,8 +10,8 @@ line-level bug hunts; every report ends with a "keep as-is" list.
 - `journal-source-audit-med-med.md` — top item: `JournalPanel`'s hand-rolled
   delete dialog should be `ModalDialog` (a11y regression); duplicated
   listing machinery wants a shared hook.
-- `settings-source-audit-med-med.md` — duplicated test scaffolding, a
-  pass-through module, `settingsStore.ts` split.
+- `settings-source-audit-med-med.md` — remaining export/test-surface and
+  theme/highlight simplification suggestions; initial source cleanup complete.
 - `architecture-shell-state-med-hard.md` — top item: one workspace-session
   owner above both chromes; the explorer should consume the session, not
   load it. Then: split the `ShellState` mega-bag, deduplicate chrome

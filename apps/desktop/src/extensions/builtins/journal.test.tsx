@@ -23,7 +23,8 @@ import {
 } from "../../commands/commandRegistry";
 import { desktopPanelRegistry } from "../../panels/panelRegistryModel";
 import { desktopEditorHeaderRegistry } from "../../tabs/editorHeaderRegistry.ts";
-import { appSettingsRegistry, useSettingsStore } from "../../settings/settingsStore";
+import { useSettingsStore } from "../../settings/settingsStore";
+import { appSettingsRegistry } from "../../settings/settingsRegistry";
 
 let host: ReturnType<typeof createDesktopExtensionHost> | null = null;
 let root: Root | null = null;

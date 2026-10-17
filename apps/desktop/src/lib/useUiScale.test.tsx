@@ -10,7 +10,8 @@ import {
   UI_SCALE_KEY,
   useUiScale
 } from "./useUiScale";
-import { useSettingsStore, appSettingsRegistry } from "../settings/settingsStore";
+import { useSettingsStore } from "../settings/settingsStore";
+import { appSettingsRegistry } from "../settings/settingsRegistry";
 import { installStageChangeSpy, seedSettingsStore } from "../settings/settingsTestHelpers";
 import {
   clearScrollAnchorSnapshots,

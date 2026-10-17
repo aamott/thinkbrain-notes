@@ -1,54 +1,27 @@
 # Audit: `apps/desktop/src/settings/` — bloat, over-testing, consolidation
 
-Task: `audit_settings_source` (done — see `plans/other_tasks/done-summary.md`). Read-only audit; no source changes.
+Task: `audit_settings_source` (done — see `plans/other_tasks/done-summary.md`). Remaining findings after the `settings_source_cleanup` follow-up.
 
 ## Summary
 
-- **Source**: 5,262 lines across 38 files (excl. tests + 262 lines of test helpers).
-- **Tests**: 6,749 lines across 24 files → **1.28×** test-to-source ratio (highest in app).
-- Largest gaps: `settingsStore.test.ts` 1,243 vs 693 src; `useEffectiveValue.test.ts` 102 vs 24 (4.3×); `appSettingsFile.test.ts` 137 vs 39 (3.5×); `SettingsTab.test.tsx` 413 vs 133 (3.1×); `useTransientStatus.test.tsx` 198 vs 74 (2.7×); `ThemeProvider.test.tsx` 601 vs 240 (2.5×, mostly justified — real async races).
-- `settingsStore.ts` (693) exceeds the 500-line preferred limit despite prior splits.
+Findings 1, 2, 3, and 5 are addressed: precedence/chain tests are consolidated,
+export-write wrappers are removed (`importExportFiles.ts` was already absent),
+and registry/hooks plus public types are separated from the store. The store is
+515 lines; it was not further fragmented just to meet the preferred 500-line
+limit. Original line-saving estimates were approximate, not acceptance targets.
 
-**Top 3 recommendations**
-1. Deduplicate effective-value precedence tests and document-chain wrapper tests → **~250 test lines** removed, zero coverage loss.
-2. Delete `importExportFiles.ts` and the one-line `write*File` wrappers → **~70 lines**, removes a 3-deep pass-through chain.
-3. Unexport test-only symbols/constants (`promoteRecentWorkspace`, `fuzzyScore`, `buildThemeExportPayload`, `parseDesktopState`, `DESKTOP_STATE_*` constants, etc.) and split the registry/live-hooks block out of `settingsStore.ts` → **~90 source lines** moved, file back under 500.
+The remaining suggestions below were not part of that behavior-preserving cleanup.
 
 ## Findings
 
 | # | Finding | Files | Est. savings | Risk |
 |---|---------|-------|--------------|------|
-| 1 | Effective-value precedence tested 3× | settingsStore.test.ts, useEffectiveValue.test.ts | ~130 test lines | Low |
-| 2 | documentChain tested twice via thin wrappers | appSettingsFile.test.ts, workspace/workspaceSettingsFile.test.ts | ~120 test lines | Low |
-| 3 | 3-layer pass-through on import/export file I/O | importExportFiles.ts, settingsImportExport.ts, themeImportExport.ts | ~70 lines | Low |
 | 4 | Dead / test-only exports | desktopState.ts, fuzzyMatch.ts, themeImportExport.ts, +6 files | ~15 symbols | Low |
-| 5 | settingsStore.ts >500 lines; registry+hooks block separable | settingsStore.ts | ~90 lines moved | Low |
 | 6 | SettingsTab.test re-covers SettingsContent/Nav internals | SettingsTab.test.tsx | ~150 test lines | Med |
 | 7 | settingHighlight.ts over-built for a 1.2s row flash | settingHighlight.ts (+145-line test) | ~90 lines | Med |
 | 8 | Triplicated "parse JSON → isRecord" helpers | desktopState.ts, settingsStore.ts, settingsImportExport.ts | ~15 lines | Low |
 | 9 | Merge tiny theme modules | themeAdapter.ts, themeResolution.ts, themeInjection.ts | ~25 lines + plumbing | Low |
 | 10 | Minor: `describeError` duplicates `getErrorMessage` | desktopStatePersistence.ts:102-105 | ~4 lines | Trivial |
-
-### 1. Effective-value precedence tested three times (over-testing)
-
-`resolveEffectiveValue` is an 18-line pure function (`settingsHelpers.ts:38-55`). It is pinned by a 14-case table at `settingsStore.test.ts:546-742` plus a store-delegation wiring test at `:744-798`. On top of that:
-
-- `settingsStore.test.ts:472-545` (`describe("getEffectiveValue")`, ~73 lines) re-tests staged>loaded>default and falsy handling through the store — all cases already in the table, and the wiring test already proves delegation.
-- `useEffectiveValue.test.ts:51-87` re-runs 4 of the same precedence cases through React. Only `"updates when the staged value changes"` (:89-101) tests something the others can't (reactivity).
-
-**Action**: delete the `getEffectiveValue` describe except 1 smoke test; keep only the reactivity test in `useEffectiveValue.test.ts`. **~130 lines**, low risk.
-
-### 2. documentChain behavior tested twice through two thin wrappers
-
-`appSettingsFile.test.ts` (137) and `workspace/workspaceSettingsFile.test.ts` (150) run near-identical scenarios against `createDocumentChain` (`native/documentChain.ts`, itself untested): "reads what was written", "previous writer's result", "carries on after failure", "recomputes revision on conflict", "precondition", "gives up", "returns written doc". 7 of 8 `appSettingsFile` tests are mirrored in the workspace file; only "one workspace's writes don't wait on another's" is unique.
-
-**Action**: move chain semantics to a single `native/documentChain.test.ts` (~170 lines) and reduce each wrapper test to a thin wiring smoke test (~25 lines). **~120 lines net**, low risk — also fixes the real gap that `documentChain` has no direct tests.
-
-### 3. Three-layer pass-through on import/export file I/O
-
-`writeExportFile` (`settingsImportExport.ts:106-108`) → `writeJsonViaSaveDialog` (`importExportFiles.ts:25-31`) → `saveAndWriteTextFile` (`native/fs.ts:34`), and the same for `writeThemeExportFile`/`readPickedFile`. `importExportFiles.ts` adds zero behavior — `native/fs.ts` already documents the identical "false/null = cancel, failures throw" contract.
-
-**Action**: call `native/fs` directly from `settingsImportExport.ts`/`themeImportExport.ts`; delete `importExportFiles.ts` (54) and the two `write*File` wrappers (~14), folding the default filenames into callers. **~70 lines + a whole file**, low risk. Keep `PickedFile` only if a signature needs a named type (it doesn't — `NativePickedTextFile` exists).
 
 ### 4. Dead / test-only exports (grep-verified)
 
@@ -69,10 +42,6 @@ Used only inside their own file, or only by their own test (dead-ish):
 Also: `createSettingsStore` (`settingsStore.ts:204`) is called in production only for the singleton at :632 — all other callers are tests. Legitimate DI seam, but the factory exists purely for testability; note it, don't remove.
 
 **Action**: unexport the function/constant cases (keep types — they cost nothing and document shapes); where a test needs the seam, test through the public path instead (`buildThemeExport` covers `buildThemeExportPayload`). **~15 symbols**, low risk.
-
-### 5. settingsStore.ts over the 500-line guideline
-
-`settingsStore.ts` is 693 lines. The clean split: the registry singleton + three `useSyncExternalStore` hooks (`appSettingsRegistry`, `useSettingsModules`, `useAllSettingsModules`, `useSettingDefinitions`, lines 50-68 and 634-685, ~90 lines) move to a `settingsRegistry.ts`. `useEffectiveValue.ts` (24) could fold in there too — it is one 12-line function. **~115 lines moved**, settingsStore back near 500. Low risk; imports change in ~10 files.
 
 ### 6. SettingsTab.test re-covers SettingsContent/SettingsNav internals
 

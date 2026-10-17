@@ -9,7 +9,9 @@ import { createSettingsTestHarness } from "./settingsTestHelpers";
 
 /**
  * Exercises the hook through a small React component because its contract
- * includes reactivity, not just value resolution.
+ * includes reactivity, not just value resolution. The pure precedence table
+ * itself is pinned in `settingsStore.test.ts` under `resolveEffectiveValue`;
+ * this suite only proves the hook re-renders as each store layer changes.
  */
 function Probe({ settingKey }: { settingKey: string }) {
   const value = useEffectiveValue(settingKey);
@@ -37,66 +39,53 @@ afterEach(async () => {
   container = null;
 });
 
-/** Renders the probe and flushes its initial render. */
-async function renderProbe(settingKey: string): Promise<void> {
-  container = await harness.render(createElement(Probe, { settingKey }));
-}
-
 /** Reads the value currently rendered by the probe. */
 function renderedValue(): string {
   return container?.querySelector("[data-testid='effective-value']")?.textContent ?? "";
 }
 
 describe("useEffectiveValue", () => {
-  it("returns the staged value when present", async () => {
-    useSettingsStore.setState({
-      appValues: { "appearance.theme": "light" },
-      stagedChanges: { "appearance.theme": "dark" }
+  it("re-renders as each layer changes, including staged fallback and falsy", async () => {
+    // A loaded app value shows on mount.
+    useSettingsStore.setState({ appValues: { "appearance.theme": "light" } });
+    container = await harness.render(createElement(Probe, { settingKey: "appearance.theme" }));
+    expect(renderedValue()).toBe("light");
+
+    // With nothing staged, a loaded app update re-renders immediately — this
+    // is what pins the appValues subscription rather than any later fallback.
+    await act(async () => {
+      useSettingsStore.setState({ appValues: { "appearance.theme": "dark" } });
     });
-
-    await renderProbe("appearance.theme");
-
     expect(renderedValue()).toBe("dark");
-  });
 
-  it("falls back to appValues when no staged value is present", async () => {
-    useSettingsStore.setState({
-      appValues: { "appearance.theme": "light" }
+    // A staged value masks the loaded layer.
+    await act(async () => {
+      useSettingsStore.getState().stageChange("appearance.theme", "system");
     });
-
-    await renderProbe("appearance.theme");
-
-    expect(renderedValue()).toBe("light");
-  });
-
-  it("falls back to workspaceValues for workspace-scoped settings", async () => {
-    useSettingsStore.setState({
-      appValues: { "sync.destination": "app-value" },
-      workspaceValues: { "sync.destination": "workspace-value" }
-    });
-
-    await renderProbe("sync.destination");
-
-    expect(renderedValue()).toBe("workspace-value");
-  });
-
-  it("falls back to the registry default when no stored value is present", async () => {
-    await renderProbe("appearance.theme");
-
     expect(renderedValue()).toBe("system");
-  });
 
-  it("updates when the staged value changes", async () => {
-    useSettingsStore.setState({
-      appValues: { "appearance.theme": "light" }
+    // A loaded app change underneath a staged value stays hidden until the
+    // staged layer resets, and the hook then falls back to the newer value.
+    await act(async () => {
+      useSettingsStore.setState({ appValues: { "appearance.theme": "light" } });
     });
-    await renderProbe("appearance.theme");
+    expect(renderedValue()).toBe("system");
+    await act(async () => {
+      useSettingsStore.getState().resetStaged();
+    });
     expect(renderedValue()).toBe("light");
+
+    // Workspace values drive workspace-scoped keys reactively too — and a
+    // falsy workspace value must surface, not fall through to the default.
+    await act(async () => {
+      useSettingsStore.setState({ workspaceValues: { "sync.destination": "nas" } });
+    });
+    container = await harness.render(createElement(Probe, { settingKey: "sync.destination" }));
+    expect(renderedValue()).toBe("nas");
 
     await act(async () => {
-      useSettingsStore.getState().stageChange("appearance.theme", "dark");
+      useSettingsStore.setState({ workspaceValues: { "sync.destination": "" } });
     });
-
-    expect(renderedValue()).toBe("dark");
+    expect(renderedValue()).toBe("");
   });
 });

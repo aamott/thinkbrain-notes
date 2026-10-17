@@ -92,7 +92,9 @@ vi.mock("../settings/settingsStore", () => ({
       workspaceRootPath: null,
       loadSettings: () => Promise.resolve()
     })
-  }),
+  })
+}));
+vi.mock("../settings/settingsRegistry", () => ({
   // Read transitively at `desktopExtensionHost` module load; never exercised
   // under these tests.
   appSettingsRegistry: {

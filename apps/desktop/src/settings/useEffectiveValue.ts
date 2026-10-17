@@ -1,4 +1,5 @@
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry } from "./settingsRegistry";
 import { resolveEffectiveValue } from "./settingsHelpers";
 
 /**

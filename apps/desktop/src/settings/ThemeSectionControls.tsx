@@ -16,10 +16,10 @@ import { useSettingsStore } from "./settingsStore";
 import { listThemes, type ThemeEntry } from "./themeAdapter";
 import {
   buildThemeExport,
-  writeThemeExportFile,
   importTheme,
   type ImportThemeResult
 } from "./themeImportExport";
+import { saveAndWriteTextFile } from "../native/fs";
 import { useTransientStatus } from "./useTransientStatus";
 import { useEffectiveValue } from "./useEffectiveValue";
 
@@ -204,7 +204,7 @@ export function ThemeToolbar() {
    */
   const handleExport = useCallback((): void => {
     void buildThemeExport()
-      .then((json) => writeThemeExportFile(json))
+      .then((json) => saveAndWriteTextFile("Export theme", "theme.tbtheme.json", json))
       .then((written) => {
         if (written) {
           status.show("Theme exported.");

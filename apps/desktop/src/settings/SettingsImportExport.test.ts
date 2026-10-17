@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildExportPayload,
-  writeExportFile,
   importSettings
 } from "./settingsImportExport";
 import { useSettingsStore } from "./settingsStore";
@@ -18,16 +17,12 @@ import {
  * Settings import/export logic tests.
  *
  * The native fs module is mocked via `vi.mock` so tests can control the file
- * paths and contents returned by `saveAndWriteTextFile` and
- * `pickAndReadTextFile`. The real module-scoped
+ * paths and contents returned by `pickAndReadTextFile`. The real module-scoped
  * `useSettingsStore` singleton is seeded directly via `setState`.
  */
 
 // Mock the native fs module so we can control dialog+read/write results.
 vi.mock("../native/fs", () => ({
-  saveAndWriteTextFile: vi.fn<
-    (title: string, defaultName: string, contents: string) => Promise<boolean>
-  >(),
   pickAndReadTextFile: vi.fn<
     (
       title: string,
@@ -37,7 +32,7 @@ vi.mock("../native/fs", () => ({
 }));
 
 // Import the mocked functions AFTER vi.mock so we get the mock implementations.
-import { saveAndWriteTextFile, pickAndReadTextFile } from "../native/fs";
+import { pickAndReadTextFile } from "../native/fs";
 
 /**
  * Default app values seeded into the store for most tests. Extends the shared
@@ -67,7 +62,6 @@ beforeEach(() => {
   seedSettingsStore({ appValues: SEEDED_APP_VALUES });
 
   // Reset mock call counts and default implementations.
-  vi.mocked(saveAndWriteTextFile).mockReset();
   vi.mocked(pickAndReadTextFile).mockReset();
 });
 
@@ -146,29 +140,6 @@ describe("buildExportPayload", () => {
     expect(keys).not.toContain("sync.trigger");
     expect(keys).not.toContain("sync.destination");
     expect(keys).toHaveLength(20);
-  });
-});
-
-describe("writeExportFile", () => {
-  it("writes the file when the user selects a path", async () => {
-    vi.mocked(saveAndWriteTextFile).mockResolvedValue(true);
-
-    const result = await writeExportFile('{"version":1}');
-
-    expect(result).toBe(true);
-    expect(saveAndWriteTextFile).toHaveBeenCalledWith(
-      "Export settings",
-      "thinkbrain-settings.json",
-      '{"version":1}'
-    );
-  });
-
-  it("returns false when the user cancels the save dialog", async () => {
-    vi.mocked(saveAndWriteTextFile).mockResolvedValue(false);
-
-    const result = await writeExportFile('{"version":1}');
-
-    expect(result).toBe(false);
   });
 });
 

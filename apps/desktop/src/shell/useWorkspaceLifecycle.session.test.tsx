@@ -59,7 +59,9 @@ vi.mock("../wikiLinks/wikiLinkIndexStore", () => ({ useWikiLinkIndexStore: index
 vi.mock("../settings/settingsStore", () => ({
   useSettingsStore: Object.assign(() => false, {
     getState: () => ({ loaded: true, workspaceRootPath: null, loadSettings: () => Promise.resolve() })
-  }),
+  })
+}));
+vi.mock("../settings/settingsRegistry", () => ({
   appSettingsRegistry: { register: () => ({ dispose: () => {} }), getDefinition: () => undefined }
 }));
 

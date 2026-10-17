@@ -3,7 +3,7 @@ import type {
   SettingsRegistry,
   SettingScope
 } from "@thinkbrain/core";
-import type { SettingsStoreState } from "./settingsStore";
+import type { SettingsStoreState } from "./settingsStoreTypes";
 
 /**
  * The single source of truth for effective-value precedence.

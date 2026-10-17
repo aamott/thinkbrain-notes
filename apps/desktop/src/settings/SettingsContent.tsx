@@ -30,7 +30,8 @@ import type {
 } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { SCROLL_ANCHOR_ATTR, useScrollAnchor } from "../lib/scrollAnchors";
-import { appSettingsRegistry, useSettingsModules, useSettingsStore } from "./settingsStore";
+import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry, useSettingsModules } from "./settingsRegistry";
 import { getControlForDefinition } from "./controlRegistry";
 import { subscribeSettingHighlight } from "./settingHighlight";
 import { resolveEffectiveValue } from "./settingsHelpers";

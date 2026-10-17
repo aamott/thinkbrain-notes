@@ -6,11 +6,8 @@ import {
   type Disposable
 } from "@thinkbrain/core";
 
-import {
-  appSettingsRegistry,
-  createSettingsStore,
-  useSettingsStore
-} from "../settings/settingsStore";
+import { createSettingsStore, useSettingsStore } from "../settings/settingsStore";
+import { appSettingsRegistry } from "../settings/settingsRegistry";
 import { appEvents } from "../events/appEvents";
 import { desktopCommandRegistry } from "../commands/commandRegistry";
 import { createDesktopTabRegistry } from "../tabs/tabRegistry";

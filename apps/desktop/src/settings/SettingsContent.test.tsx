@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsContent } from "./SettingsContent";
 import { createScrollSpyHarness, intersectSection } from "./scrollSpyTestUtils";
 import { requestSettingHighlight } from "./settingHighlight";
-import { appSettingsRegistry, useSettingsStore } from "./settingsStore";
+import { useSettingsStore } from "./settingsStore";
+import { appSettingsRegistry } from "./settingsRegistry";
 import {
   createSettingsTestHarness,
   seedSettingsStore
