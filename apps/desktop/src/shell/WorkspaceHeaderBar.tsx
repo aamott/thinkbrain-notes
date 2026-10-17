@@ -5,6 +5,7 @@ import { useEditorCommands } from "../tabs/editorCommands";
 import { desktopTabRegistry } from "../tabs/tabRegistry";
 import { isWorkspaceGitLinked } from "../workspace/workspaceSettings";
 import { cn } from "../lib/utils";
+import { isApplePlatform } from "../native/runtime";
 
 export interface WorkspaceHeaderBarProps {
   /** Display name of the active workspace, or null if none. */
@@ -21,7 +22,7 @@ export interface WorkspaceHeaderBarProps {
   readonly onSave?: () => void;
 }
 
-const IS_APPLE = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent || navigator.platform || "");
+const IS_APPLE = isApplePlatform();
 const SAVE_SHORTCUT = IS_APPLE ? "⌘S" : "Ctrl+S";
 const UNDO_SHORTCUT = IS_APPLE ? "⌘Z" : "Ctrl+Z";
 const REDO_SHORTCUT = IS_APPLE ? "⇧⌘Z" : "Ctrl+Y";

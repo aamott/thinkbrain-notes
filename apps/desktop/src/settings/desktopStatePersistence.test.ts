@@ -11,11 +11,10 @@ import { DEFAULT_DESKTOP_STATE } from "./desktopState";
  * underlying gateway logic `desktopState.test.ts` already covers.
  */
 
-// `isTauri` is mocked to true so the abstraction exercises its IPC path.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: () => true,
-  invoke: () => Promise.resolve(null),
-  convertFileSrc: (path: string) => path
+// `isNativeHost` is mocked to true so the abstraction exercises its IPC path.
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: () => true
 }));
 
 let saveShouldFail = false;

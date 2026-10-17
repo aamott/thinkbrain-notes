@@ -3,9 +3,10 @@
 import { act, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the Tauri core `isTauri` check so we can toggle the mount-load branch.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn<() => boolean>()
+// Mock the native runtime check so we can toggle the mount-load branch.
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn<() => boolean>()
 }));
 
 // Mock the workspace adapter so `windowWorkspaceRoot` is controllable.
@@ -25,7 +26,7 @@ vi.mock("../native/commands", async (importOriginal) => {
   };
 });
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { invokeNativeCommand } from "../native/commands";
 import { SettingsTab } from "./SettingsTab";
@@ -67,9 +68,9 @@ beforeEach(() => {
     }))
   );
 
-  // `isTauri` is false by default so the mount effect is a no-op for existing
+  // `isNativeHost` is false by default so the mount effect is a no-op for existing
   // tests. The remount-persistence test overrides this to true.
-  vi.mocked(isTauri).mockReturnValue(false);
+  vi.mocked(isNativeHost).mockReturnValue(false);
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);
   vi.mocked(invokeNativeCommand).mockImplementation(async (command) =>
     command === "list_themes" ? [] : null
@@ -83,7 +84,7 @@ afterEach(async () => {
   await harness.unmount();
   clearScrollAnchorSnapshots();
   vi.unstubAllGlobals();
-  vi.mocked(isTauri).mockReset();
+  vi.mocked(isNativeHost).mockReset();
   vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockReset();
   vi.mocked(invokeNativeCommand).mockReset();
   scrollSpy.restore();
@@ -405,7 +406,7 @@ describe("SettingsTab", () => {
 
   it("preserves staged changes across unmount/remount (Tauri)", async () => {
     // Simulate the native mount-load path.
-    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(isNativeHost).mockReturnValue(true);
     const WORKSPACE_ROOT = "/test/workspace";
     vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(WORKSPACE_ROOT);
     vi.mocked(invokeNativeCommand).mockImplementation(async (command) =>
@@ -462,7 +463,7 @@ describe("SettingsTab and lazy extensions", () => {
 describe("finding the workspace a setting belongs to", () => {
   /** The main window falls back to the shell bridge when no native root exists. */
   it("falls back to the shell's open workspace", async () => {
-    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(isNativeHost).mockReturnValue(true);
     vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue(null);
     useSettingsStore.setState({ loaded: false, workspaceRootPath: null });
     setWorkspaceBridge({
@@ -479,7 +480,7 @@ describe("finding the workspace a setting belongs to", () => {
   });
 
   it("prefers the window's own root when it has one", async () => {
-    vi.mocked(isTauri).mockReturnValue(true);
+    vi.mocked(isNativeHost).mockReturnValue(true);
     vi.mocked(workspaceDesktopApi.windowWorkspaceRoot).mockResolvedValue("/window-vault");
     useSettingsStore.setState({ loaded: false, workspaceRootPath: null });
     setWorkspaceBridge({

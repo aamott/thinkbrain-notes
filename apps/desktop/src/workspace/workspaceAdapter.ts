@@ -1,4 +1,4 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import {
   invokeNativeCommand,
   NativeCommandError,
@@ -60,7 +60,7 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
     // Guard non-Tauri contexts (tests, web-only dev): a workspace list does
     // not exist there and the rejected invoke would only be noise. Called on
     // every window focus, so this matters.
-    if (!isTauri()) return Promise.resolve([]);
+    if (!isNativeHost()) return Promise.resolve([]);
     return invokeNativeCommand("list_known_workspaces");
   },
   deleteManagedWorkspace(rootPath) {

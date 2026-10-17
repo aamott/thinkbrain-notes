@@ -14,7 +14,7 @@
  * (tests, web preview).
  */
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "./runtime";
 
 import { invokeNativeCommand } from "./commands";
 
@@ -31,7 +31,7 @@ import { invokeNativeCommand } from "./commands";
 export async function copyFilesToClipboard(
   paths: readonly string[]
 ): Promise<boolean> {
-  if (!isTauri() || paths.length === 0) return false;
+  if (!isNativeHost() || paths.length === 0) return false;
   try {
     await invokeNativeCommand("copy_files_to_clipboard", { paths });
     return true;

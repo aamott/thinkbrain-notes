@@ -4,12 +4,11 @@
 
 Reviewed the renderer application architecture around `shell/`, `tabs/`, `panels/`, `events/`, `notifications/`, `workspace/`, and the renderer-facing `native/` boundary. I first mapped production/test file sizes and cross-feature imports, then traced workspace restoration/switching, tab/document state, command execution, panel/tab/editor registries, notifications, and native event subscriptions. This is an architecture judgment, not only a bug audit.
 
-## Summary: top 5 recommendations
+## Summary: remaining recommendations
 
 2. **Replace the flat `ShellState` mega-bag with explicit domain facets.** Prefer memoized `tabs`, `workspace`, `panels`, `commands`, and `documents` view models over either the current unstable object or a wholesale move to Zustand.
 3. **Extract shared shell composition from DesktopShell and PhoneShell.** In particular, build landing-tab actions and workspace switching once; keep only routing/layout differences in each chrome.
 4. **Remove the module-global command-surface override.** Inject the active chrome's command target explicitly so commands are deterministic, instance-scoped, and testable.
-5. **Finish the native boundary.** Tauri event listening and runtime detection should be adapters under `native/`, not imports spread through shell/workspace/sync/settings.
 
 ## Findings ranked by value
 
@@ -18,7 +17,6 @@ Reviewed the renderer application architecture around `shell/`, `tabs/`, `panels
 | 2 | Split the unstable `ShellState` mega-bag into domain facets | med | hard | high |
 | 3 | Deduplicate cross-chrome application composition | med | med | high |
 | 4 | Inject command surfaces; remove the global mutable slot | med | med | high |
-| 5 | Enforce the renderer/native bridge for events and capability checks | med | med | high |
 | 6 | Restore dependency direction between shell, workspace, panels, and tabs | med | med | medium-high |
 | 7 | Split the largest production renderer files by responsibility | low | med | medium |
 | 8 | Keep the existing contribution-registry primitive; do not invent one universal registry | low | low | medium |
@@ -52,16 +50,6 @@ Reviewed the renderer application architecture around `shell/`, `tabs/`, `panels
 **Change.** Choose form factor before constructing the command executor, then pass an explicit `CommandSurface` adapter into `useShellCommands`; alternatively let `runCommand(command, surface)` receive the mounted surface. A root-owned context/ref is acceptable if stable command callbacks are required, but it must be scoped to the shell instance. Keep the command registry global; only execution targets need injection.
 
 **Effort/risk/payoff.** Medium (2–3 days). Risk is medium because keyboard/palette/phone routes all execute commands. Payoff is high: deterministic behavior and much easier command tests.
-
-## 5. Enforce the renderer/native bridge for events and capability checks
-
-**Current decision.** Command invocation is mostly centralized, which is good, but Tauri imports escape `native/`: watcher, git import, and sync subscribe directly to `@tauri-apps/api/event` (`apps/desktop/src/workspace/workspaceWatcher.ts:1-4`, `:118-138`; `apps/desktop/src/workspace/gitLinkImport.ts:8-15`, `:58-64`; `apps/desktop/src/sync/syncEvents.ts:10-29`). `isTauri` is also imported by shell/workspace code (`apps/desktop/src/shell/useWorkspaceLifecycle.ts:1`, `:81-97`; `apps/desktop/src/workspace/workspaceAdapter.ts:1`, `:56-61`). This conflicts with the documented “all native communication through `native/`” boundary.
-
-**Cost.** Tests must mock Tauri package modules throughout feature folders, event payload typing/cleanup conventions are repeated, and a future web/native transport change crosses unrelated features. Runtime detection also becomes policy embedded in consumers.
-
-**Change.** Add typed `native/events` subscriptions and a `native/runtime` capability (`isNativeHost`) or, preferably, put fallback behavior inside injected adapters. Workspace watcher and sync modules should depend on those interfaces. Do not hide domain event translation: `workspaceWatcher` should still translate native changes to `appEvents`; only transport belongs in `native/`.
-
-**Effort/risk/payoff.** Medium (3–5 days). Risk is medium around listener cleanup and Tauri event payloads. Payoff is high for compliance, tests, and Android/web portability.
 
 ## 6. Restore dependency direction between feature folders
 

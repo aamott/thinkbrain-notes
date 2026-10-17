@@ -7,7 +7,7 @@
  * of the truth. The answer is always one command away.
  */
 
-import { listen } from "@tauri-apps/api/event";
+import { subscribeToNativeEvent, type NativeSyncEventName } from "../native/events";
 
 /**
  * Calls `onChange` whenever the native side raises `event`.
@@ -20,10 +20,10 @@ import { listen } from "@tauri-apps/api/event";
  * workspace costs one call and cannot be wrong.
  */
 export async function subscribeToSyncEvent(
-  event: string,
+  event: NativeSyncEventName,
   onChange: () => void
 ): Promise<() => void> {
-  return listen(event, () => {
+  return subscribeToNativeEvent(event, () => {
     onChange();
   });
 }

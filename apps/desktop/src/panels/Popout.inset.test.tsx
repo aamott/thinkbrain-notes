@@ -13,7 +13,10 @@ import { DesktopShell } from "../shell/DesktopShell";
 import { PhoneShell } from "../shell/phone/PhoneShell";
 import { useShellState, type ShellState } from "../shell/useShellState";
 
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: vi.fn(() => false) }));
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
+}));
 vi.mock("../native/commands", () => ({
   invokeNativeCommand: vi.fn(() => Promise.resolve(null))
 }));

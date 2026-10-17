@@ -10,9 +10,9 @@ vi.mock("../native/commands", async (importOriginal) => ({
 vi.mock("../native/dialogs", () => ({
   pickDirectoryPath: vi.fn(async () => null)
 }));
-vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@tauri-apps/api/core")>()),
-  isTauri: () => true
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: () => true
 }));
 
 import { invokeNativeCommand } from "../native/commands";

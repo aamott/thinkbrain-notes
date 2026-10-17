@@ -4,8 +4,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false)
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
 }));
 
 vi.mock("../native/commands", () => ({

@@ -7,7 +7,7 @@
  * they did before the split.
  */
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
 import type { NativeMarkdownFileEntry } from "../native/commands";
@@ -38,7 +38,7 @@ export function useWorkspaceIndexes({
   // outside changes as the same `note.*` events an in-app edit produces, so
   // every consumer stays as it was.
   useEffect(() => {
-    if (!isTauri() || !restoredWorkspacePath) return;
+    if (!isNativeHost() || !restoredWorkspacePath) return;
     const rootPath = restoredWorkspacePath;
     let cancelled = false;
     let stop: (() => void) | null = null;

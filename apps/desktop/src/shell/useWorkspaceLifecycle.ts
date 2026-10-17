@@ -1,4 +1,4 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from "react";
 import { getExtensionBootstrap } from "../extensions/bootstrapRef";
 import { splitContributionId } from "../extensions/desktopExtensionHost";
@@ -95,13 +95,13 @@ export function useWorkspaceLifecycle({
   const workspaceName = workspaceSession.snapshot?.workspace.name ?? null;
   const workspaceFiles = workspaceSession.files;
   const [newNoteFocusRequest, setNewNoteFocusRequest] = useState(0);
-  const [stateRestored, setStateRestored] = useState(!isTauri());
+  const [stateRestored, setStateRestored] = useState(!isNativeHost());
   const tabsRestoredRef = useRef(false);
 
   // Restore the persisted desktop state (last workspace, recents, explorer
   // visibility) plus the workspace root the native window was launched with.
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isNativeHost()) return;
 
     let active = true;
     void Promise.allSettled([readDesktopState(), workspaceDesktopApi.windowWorkspaceRoot()]).then(([desktopResult, rootResult]) => {
@@ -184,7 +184,7 @@ export function useWorkspaceLifecycle({
     []
   );
   useEffect(() => {
-    if (!stateRestored || !isTauri()) return;
+    if (!stateRestored || !isNativeHost()) return;
     saveTabs({ tabs: tabState, workspacePath: restoredWorkspacePath });
   }, [saveTabs, stateRestored, tabState, restoredWorkspacePath]);
 
@@ -232,7 +232,7 @@ export function useWorkspaceLifecycle({
   // workspace-scoped write in `stagedChanges` without persisting anything.
   // SettingsTab has its own guard that skips the reload if the root matches.
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isNativeHost()) return;
     const { loaded, workspaceRootPath } = useSettingsStore.getState();
     if (loaded && workspaceRootPath === restoredWorkspacePath) return;
     void useSettingsStore.getState().loadSettings(restoredWorkspacePath);

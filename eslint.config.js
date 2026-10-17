@@ -104,6 +104,42 @@ export default tseslint.config(
     }
   },
   {
+    // The renderer's Tauri boundary: feature code reaches the host only
+    // through `native/` adapters, so nothing outside that directory may touch
+    // the SDK — statically, as a type import, via re-export, dynamically, or
+    // through `require`. Ordinary Web APIs and feature imports stay allowed.
+    files: ["apps/desktop/src/**/*.{ts,tsx}"],
+    ignores: ["apps/desktop/src/native/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^@tauri-apps/",
+              message:
+                "Use apps/desktop/src/native adapters instead of importing Tauri in feature code."
+            }
+          ]
+        }
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression[source.value=/^@tauri-apps\\//]",
+          message:
+            "Use apps/desktop/src/native adapters instead of importing Tauri in feature code."
+        },
+        {
+          selector:
+            "CallExpression[callee.name='require'] > Literal[value=/^@tauri-apps\\//]",
+          message:
+            "Use apps/desktop/src/native adapters instead of importing Tauri in feature code."
+        }
+      ]
+    }
+  },
+  {
     // Tailwind CSS class-conflict detection — mirrors the `cssConflict`
     // warnings shown by the Tailwind IntelliSense extension, but runnable
     // from `pnpm lint` / `scripts/qa.sh`. Scoped to the packages that

@@ -8,7 +8,10 @@ import { createVersionDiffTab } from "../tabs/tabModel";
 import { DesktopShell } from "./DesktopShell";
 import { useShellState, type ShellState } from "./useShellState";
 
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: vi.fn(() => false) }));
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
+}));
 vi.mock("../native/commands", () => ({
   // Commands a mounted tab actually issues need real-shaped answers: a null
   // document crashes the view-state reader, and a null version diff crashes
