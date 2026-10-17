@@ -164,7 +164,9 @@ export function useShellCommands({
   // pattern, driven by platform capabilities; this one is live history.)
   const paletteCommands = useMemo(
     () =>
-      registeredCommands.map((command) => {
+      registeredCommands.filter((command) =>
+        !["move-tab-left", "move-tab-right"].includes(command.id) || tabState.tabs.length > 1
+      ).map((command) => {
         const canBack = surfaceAvail?.canGoBack ?? canGoBackInTabs(tabState);
         const canForward = surfaceAvail?.canGoForward ?? canGoForwardInTabs(tabState);
         if (command.id === "go-back" && !canBack) {
@@ -237,6 +239,14 @@ export function useShellCommands({
       toggleAssistant: () => toggleRightPanel("assistant"),
       toggleBottomPanel,
       toggleLivePreview,
+      moveTabLeft: () => dispatchTabs({
+        type: "reorder", tabId: tabState.activeTabId ?? "",
+        toIndex: tabState.tabs.findIndex((tab) => tab.id === tabState.activeTabId) - 1
+      }),
+      moveTabRight: () => dispatchTabs({
+        type: "reorder", tabId: tabState.activeTabId ?? "",
+        toIndex: tabState.tabs.findIndex((tab) => tab.id === tabState.activeTabId) + 1
+      }),
       // `panelId` is an unconstrained string at this boundary (see
       // `DesktopCommandContext`) so any extension can reveal a panel it
       // registered; narrow it against the live registry before it reaches
@@ -270,7 +280,7 @@ export function useShellCommands({
       .catch((error: unknown) => {
         console.error(`[commandRegistry] Command "${command.id}" failed.`, error);
       });
-  }, [closePalette, dispatchTabs, openSettingsTab, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setRightPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel]);
+  }, [closePalette, dispatchTabs, openSettingsTab, requestNewNoteFocus, selectLeftPanel, setLeftPanel, setRightPanel, setTheme, showExplorer, theme, toggleBottomPanel, toggleLivePreview, toggleRightPanel, tabState.activeTabId, tabState.tabs]);
 
   return {
     closePalette,

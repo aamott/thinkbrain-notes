@@ -24,7 +24,7 @@ fn acquire_app_settings_lock() -> std::sync::MutexGuard<'static, ()> {
 const DESKTOP_STATE_KEY: &str = "desktopState";
 const DESKTOP_STATE_VERSION: u64 = 5;
 const MAX_RECENT_WORKSPACES: usize = 12;
-const MIN_PANEL_WIDTH: f64 = 224.0;
+const MIN_PANEL_WIDTH: f64 = 148.0;
 const MAX_PANEL_WIDTH: f64 = 480.0;
 const DEFAULT_LEFT_PANEL_WIDTH: f64 = 288.0;
 const DEFAULT_RIGHT_PANEL_WIDTH: f64 = 320.0;

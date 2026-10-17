@@ -11,6 +11,8 @@
 import { useEffect, type Dispatch } from "react";
 
 import type { DesktopTab, DesktopTabAction, DesktopTabState } from "../tabs/tabModel";
+import { nextCycledTabId } from "../tabs/tabCycle";
+import { useSettingsStore } from "../settings/settingsStore";
 import type { LeftPanel } from "./shellTypes";
 import { commandSurfaceEffect } from "./useShellCommands";
 
@@ -77,16 +79,16 @@ export function useShellShortcuts({
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
       const isTab = event.key === "Tab";
-      if (modifier && isTab) {
+      if (modifier && isTab && !event.altKey) {
         event.preventDefault();
         event.stopPropagation();
-        if (tabState.tabs.length > 1) {
-          const currentIndex = tabState.tabs.findIndex((t) => t.id === tabState.activeTabId);
-          const delta = event.shiftKey ? -1 : 1;
-          const nextIndex = (currentIndex + delta + tabState.tabs.length) % tabState.tabs.length;
-          const nextTab = tabState.tabs[nextIndex];
-          if (nextTab) dispatchTabs({ type: "activate", tabId: nextTab.id });
-        }
+        const setting = useSettingsStore.getState().getEffectiveValue("editor.tabCycleOrder");
+        const nextId = nextCycledTabId(
+          tabState.tabs, tabState.activeTabId,
+          setting === "last visited" ? "last visited" : "tab order",
+          event.shiftKey ? -1 : 1
+        );
+        if (nextId !== null) dispatchTabs({ type: "activate", tabId: nextId });
         return;
       }
       if (modifier && event.key.toLowerCase() === "p") {

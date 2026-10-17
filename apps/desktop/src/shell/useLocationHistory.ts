@@ -58,6 +58,8 @@ import type { DocumentViewState } from "./shellTypes";
 const DEPARTURE_ACTIONS: ReadonlySet<DesktopTabAction["type"]> = new Set([
   "open",
   "activate",
+  // A multi-close activates the right-clicked tab first — same departure.
+  "closeMultiple",
   "goBack",
   "goForward",
   "restoreVisit",
