@@ -127,14 +127,12 @@ test("a heading typed but unsaved resolves on tap", async ({ page }) => {
   await page.getByRole("button", { name: "Open guide.md" }).tap();
   await expect(editor(page).getByText(/Guide/)).toBeVisible();
 
-  // Type the heading into the live document — no save required. The Enters
-  // split the parked line wherever the tap's caret lands, so the heading
-  // always ends up on its own line; the departure tap below targets a
-  // different line the insert can never touch.
-  await editor(page).getByText("filler 8", { exact: true }).tap();
-  // The touch caret focuses the editor a beat after the tap resolves, and
-  // Enter keydowns don't reliably split lines under touch emulation —
-  // `insertText` goes through the input path and inserts real newlines.
+  // Type the heading into the live document — no save required. The
+  // newlines split the parked line wherever the tap's caret lands, so the
+  // heading always ends up on its own line; the departure tap below targets
+  // a different line the insert can never touch. Under touch emulation the
+  // caret focuses a beat after the tap and Enter keydowns don't reliably
+  // split lines, so `insertText` inserts real newlines via the input path.
   await expect(page.locator(".cm-editor")).toHaveClass(/cm-focused/);
   await page.keyboard.insertText("\n\n## Fresh Heading");
   await expect(editor(page).getByText("## Fresh Heading")).toBeVisible();
