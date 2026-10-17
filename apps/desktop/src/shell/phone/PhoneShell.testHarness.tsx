@@ -158,7 +158,12 @@ export const render = async (): Promise<HTMLDivElement> => {
  * Same mount, but hands the test the live shell so it can open and edit a note.
  * Reaching a dirty tab any other way would mean faking the reducer.
  */
-export const renderWithShell = async (): Promise<{
+export const renderWithShell = async (options?: {
+  /** Present the chrome as though this vault were the restored workspace —
+   *  the real phone always has one; the bare fixture has none, and openers
+   *  like the note tap path no-op without it. */
+  readonly restoredWorkspacePath?: string;
+}): Promise<{
   host: HTMLDivElement;
   shell: () => ShellState;
 }> => {
@@ -166,7 +171,15 @@ export const renderWithShell = async (): Promise<{
   const Host = () => {
     const shell = useShellState();
     box.current = shell;
-    return <PhoneShell shell={shell} />;
+    return (
+      <PhoneShell
+        shell={
+          options?.restoredWorkspacePath === undefined
+            ? shell
+            : { ...shell, restoredWorkspacePath: options.restoredWorkspacePath }
+        }
+      />
+    );
   };
   const host = await mount(<Host />);
   return {

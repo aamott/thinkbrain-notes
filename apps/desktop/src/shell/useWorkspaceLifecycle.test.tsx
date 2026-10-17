@@ -108,7 +108,7 @@ const NO_TABS: DesktopTabState = {
   tabs: [],
   activeTabId: null,
   closeRequest: null,
-  history: { entries: [], cursor: -1 }
+  history: { entries: [], cursor: -1, nextVisitId: 1 }
 };
 
 const tab = (root: string, note: string) => ({
@@ -291,7 +291,21 @@ describe("what a window persists", () => {
       ],
       activeTabId: "editor:/vault-b:b.md",
       closeRequest: null,
-      history: { entries: ["editor:/vault-b:b.md"], cursor: 0 }
+      history: {
+        entries: [
+          {
+            id: 1,
+            tab: {
+              id: "editor:/vault-b:b.md",
+              title: "b.md",
+              kind: "editor",
+              resource: { rootPath: "/vault-b", relativePath: "b.md" }
+            }
+          }
+        ],
+        cursor: 0,
+        nextVisitId: 2
+      }
     } as DesktopTabState);
 
     // Debounced, so the write lands after the delay rather than on mount.

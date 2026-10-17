@@ -70,7 +70,7 @@ const NO_TABS: DesktopTabState = {
   tabs: [],
   activeTabId: null,
   closeRequest: null,
-  history: { entries: [], cursor: -1 }
+  history: { entries: [], cursor: -1, nextVisitId: 1 }
 };
 const snapshot = (rootPath: string): NativeWorkspaceSnapshot => ({
   workspace: { root_path: rootPath, name: rootPath.slice(1) },

@@ -21,6 +21,11 @@ import {
   resolveEditorFontSize,
   resolveEditorLineWrapping
 } from "./editorDisplaySettings";
+import {
+  notifyEditorMapped,
+  registerEditorView,
+  unregisterEditorView
+} from "./editorLocationRegistry";
 import { recallEditorState, rememberEditorState } from "./editorStateCache";
 
 /**
@@ -158,8 +163,16 @@ export function useCodeMirrorView({
     const parked = stateKey === undefined ? undefined : recallEditorState(stateKey);
 
     // The display compartment is appended last so a reconfigure lands on
-    // fresh and parked states identically.
-    const extensions = [mounted.extensions, displayCtl.extension()];
+    // fresh and parked states identically. The location tracker reports every
+    // doc-changing transaction so stored history anchors re-anchor through
+    // local edits — same for a fresh state as for a rebound parked one.
+    const locationTracking =
+      stateKey === undefined
+        ? []
+        : EditorView.updateListener.of((update) => {
+            if (update.docChanged) notifyEditorMapped(stateKey, update.changes);
+          });
+    const extensions = [mounted.extensions, displayCtl.extension(), locationTracking];
 
     const view = new EditorView({
       parent: host,
@@ -180,6 +193,9 @@ export function useCodeMirrorView({
         : { scrollTo: parked.scrollSnapshot })
     });
     viewRef.current = view;
+    // The live-view registry is what lets navigation history capture and
+    // restore this editor's position while it is the one on screen.
+    if (stateKey !== undefined) registerEditorView(stateKey, view);
 
     // Undo/redo buttons in the header act on this view, keyed by the tab id
     // the shell passed as `stateKey`; `mounted.commands` adds per-editor
@@ -206,6 +222,7 @@ export function useCodeMirrorView({
     return () => {
       unregisterCommands?.();
       if (stateKey !== undefined) {
+        unregisterEditorView(stateKey, view);
         // Scroll position is DOM state rather than editor state, so it has to
         // be taken before the view goes — as a scrollSnapshot, which survives
         // the layout reflow a remount can cause.

@@ -5,6 +5,11 @@ import { extractHeadings, type Heading } from "./outlineModel";
 type OutlinePanelProps = {
   /** Current Markdown document contents, or null when no note is active. */
   readonly contents: string | null;
+  /**
+   * Jumps to a heading's 1-based line in the active document through shell
+   * history. Omitted chromes get a read-only outline.
+   */
+  readonly onNavigate?: (line: number) => void;
 };
 
 type OutlineNode = {
@@ -13,12 +18,12 @@ type OutlineNode = {
 };
 
 /**
- * Read-only heading inspector for the active Markdown document.
+ * Heading inspector for the active Markdown document.
  *
- * Headings render as plain rows, not navigation controls — this inspector
- * never mutates the document or owning editor state.
+ * Rows are plain text until the chrome supplies `onNavigate`; with one they
+ * become jump buttons that record a location-history visit.
  */
-export function OutlinePanel({ contents }: OutlinePanelProps) {
+export function OutlinePanel({ contents, onNavigate }: OutlinePanelProps) {
   if (contents === null) {
     return <Unavailable title="No note selected" description="Open a Markdown note to view its headings." />;
   }
@@ -30,7 +35,7 @@ export function OutlinePanel({ contents }: OutlinePanelProps) {
 
   return (
     <nav data-phone-scroll-clearance className="flex min-h-0 flex-1 flex-col overflow-y-auto p-2" aria-label="Note outline">
-      <OutlineList nodes={buildOutlineTree(headings)} />
+      <OutlineList nodes={buildOutlineTree(headings)} onNavigate={onNavigate} />
     </nav>
   );
 }
@@ -57,21 +62,37 @@ function buildOutlineTree(headings: readonly Heading[]): readonly OutlineNode[] 
   return root.children;
 }
 
+const ROW_CLASS =
+  "w-full rounded px-2 py-1 text-left text-xs leading-relaxed text-foreground pointer-coarse:min-h-11 pointer-coarse:flex pointer-coarse:items-center pointer-coarse:text-sm pointer-coarse:py-2";
+
 function OutlineList({
   nodes,
-  nested = false
+  nested = false,
+  onNavigate
 }: {
   readonly nodes: readonly OutlineNode[];
   readonly nested?: boolean;
+  readonly onNavigate?: (line: number) => void;
 }) {
   return (
     <ul className={cn("m-0 list-none space-y-0.5 p-0", nested && "ml-3 border-l border-border pl-2")}>
       {nodes.map((node) => (
         <li key={`${node.heading.line}-${node.heading.text}`}>
-          <div className="w-full rounded px-2 py-1 text-left text-xs leading-relaxed text-foreground pointer-coarse:min-h-11 pointer-coarse:flex pointer-coarse:items-center pointer-coarse:text-sm pointer-coarse:py-2">
-            {node.heading.text}
-          </div>
-          {node.children.length > 0 && <OutlineList nodes={node.children} nested />}
+          {onNavigate ? (
+            <button
+              type="button"
+              className={cn(ROW_CLASS, "cursor-pointer border-0 bg-transparent font-inherit hover:bg-secondary focus-visible:outline-1 focus-visible:outline-ring")}
+              title={`Go to ${node.heading.text}`}
+              onClick={() => onNavigate(node.heading.line)}
+            >
+              {node.heading.text}
+            </button>
+          ) : (
+            <div className={ROW_CLASS}>
+              {node.heading.text}
+            </div>
+          )}
+          {node.children.length > 0 && <OutlineList nodes={node.children} nested onNavigate={onNavigate} />}
         </li>
       ))}
     </ul>

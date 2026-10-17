@@ -511,8 +511,8 @@ describe("PhoneShell navigation", () => {
     expect(newNoteMenu(host)).toBeNull();
   });
 
-  it("Open most recent note restores the last open note's own tab", async () => {
-    const { host, shell } = await renderWithShell();
+  it("Open most recent note reopens the last open note's own tab", async () => {
+    const { host, shell } = await renderWithShell({ restoredWorkspacePath: "/vault" });
     await act(async () => shell().openMarkdownDocument("/vault", "note.md"));
     expect(noteTitleVisible(host)).toBe(true);
 
@@ -592,7 +592,7 @@ describe("PhoneShell navigation", () => {
   });
 
   it("offers the previous distinct note while viewing a note, toggling A/B", async () => {
-    const { host, shell } = await renderWithShell();
+    const { host, shell } = await renderWithShell({ restoredWorkspacePath: "/vault" });
     await act(async () => shell().openMarkdownDocument("/vault", "a.md"));
     await act(async () => shell().openMarkdownDocument("/vault", "b.md"));
     expect(noteTitle(host)?.value).toBe("b");

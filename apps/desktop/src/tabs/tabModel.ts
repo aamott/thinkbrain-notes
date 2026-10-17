@@ -1,5 +1,25 @@
 import type { Tab, TabKind, TabResource } from "@thinkbrain/core";
 import { inferTabKind } from "@thinkbrain/core";
+import type { ChangeDesc } from "@codemirror/state";
+
+import {
+  dropTabVisits,
+  emptyTabHistory,
+  findVisit,
+  mapVisitLocations,
+  recordVisit,
+  resetHistory as resetTabHistoryEntries,
+  retargetVisits,
+  setVisitLocation,
+  type DesktopTabHistory,
+  type EditorLocation,
+  type HistoryVisit
+} from "./tabHistory";
+
+// The history model lives in tabHistory.ts; re-exported so shell code has a
+// single import surface for everything visit-shaped.
+export { currentVisit, findVisit } from "./tabHistory";
+export type { EditorLocation } from "./tabHistory";
 
 export interface DesktopTab extends Tab {
   readonly kind: TabKind;
@@ -52,21 +72,6 @@ interface CloseRequest {
   readonly tabId: string;
 }
 
-/**
- * Tab-activation history for title-bar Back/Forward, in browser order.
- *
- * `entries[cursor]` is the visit the user is on — normally the active tab.
- * Entries before the cursor are the Back stack, entries after it the Forward
- * stack. A fresh activation truncates the forward tail, matching browser
- * history. Entries name tab ids, so a retarget rewrites them in place and a
- * close scrubs them — Back can never land on a tab that no longer exists.
- */
-interface DesktopTabHistory {
-  readonly entries: readonly string[];
-  /** Index of the current visit; `-1` while nothing has been activated. */
-  readonly cursor: number;
-}
-
 export interface DesktopTabState {
   readonly tabs: readonly DesktopTab[];
   readonly activeTabId: string | null;
@@ -100,6 +105,36 @@ export type DesktopTabAction =
   | { readonly type: "cancelClose"; readonly tabId: string }
   | { readonly type: "goBack" }
   | { readonly type: "goForward" }
+  /**
+   * Jumps within the active tab's document — an outline heading, an anchor.
+   * Records a fresh visit for the same tab carrying the target position.
+   */
+  | { readonly type: "navigateToLocation"; readonly location: EditorLocation }
+  /**
+   * The position the user is leaving, folded into the visit named `visitId`
+   * (the cursor's visit when the action was dispatched — batched navigations
+   * can move it before the reducer runs). `tabId` optionally guards against
+   * filing a capture under a visit since retargeted to another tab.
+   */
+  | {
+      readonly type: "setVisitLocation";
+      readonly visitId: number;
+      readonly location: EditorLocation;
+      readonly tabId?: string;
+    }
+  /** A transaction in `tabId`'s editor; stored positions map through it. */
+  | { readonly type: "mapLocations"; readonly tabId: string; readonly changes: ChangeDesc }
+  /**
+   * Lands on a recorded visit by id without recording — a revisit, not a new
+   * visit. `placement` decides how an absent destination rejoins the strip:
+   * omitted keeps the displaced-preview refill, while `"replace-active"`
+   * takes over the tab in use — the phone's always-one-surface policy.
+   */
+  | {
+      readonly type: "restoreVisit";
+      readonly visitId: number;
+      readonly placement?: TabOpenPlacement;
+    }
   /** A workspace switch rebases history onto the surviving active tab. */
   | { readonly type: "resetHistory" }
   /** The file a tab is showing was renamed or moved, here or outside the app. */
@@ -113,7 +148,7 @@ export const initialDesktopTabState: DesktopTabState = {
   tabs: [],
   activeTabId: null,
   closeRequest: null,
-  history: { entries: [], cursor: -1 }
+  history: emptyTabHistory
 };
 
 /** Creates a stable editor identity for a file within a workspace. */
@@ -320,7 +355,7 @@ export function desktopTabReducer(
           : {
               ...state,
               activeTabId: existing.id,
-              history: recordActivation(state.history, existing.id)
+              history: recordVisit(state.history, existing)
             };
       }
       const placement = action.placement ?? "new";
@@ -331,34 +366,68 @@ export function desktopTabReducer(
         return {
           ...swapped,
           activeTabId: moved.id,
-          history: recordActivation(swapped.history, moved.id)
+          history: recordVisit(swapped.history, moved)
         };
       }
+      // The visit must describe the tab as opened — the preview flag above
+      // all, because Back reaching a displaced preview visit refills the
+      // standing preview slot rather than spawning a new tab.
+      const tab = placement === "preview" ? { ...action.tab, preview: true } : action.tab;
       return {
         ...state,
-        tabs: [...state.tabs, placement === "preview" ? { ...action.tab, preview: true } : action.tab],
-        activeTabId: action.tab.id,
-        history: recordActivation(state.history, action.tab.id)
+        tabs: [...state.tabs, tab],
+        activeTabId: tab.id,
+        history: recordVisit(state.history, tab)
       };
     }
     case "keep":
       return updateTab(state, action.tabId, (tab) =>
         tab.preview ? { ...tab, preview: undefined } : tab
       );
-    case "activate":
-      return state.tabs.some((tab) => tab.id === action.tabId)
+    case "activate": {
+      const tab = state.tabs.find((candidate) => candidate.id === action.tabId);
+      return tab
         ? {
             ...state,
             activeTabId: action.tabId,
-            history: recordActivation(state.history, action.tabId)
+            history: recordVisit(state.history, tab)
           }
         : state;
+    }
     case "goBack":
       return stepHistory(state, -1);
     case "goForward":
       return stepHistory(state, 1);
-    case "resetHistory":
-      return resetTabHistory(state);
+    case "navigateToLocation": {
+      const active = state.tabs.find((tab) => tab.id === state.activeTabId);
+      if (!active) return state;
+      const history = recordVisit(state.history, active, action.location);
+      return history === state.history ? state : { ...state, history };
+    }
+    case "setVisitLocation": {
+      const history = setVisitLocation(
+        state.history,
+        action.visitId,
+        action.location,
+        action.tabId
+      );
+      return history === state.history ? state : { ...state, history };
+    }
+    case "mapLocations": {
+      const history = mapVisitLocations(state.history, action.tabId, action.changes);
+      return history === state.history ? state : { ...state, history };
+    }
+    case "restoreVisit": {
+      const found = findVisit(state.history, action.visitId);
+      return found === null
+        ? state
+        : restoreVisitAtIndex(state, found.index, action.placement);
+    }
+    case "resetHistory": {
+      const active = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
+      const history = resetTabHistoryEntries(state.history, active);
+      return history === state.history ? state : { ...state, history };
+    }
     case "setDirty": {
       // Compare against the normalized target so dispatching `isDirty: false`
       // on a tab whose `isDirty` is already `undefined` is a no-op. Without
@@ -414,16 +483,27 @@ function retargetTab(
   const editorId = editorTabId(from);
   const fileId = fileTabId(from);
   const existing = state.tabs.find((tab) => tab.id === editorId || tab.id === fileId);
-  if (!existing) return state;
-  const oldId = existing.id;
 
-  const moved: DesktopTab = {
-    ...(inferTabKind(to.relativePath) === "editor" ? createEditorTab(to) : createFileTab(to)),
+  // The replacement is built from the DESTINATION's inferred kind: renaming
+  // `note.md` to `note.txt` must hand the tab to the text-file renderer, not
+  // keep it a Markdown editor showing a `.txt` file.
+  const moved: DesktopTab =
+    inferTabKind(to.relativePath) === "editor" ? createEditorTab(to) : createFileTab(to);
+
+  // Every retained destination follows the rename — open or displaced — so
+  // Back to a renamed file lands on its new identity, even while nothing
+  // shows the file on screen.
+  const history = retargetVisits(state.history, new Set([editorId, fileId]), moved);
+  if (!existing) {
+    return history === state.history ? state : { ...state, history };
+  }
+
+  const movedWithFlags: DesktopTab = {
+    ...moved,
     ...(existing.isDirty ? { isDirty: existing.isDirty } : {}),
     ...(existing.preview ? { preview: existing.preview } : {})
   };
-
-  return replaceTabInPlace(state, oldId, moved);
+  return { ...replaceTabInPlace(state, existing.id, movedWithFlags), history };
 }
 
 /**
@@ -449,9 +529,12 @@ function reuseTargetId(
 
 /**
  * Swaps the tab at `oldId` for `moved`, keeping its strip position and
- * carrying everything keyed by the old id onto the new one: which tab is
- * selected, any close decision waiting on it, and every history visit —
- * Back must land on what the tab became, not on an id nothing answers to.
+ * carrying over which tab is selected and any close decision waiting on it.
+ *
+ * History is deliberately untouched here: preview/replace-active takeover is
+ * navigation, not close — the displaced tab's visits keep pointing at its
+ * retained descriptor so Back can reopen it. Renames rewrite visits
+ * separately through `retargetVisits`.
  */
 function replaceTabInPlace(
   state: DesktopTabState,
@@ -469,10 +552,7 @@ function replaceTabInPlace(
     tabs,
     activeTabId: state.activeTabId === oldId ? moved.id : state.activeTabId,
     closeRequest: state.closeRequest?.tabId === oldId ? { tabId: moved.id } : state.closeRequest,
-    history: {
-      entries: state.history.entries.map((id) => (id === oldId ? moved.id : id)),
-      cursor: state.history.cursor
-    }
+    history: state.history
   };
 }
 
@@ -500,118 +580,139 @@ function removeTab(state: DesktopTabState, tabId: string): DesktopTabState {
     ? tabs[index]?.id ?? tabs[index - 1]?.id ?? null
     : state.activeTabId;
 
-  // The closed tab's visits die with it. The cursor keeps pointing at the
-  // same *visit* — it shifts left by however many earlier entries died —
-  // rather than re-anchoring on the active tab's last occurrence, which would
-  // silently promote Forward visits into the Back stack when the user is
-  // sitting on an earlier visit of a repeated tab (`[A, B, A]`, cursor on the
-  // first A, close an unrelated tab: lastIndexOf would jump to the last A).
-  const entries = state.history.entries.filter((id) => id !== tabId);
+  // The closed tab's visits die with it — an explicit close must never be
+  // revisit. The cursor keeps pointing at the same *visit* — it shifts left
+  // by however many earlier entries died — rather than re-anchoring on the
+  // active tab's last occurrence, which would silently promote Forward
+  // visits into the Back stack when the user is sitting on an earlier visit
+  // of a repeated tab (`[A, B, A]`, cursor on the first A, close an unrelated
+  // tab: re-anchoring would jump to the last A).
+  const dropped = dropTabVisits(state.history, tabId);
+  let entries = dropped.entries;
+  let nextVisitId = state.history.nextVisitId;
   let cursor: number;
-  const currentVisit = state.history.entries[state.history.cursor];
-  if (currentVisit !== undefined && currentVisit !== tabId) {
-    let removedBefore = 0;
-    for (let index = 0; index < state.history.cursor; index += 1) {
-      if (state.history.entries[index] === tabId) removedBefore += 1;
-    }
-    cursor = state.history.cursor - removedBefore;
+  const currentEntry = state.history.entries[state.history.cursor];
+  if (currentEntry !== undefined && currentEntry.tab.id !== tabId) {
+    cursor = state.history.cursor - dropped.removedBeforeCursor;
   } else {
     // The visit the user was on died with the closed tab (or there was none):
     // re-anchor on the most recent visit of the tab left active, so Back
     // never lands on the tab that was just closed.
-    cursor = activeTabId === null ? -1 : entries.lastIndexOf(activeTabId);
+    cursor = activeTabId === null ? -1 : lastVisitIndexOfTab(entries, activeTabId);
     // Every activated tab has an entry; if state arrived without one (a
     // reducer-external tab list, say a test fixture), record it now.
     if (cursor < 0 && activeTabId !== null) {
-      entries.push(activeTabId);
-      cursor = entries.length - 1;
+      const active = tabs.find((tab) => tab.id === activeTabId);
+      if (active) {
+        entries = [...entries, { id: nextVisitId, tab: active }];
+        nextVisitId += 1;
+        cursor = entries.length - 1;
+      }
     }
   }
 
-  return { tabs, activeTabId, closeRequest: null, history: { entries, cursor } };
+  return {
+    tabs,
+    activeTabId,
+    closeRequest: null,
+    history: { entries, cursor, nextVisitId }
+  };
 }
 
-/**
- * Appends `tabId` as the current visit, truncating anything Forward could
- * have revisited — browser-history semantics. Re-activating the tab already
- * at the cursor is a no-op so repeated dispatches do not stack duplicates.
- */
-function recordActivation(history: DesktopTabHistory, tabId: string): DesktopTabHistory {
-  if (history.entries[history.cursor] === tabId) return history;
-  const entries = [...history.entries.slice(0, history.cursor + 1), tabId];
-  return { entries, cursor: entries.length - 1 };
-}
-
-/**
- * The index of the nearest visit past the cursor — before it for `direction`
- * `-1`, after it for `1` — that still names an open tab. `-1` when there is
- * nothing live to move to.
- */
-function liveEntryIndex(state: DesktopTabState, direction: -1 | 1): number {
-  const { entries, cursor } = state.history;
-  for (let index = cursor + direction; index >= 0 && index < entries.length; index += direction) {
-    if (state.tabs.some((tab) => tab.id === entries[index])) return index;
+/** The index of `tabId`'s most recent visit in `entries`, or `-1`. */
+function lastVisitIndexOfTab(entries: readonly HistoryVisit[], tabId: string): number {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (entries[index]!.tab.id === tabId) return index;
   }
   return -1;
 }
 
-/** Whether the title bar's Back button has a previous tab to return to. */
+/**
+ * The index Back (`direction` `-1`) or Forward (`1`) would move the cursor
+ * to — plain bounds, because every retained visit is restorable: explicit
+ * closes scrub their visits, and displaced ones reopen from the descriptor
+ * they carry.
+ */
+function adjacentVisitIndex(state: DesktopTabState, direction: -1 | 1): number {
+  const index = state.history.cursor + direction;
+  return index >= 0 && index < state.history.entries.length ? index : -1;
+}
+
+/** Whether the title bar's Back button has an earlier visit to return to. */
 export function canGoBackInTabs(state: DesktopTabState): boolean {
-  return liveEntryIndex(state, -1) >= 0;
+  return adjacentVisitIndex(state, -1) >= 0;
 }
 
 /** Whether the title bar's Forward button has a later visit to re-walk. */
 export function canGoForwardInTabs(state: DesktopTabState): boolean {
-  return liveEntryIndex(state, 1) >= 0;
+  return adjacentVisitIndex(state, 1) >= 0;
 }
 
 /**
- * The open tab Back (`direction` `-1`) or Forward (`1`) would land on, or
- * `null` when there is nowhere to go — the same live-entry scan the buttons
- * and `stepHistory` share, so a destination tooltip can never promise a
- * visit the action would skip.
+ * The tab descriptor Back (`direction` `-1`) or Forward (`1`) would land on —
+ * the visit's retained descriptor, which still names the destination even
+ * when its tab was displaced and nothing shows it right now — or `null` when
+ * there is nowhere to go.
  */
 export function historyDestination(state: DesktopTabState, direction: -1 | 1): DesktopTab | null {
-  const index = liveEntryIndex(state, direction);
-  if (index < 0) return null;
-  const tabId = state.history.entries[index];
-  return state.tabs.find((tab) => tab.id === tabId) ?? null;
+  const index = adjacentVisitIndex(state, direction);
+  return index < 0 ? null : state.history.entries[index]!.tab;
 }
 
 /**
- * Moves the history cursor and activates the tab it lands on, without
- * recording: history navigation is a revisit, not a new visit — recording it
- * would truncate the Forward tail it just walked out of.
+ * Lands the cursor on `index`'s visit without recording: history traversal
+ * is a revisit, not a new visit — recording it would truncate the Forward
+ * tail it just walked out of.
+ *
+ * The visit's tab is reactivated when open; when it was displaced (a preview
+ * or replace-active takeover, which is navigation rather than close) it
+ * reopens from the descriptor it carries. An absent destination refills the
+ * standing preview slot by default — there is only ever one preview tab —
+ * or, under `placement: "replace-active"`, the tab in use — the phone's
+ * always-one-surface restore. Either way a dirty or chrome tab is never
+ * displaced to restore a visit: nothing reusable means the destination
+ * simply appends.
  */
-function stepHistory(state: DesktopTabState, direction: -1 | 1): DesktopTabState {
-  const index = liveEntryIndex(state, direction);
-  if (index < 0) return state;
-  const tabId = state.history.entries[index];
-  if (tabId === undefined) return state;
+function restoreVisitAtIndex(
+  state: DesktopTabState,
+  index: number,
+  placement?: TabOpenPlacement
+): DesktopTabState {
+  const visit = state.history.entries[index];
+  if (!visit) return state;
+  const destination = visit.tab;
+  if (state.activeTabId === destination.id && state.history.cursor === index) return state;
+
+  let next = state;
+  if (!next.tabs.some((tab) => tab.id === destination.id)) {
+    const reuseId =
+      placement === "replace-active"
+        ? reuseTargetId(next, "replace-active")
+        : destination.preview === true
+          ? (next.tabs.find((tab) => tab.preview === true && !tab.isDirty)?.id ?? null)
+          : null;
+    next =
+      reuseId !== null
+        ? // A replace-active landing makes the destination permanent, same as
+          // a replace-active open does.
+          replaceTabInPlace(next, reuseId, {
+            ...destination,
+            preview: placement === "replace-active" ? undefined : destination.preview
+          })
+        : { ...next, tabs: [...next.tabs, destination] };
+  }
   return {
-    ...state,
-    activeTabId: tabId,
-    history: { entries: state.history.entries, cursor: index }
+    ...next,
+    activeTabId: destination.id,
+    history: { ...next.history, cursor: index }
   };
 }
 
 /**
- * Rebases history on the active tab for a workspace switch: Back must never
- * resurrect a previous vault's visits. Already-rebased state is returned
- * unchanged — this also fires on mount while the reducer's initial state is
- * already empty.
+ * Moves the history cursor and activates the tab it lands on, without
+ * recording — see {@link restoreVisitAtIndex}.
  */
-function resetTabHistory(state: DesktopTabState): DesktopTabState {
-  const active = state.activeTabId !== null && state.tabs.some((tab) => tab.id === state.activeTabId)
-    ? state.activeTabId
-    : null;
-  const entries = active === null ? [] : [active];
-  if (
-    state.history.cursor === entries.length - 1 &&
-    state.history.entries.length === entries.length &&
-    state.history.entries.every((id, index) => id === entries[index])
-  ) {
-    return state;
-  }
-  return { ...state, history: { entries, cursor: entries.length - 1 } };
+function stepHistory(state: DesktopTabState, direction: -1 | 1): DesktopTabState {
+  const index = adjacentVisitIndex(state, direction);
+  return index < 0 ? state : restoreVisitAtIndex(state, index);
 }

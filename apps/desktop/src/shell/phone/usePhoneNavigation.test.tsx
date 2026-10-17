@@ -4,7 +4,11 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { usePhoneNavigation, type PhoneNavigation } from "./usePhoneNavigation";
+import {
+  usePhoneNavigation,
+  type PhoneHistoryIntegration,
+  type PhoneNavigation
+} from "./usePhoneNavigation";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -16,10 +20,13 @@ afterEach(async () => {
   container = null;
 });
 
-const renderNav = async (workspace: string | null): Promise<() => PhoneNavigation> => {
+const renderNav = async (
+  workspace: string | null,
+  integration?: PhoneHistoryIntegration
+): Promise<() => PhoneNavigation> => {
   const box: { current: PhoneNavigation | null } = { current: null };
   const Probe = ({ ws }: { readonly ws: string | null }) => {
-    box.current = usePhoneNavigation(ws);
+    box.current = usePhoneNavigation(ws, integration);
     return null;
   };
   container = document.createElement("div");
@@ -177,6 +184,53 @@ describe("usePhoneNavigation", () => {
     expect(box.current?.route).toEqual({ kind: "files" });
     expect(historyDepth()).toBe(0);
     expect(box.current?.canGoBack).toBe(false);
+    expect(box.current?.canGoForward).toBe(false);
+  });
+
+  it("a stale same-workspace entry from before A→B→A reads as foreign", async () => {
+    const box: { current: PhoneNavigation | null } = { current: null };
+    const Probe = ({ ws }: { readonly ws: string | null }) => {
+      box.current = usePhoneNavigation(ws);
+      return null;
+    };
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+
+    // Capture a panel entry and a tab entry from this session — a panel has
+    // no visit id, so only the session token tells it from a stale ancestor.
+    await act(async () => box.current?.push({ kind: "panel", panel: "search" }));
+    const stalePanel = window.history.state;
+    await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b", visitId: 9 }));
+    const staleTab = window.history.state;
+
+    // A→B→A: each reset mints a new session, so the first session's vault-A
+    // entries can never validate again even though the workspace matches.
+    await act(async () => {
+      root?.render(<Probe ws="/vault-b" />);
+    });
+    await act(async () => {
+      root?.render(<Probe ws="/vault-a" />);
+    });
+    expect(box.current?.route).toEqual({ kind: "files" });
+
+    // Raw pops resurfacing the old session's entries land safe at Home —
+    // never the old panel/tab and never its stale depth offsets.
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: staleTab }));
+    });
+    expect(box.current?.route).toEqual({ kind: "files" });
+    expect(historyDepth()).toBe(0);
+    expect(box.current?.canGoForward).toBe(false);
+
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: stalePanel }));
+    });
+    expect(box.current?.route).toEqual({ kind: "files" });
+    expect(historyDepth()).toBe(0);
     expect(box.current?.canGoForward).toBe(false);
   });
 });

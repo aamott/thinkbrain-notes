@@ -86,7 +86,7 @@ describe("file.renamed retargeting", () => {
       tabs: [tab],
       activeTabId: tab.id,
       closeRequest: null,
-      history: { entries: [tab.id], cursor: 0 }
+      history: { entries: [{ id: 1, tab }], cursor: 0, nextVisitId: 2 }
     });
 
     await act(async () => {
@@ -109,7 +109,7 @@ describe("file.renamed retargeting", () => {
       tabs: [tab],
       activeTabId: tab.id,
       closeRequest: null,
-      history: { entries: [tab.id], cursor: 0 }
+      history: { entries: [{ id: 1, tab }], cursor: 0, nextVisitId: 2 }
     });
 
     await act(async () => {
@@ -126,6 +126,40 @@ describe("file.renamed retargeting", () => {
     expect(moveDocument).toHaveBeenCalledWith(editorTabId(from), editorTabId(to));
   });
 
+  it("rewrites a retained displaced visit when its file is renamed", async () => {
+    // A preview takeover keeps the displaced note's visit — the descriptor
+    // still names the old path even though no open tab shows it.
+    const noteA = { ...createEditorTab({ rootPath: ROOT, relativePath: "a.md" }), preview: true };
+    const noteB = { ...createEditorTab({ rootPath: ROOT, relativePath: "b.md" }), preview: true };
+    const { moveDocument, dispatchTabs, tabStateRef } = await mount({
+      tabs: [noteB],
+      activeTabId: noteB.id,
+      closeRequest: null,
+      history: { entries: [{ id: 1, tab: noteA }, { id: 2, tab: noteB }], cursor: 1, nextVisitId: 3 }
+    });
+
+    await act(async () => {
+      appEvents.emit("note.renamed", {
+        rootPath: ROOT,
+        oldRelativePath: "a.md",
+        newRelativePath: "a-renamed.md"
+      });
+    });
+
+    const from = { rootPath: ROOT, relativePath: "a.md" };
+    const to = { rootPath: ROOT, relativePath: "a-renamed.md" };
+    const moved = createEditorTab(to);
+    // The retarget still reaches the reducer — the early return for a
+    // missing source tab only skips the document move.
+    expect(dispatchTabs).toHaveBeenCalledWith({ type: "retarget", from, to });
+    expect(moveDocument).not.toHaveBeenCalled();
+    // The retained visit now names the new path — Back lands where the file
+    // lives, not on a path nothing is at.
+    expect(tabStateRef.current.history.entries[0]!.tab.id).toBe(moved.id);
+    await act(async () => dispatchTabs({ type: "goBack" }));
+    expect(tabStateRef.current.activeTabId).toBe(moved.id);
+  });
+
   it("never feeds file.renamed into the note-change planner", async () => {
     // A dirty file tab retargeted by file.renamed must keep its edits — no
     // conflict flag, no reload — because generic file events are not note
@@ -135,7 +169,7 @@ describe("file.renamed retargeting", () => {
       tabs: [tab],
       activeTabId: tab.id,
       closeRequest: null,
-      history: { entries: [tab.id], cursor: 0 }
+      history: { entries: [{ id: 1, tab }], cursor: 0, nextVisitId: 2 }
     });
 
     await act(async () => {
@@ -157,7 +191,7 @@ describe("file.renamed retargeting", () => {
       tabs: [tab],
       activeTabId: tab.id,
       closeRequest: null,
-      history: { entries: [tab.id], cursor: 0 }
+      history: { entries: [{ id: 1, tab }], cursor: 0, nextVisitId: 2 }
     });
 
     // An md→txt rename crosses the Markdown boundary: the adapter emits
@@ -188,7 +222,7 @@ describe("file.renamed retargeting", () => {
       tabs: [tab],
       activeTabId: tab.id,
       closeRequest: null,
-      history: { entries: [tab.id], cursor: 0 }
+      history: { entries: [{ id: 1, tab }], cursor: 0, nextVisitId: 2 }
     });
 
     await act(async () => {

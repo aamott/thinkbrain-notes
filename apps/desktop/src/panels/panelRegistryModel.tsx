@@ -56,6 +56,12 @@ export interface RightPanelContext {
   readonly documentPath: string | null;
   /** Requests shell-owned navigation to another note. */
   readonly onOpenNote: (relativePath: string) => void;
+  /**
+   * Jumps to a 1-based line in the active document through shell history —
+   * an outline heading click. Optional: a chrome that cannot offer in-file
+   * navigation leaves it out and the outline renders read-only rows.
+   */
+  readonly onNavigate?: (line: number) => void;
   /** Opens a read-only comparison of a file with one recorded version. */
   readonly onCompareVersion: (notePath: string, changeId: string, versionAt?: number | null) => void;
   /** Puts a recorded version back, saving an open dirty file first. */
@@ -340,7 +346,9 @@ export const builtInDesktopPanels: readonly (LeftPanelContribution | RightPanelC
     icon: "outline",
     side: "right",
     keepMounted: true,
-    factory: ({ documentContents }) => <OutlinePanel contents={documentContents} />
+    factory: ({ documentContents, onNavigate }) => (
+      <OutlinePanel contents={documentContents} onNavigate={onNavigate} />
+    )
   },
   {
     id: "backlinks",
