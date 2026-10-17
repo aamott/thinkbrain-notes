@@ -32,6 +32,8 @@ const noteB = createEditorTab({ rootPath: "/notes", relativePath: "b.md" });
 interface ProbeHandle {
   readonly state: DesktopTabState;
   readonly dispatch: (action: DesktopTabAction) => void;
+  /** The raw reducer dispatch — bookkeeping that never bumps the request seq. */
+  readonly rawDispatch: (action: DesktopTabAction) => void;
   readonly api: LocationHistoryApi;
   readonly loadDocumentIntoView: ReturnType<typeof vi.fn>;
 }
@@ -65,7 +67,8 @@ function StaleDocSync({
  */
 function Probe({
   sinkRef,
-  sync
+  sync,
+  guard
 }: {
   readonly sinkRef: { current?: ProbeHandle };
   readonly sync?: {
@@ -73,13 +76,16 @@ function Probe({
     readonly tabId: string;
     readonly changes: ChangeDesc;
   };
+  readonly guard?: () => Promise<boolean>;
 }) {
   const [tabState, dispatchTabs] = useReducer(desktopTabReducer, initialDesktopTabState);
   const stateRef = useRef(tabState);
   useEffect(() => {
     stateRef.current = tabState;
   });
-  const dispatch = useHistoryDispatch(dispatchTabs, stateRef);
+  const guardRef = useRef<(() => Promise<boolean>) | null>(guard ?? null);
+  const seqRef = useRef(0);
+  const dispatch = useHistoryDispatch(dispatchTabs, stateRef, guardRef, seqRef);
   const [loadDocumentIntoView] = useState(() => vi.fn());
   const api = useLocationHistory({
     tabState,
@@ -89,7 +95,7 @@ function Probe({
     loadDocumentIntoView
   });
   useEffect(() => {
-    sinkRef.current = { state: tabState, dispatch, api, loadDocumentIntoView };
+    sinkRef.current = { state: tabState, dispatch, rawDispatch: dispatchTabs, api, loadDocumentIntoView };
   });
   return sync ? (
     <StaleDocSync fire={sync.when(tabState)} tabId={sync.tabId} changes={sync.changes} />
@@ -101,13 +107,14 @@ let container: HTMLDivElement | null = null;
 const views: { key: string; view: EditorView }[] = [];
 
 const mountProbe = async (
-  sync?: Parameters<typeof Probe>[0]["sync"]
+  sync?: Parameters<typeof Probe>[0]["sync"],
+  guard?: () => Promise<boolean>
 ): Promise<{ current?: ProbeHandle }> => {
   const sinkRef: { current?: ProbeHandle } = {};
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root!.render(<Probe sinkRef={sinkRef} sync={sync} />));
+  await act(async () => root!.render(<Probe sinkRef={sinkRef} sync={sync} guard={guard} />));
   return sinkRef;
 };
 
@@ -274,7 +281,9 @@ describe("useLocationHistory", () => {
 
     // Back restores the in-file visit (caret + viewport landed), so jumping
     // to that same line while B waits Forward is a no-op too.
-    await act(async () => sinkRef.current!.dispatch({ type: "open", tab: noteB }));
+    await act(async () =>
+      sinkRef.current!.dispatch({ type: "open", tab: noteB, placement: "replace-active" })
+    );
     await act(async () => {
       sinkRef.current!.dispatch({ type: "goBack" });
       sinkRef.current!.api.navigateToLine(2);
@@ -347,9 +356,9 @@ describe("useLocationHistory", () => {
 
     await act(async () => {
       sinkRef.current!.dispatch({ type: "open", tab: noteA });
-      sinkRef.current!.dispatch({ type: "open", tab: noteB });
+      sinkRef.current!.dispatch({ type: "open", tab: noteB, placement: "replace-active" });
       sinkRef.current!.dispatch({ type: "goBack" });
-      // Re-activating the tab already on screen records nothing — Forward
+      // Re-opening the view already on screen records nothing — Forward
       // to B must survive.
       sinkRef.current!.dispatch({ type: "open", tab: noteA });
       sinkRef.current!.dispatch({ type: "goForward" });
@@ -484,5 +493,69 @@ describe("useLocationHistory", () => {
     });
     expect(view.state.selection.main.anchor).toBe(8);
     expect(focusCalls()).toBe(focusWhenCovered + 1);
+  });
+});
+
+describe("the deferred traversal guard", () => {
+  const noteC = createEditorTab({ rootPath: "/notes", relativePath: "c.md" });
+
+  it("traverses once the save resolves — its own bookkeeping is not a move", async () => {
+    let release: ((ok: boolean) => void) | null = null;
+    const guard = () =>
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      });
+    const sinkRef = await mountProbe(undefined, guard);
+
+    await act(async () => {
+      sinkRef.current!.dispatch({ type: "open", tab: noteA });
+      sinkRef.current!.dispatch({ type: "open", tab: noteB, placement: "replace-active" });
+      sinkRef.current!.rawDispatch({ type: "setDirty", tabId: noteB.id, isDirty: true });
+    });
+    const seqBefore = sinkRef.current!.state;
+    await act(async () => sinkRef.current!.dispatch({ type: "goBack" }));
+    // Guard still pending: nothing moved.
+    expect(sinkRef.current!.state.activeTabId).toBe(noteB.id);
+
+    // The save's own setDirty(false) commit lands mid-await — a new state
+    // object, but the same departure. The hop must still complete.
+    await act(async () => {
+      sinkRef.current!.rawDispatch({ type: "setDirty", tabId: noteB.id, isDirty: false });
+      release?.(true);
+    });
+
+    const state = sinkRef.current!.state;
+    expect(state).not.toBe(seqBefore);
+    expect(state.activeTabId).toBe(noteA.id);
+    expect(state.history.cursor).toBe(0);
+  });
+
+  it("abandons the hop when a newer navigation intervened", async () => {
+    let release: ((ok: boolean) => void) | null = null;
+    const guard = () =>
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      });
+    const sinkRef = await mountProbe(undefined, guard);
+
+    await act(async () => {
+      sinkRef.current!.dispatch({ type: "open", tab: noteA });
+      sinkRef.current!.dispatch({ type: "open", tab: noteC });
+      sinkRef.current!.dispatch({ type: "activate", tabId: noteA.id });
+      sinkRef.current!.dispatch({ type: "open", tab: noteB, placement: "replace-active" });
+      sinkRef.current!.rawDispatch({ type: "setDirty", tabId: noteB.id, isDirty: true });
+    });
+    await act(async () => sinkRef.current!.dispatch({ type: "goBack" }));
+
+    // A deliberate tab switch while the save runs: the stale hop must not
+    // come back and displace C when the guard finally answers.
+    await act(async () => {
+      sinkRef.current!.dispatch({ type: "activate", tabId: noteC.id });
+      release?.(true);
+    });
+
+    const state = sinkRef.current!.state;
+    expect(state.activeTabId).toBe(noteC.id);
+    expect(state.tabs.map((tab) => tab.id)).toEqual([noteB.id, noteC.id]);
   });
 });

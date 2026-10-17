@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   canGoBackInTabs,
-  canGoForwardInTabs,
   createEditorTab,
   createFileTab,
   createNewTab,
@@ -12,8 +11,10 @@ import {
   initialDesktopTabState,
   isDocumentBackedKind,
   restoreBreadcrumbSegments,
+  retargetIdAllocator,
   tabAccessibleName,
-  versionDiffTabId
+  versionDiffTabId,
+  type DesktopTabState
 } from "./tabModel";
 
 const welcome = createStaticTab("settings", "Settings");
@@ -244,11 +245,11 @@ describe("desktopTabReducer", () => {
   });
 
   /**
-   * Renaming one open note over another leaves a single file, so it has to
-   * leave a single tab — otherwise two tabs share an id and the shell keys its
-   * document state by that id.
+   * Renaming one open note over another leaves a single file under two
+   * trails — both views survive, but the moved one mints a collision view id
+   * since the shell keys its document state by that id.
    */
-  it("replaces the tab already sitting at the destination", () => {
+  it("keeps both trails' views when a rename lands on an open file", () => {
     const state = reduce(
       { type: "open", tab: firstNote },
       { type: "open", tab: secondNote },
@@ -259,8 +260,57 @@ describe("desktopTabReducer", () => {
       }
     );
 
-    expect(state.tabs.map((tab) => tab.id)).toEqual([secondNote.id]);
+    expect(state.tabs.map((tab) => tab.id)).toEqual([
+      `${secondNote.id}:view:${state.history.nextVisitId}`,
+      secondNote.id
+    ]);
+    expect(state.tabs[0]?.resource?.relativePath).toBe("second.md");
     expect(state.activeTabId).toBe(secondNote.id);
+  });
+
+  /**
+   * The view-id map a rename produces must not depend on the order callers
+   * ask — the shell moves documents in tab order while the reducer walks
+   * retained visits, which can interleave differently. Here B holds its
+   * canonical id while A survives in history under both its canonical id
+   * and a collision view id, with the visits in reverse id order.
+   */
+  it("maps renamed views to the same ids whatever order tabs and visits come in", () => {
+    const noteA = createEditorTab({ rootPath: "/notes", relativePath: "a.md" });
+    const noteB = createEditorTab({ rootPath: "/notes", relativePath: "b.md" });
+    const dupA = { ...noteA, id: `${noteA.id}:view:4` };
+    const state: DesktopTabState = {
+      tabs: [noteB],
+      activeTabId: noteB.id,
+      closeRequest: null,
+      history: {
+        entries: [
+          { id: 1, tab: dupA },
+          { id: 2, tab: noteA },
+          { id: 3, tab: noteB }
+        ],
+        cursor: 2,
+        nextVisitId: 4
+      }
+    };
+    const from = { rootPath: "/notes", relativePath: "a.md" };
+    const to = { rootPath: "/notes", relativePath: "b.md" };
+
+    const movedId = retargetIdAllocator(state, from, to);
+    // Sorted pass: `a.md` maps first — canonical B is held, so it mints
+    // `b.md:view:4`; `a.md:view:4` keeps its `:view:4` suffix, finds that
+    // id now taken, and mints `b.md:view:5`.
+    expect(movedId(noteA.id)).toBe(`${noteB.id}:view:4`);
+    expect(movedId(dupA.id)).toBe(`${noteB.id}:view:5`);
+
+    // The reducer's descriptors must land on exactly those ids — this is the
+    // invariant the shell's moveDocument relies on.
+    const moved = desktopTabReducer(state, { type: "retarget", from, to });
+    expect(moved.history.entries.map((entry) => entry.tab.id)).toEqual([
+      movedId(dupA.id),
+      movedId(noteA.id),
+      noteB.id
+    ]);
   });
 
   it("carries a pending close decision over to the moved tab", () => {
@@ -284,196 +334,6 @@ describe("desktopTabReducer", () => {
 
     expect(desktopTabReducer(state, { type: "activate", tabId: "missing" })).toBe(state);
     expect(desktopTabReducer(state, { type: "requestClose", tabId: "missing" })).toBe(state);
-  });
-});
-
-describe("tab activation history", () => {
-  const noteA = createEditorTab({ rootPath: "/notes", relativePath: "a.md" });
-  const noteB = createEditorTab({ rootPath: "/notes", relativePath: "b.md" });
-  const noteC = createEditorTab({ rootPath: "/notes", relativePath: "c.md" });
-
-  it("starts with nowhere to go, then records each activation in order", () => {
-    expect(canGoBackInTabs(initialDesktopTabState)).toBe(false);
-    expect(canGoForwardInTabs(initialDesktopTabState)).toBe(false);
-
-    const state = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "activate", tabId: noteA.id }
-    );
-
-    expect(state.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id, noteA.id]);
-    expect(state.history.cursor).toBe(2);
-    expect(canGoBackInTabs(state)).toBe(true);
-    expect(canGoForwardInTabs(state)).toBe(false);
-  });
-
-  it("re-activating the current tab adds no visit", () => {
-    const state = reduce(
-      { type: "open", tab: noteA },
-      { type: "activate", tabId: noteA.id },
-      { type: "activate", tabId: noteA.id }
-    );
-
-    expect(state.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id]);
-    expect(canGoBackInTabs(state)).toBe(false);
-  });
-
-  it("walks Back over earlier visits and Forward back up again", () => {
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "open", tab: noteC }
-    );
-
-    const back1 = desktopTabReducer(opened, { type: "goBack" });
-    expect(back1.activeTabId).toBe(noteB.id);
-    expect(canGoForwardInTabs(back1)).toBe(true);
-
-    const back2 = desktopTabReducer(back1, { type: "goBack" });
-    expect(back2.activeTabId).toBe(noteA.id);
-    expect(canGoBackInTabs(back2)).toBe(false);
-    // At the bottom of the stack Back is a no-op — same object, no churn.
-    expect(desktopTabReducer(back2, { type: "goBack" })).toBe(back2);
-
-    const forward = desktopTabReducer(back2, { type: "goForward" });
-    expect(forward.activeTabId).toBe(noteB.id);
-    const forward2 = desktopTabReducer(forward, { type: "goForward" });
-    expect(forward2.activeTabId).toBe(noteC.id);
-    expect(canGoForwardInTabs(forward2)).toBe(false);
-    expect(desktopTabReducer(forward2, { type: "goForward" })).toBe(forward2);
-  });
-
-  it("truncates the forward tail when a new activation follows a Back", () => {
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "goBack" },
-      { type: "open", tab: noteC }
-    );
-
-    // noteB's forward visit is gone; Forward stays disabled on the new tip.
-    expect(opened.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteC.id]);
-    expect(opened.activeTabId).toBe(noteC.id);
-    expect(canGoForwardInTabs(opened)).toBe(false);
-
-    const back = desktopTabReducer(opened, { type: "goBack" });
-    expect(back.activeTabId).toBe(noteA.id);
-  });
-
-  it("re-raising an already-open tab records a fresh visit", () => {
-    const state = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "open", tab: noteA }
-    );
-
-    expect(state.activeTabId).toBe(noteA.id);
-    expect(state.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id, noteA.id]);
-  });
-
-  it("scrubs a closed tab's visits and keeps Back on live tabs", () => {
-    // Visit A → B → C → B, then close B: both of B's visits die with it.
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "open", tab: noteC },
-      { type: "activate", tabId: noteB.id }
-    );
-    const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteB.id });
-
-    expect(closed.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteC.id]);
-    expect(closed.activeTabId).toBe(noteC.id);
-
-    const back = desktopTabReducer(closed, { type: "goBack" });
-    expect(back.activeTabId).toBe(noteA.id);
-    expect(canGoBackInTabs(back)).toBe(false);
-    // Forward must never resurrect the closed tab.
-    const forward = desktopTabReducer(back, { type: "goForward" });
-    expect(forward.activeTabId).toBe(noteC.id);
-    expect(canGoForwardInTabs(forward)).toBe(false);
-  });
-
-  it("keeps the cursor on its visit when an unrelated tab closes mid-history", () => {
-    // Visits [A, C, B, A], then three Backs land on the first A with a live
-    // forward tail ahead of it.
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteC },
-      { type: "open", tab: noteB },
-      { type: "activate", tabId: noteA.id },
-      { type: "goBack" },
-      { type: "goBack" },
-      { type: "goBack" }
-    );
-    expect(opened.activeTabId).toBe(noteA.id);
-
-    // Closing C must not move the cursor: Forward still walks B then A, the
-    // same future it had before the close. Re-anchoring by `lastIndexOf`
-    // would jump to the *last* A and flip the forward tail into the back
-    // stack — Back would walk visits that were in the user's future.
-    const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteC.id });
-
-    expect(closed.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id, noteA.id]);
-    expect(closed.activeTabId).toBe(noteA.id);
-    expect(canGoBackInTabs(closed)).toBe(false);
-    expect(canGoForwardInTabs(closed)).toBe(true);
-
-    const forward = desktopTabReducer(closed, { type: "goForward" });
-    expect(forward.activeTabId).toBe(noteB.id);
-    const forward2 = desktopTabReducer(forward, { type: "goForward" });
-    expect(forward2.activeTabId).toBe(noteA.id);
-    expect(canGoForwardInTabs(forward2)).toBe(false);
-  });
-
-  it("anchors the cursor on the survivor when the active tab closes", () => {
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "open", tab: noteC }
-    );
-    const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteC.id });
-
-    expect(closed.activeTabId).toBe(noteB.id);
-    expect(closed.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id]);
-    expect(closed.history.cursor).toBe(1);
-    expect(canGoForwardInTabs(closed)).toBe(false);
-
-    const back = desktopTabReducer(closed, { type: "goBack" });
-    expect(back.activeTabId).toBe(noteA.id);
-  });
-
-  it("follows a retargeted tab so Back lands on the file's new name", () => {
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "activate", tabId: noteA.id },
-      {
-        type: "retarget",
-        from: { rootPath: "/notes", relativePath: "b.md" },
-        to: { rootPath: "/notes", relativePath: "renamed.md" }
-      }
-    );
-    const moved = createEditorTab({ rootPath: "/notes", relativePath: "renamed.md" });
-
-    const back = desktopTabReducer(opened, { type: "goBack" });
-    expect(back.activeTabId).toBe(moved.id);
-  });
-
-  it("rebases on resetHistory, keeping only the active tab", () => {
-    const opened = reduce(
-      { type: "open", tab: noteA },
-      { type: "open", tab: noteB },
-      { type: "resetHistory" }
-    );
-
-    expect(opened.history.entries.map((entry) => entry.tab.id)).toEqual([noteB.id]);
-    expect(opened.history.cursor).toBe(0);
-    expect(canGoBackInTabs(opened)).toBe(false);
-    // Already reset: no churn, and an empty shell stays empty.
-    expect(desktopTabReducer(opened, { type: "resetHistory" })).toBe(opened);
-    expect(desktopTabReducer(initialDesktopTabState, { type: "resetHistory" }))
-      .toBe(initialDesktopTabState);
   });
 });
 
@@ -580,11 +440,14 @@ describe("tab reuse placements", () => {
     );
 
     // The displaced preview's visit survives the takeover: Back lands on
-    // firstNote and reopens its tab, then once more reaches the welcome tab.
+    // firstNote and restores its view — but the trail ends there; welcome's
+    // visit belongs to a different trail.
     const back = desktopTabReducer(state, { type: "goBack" });
     expect(back.activeTabId).toBe(firstNote.id);
     expect(back.tabs.map((tab) => tab.id)).toContain(firstNote.id);
-    expect(desktopTabReducer(back, { type: "goBack" }).activeTabId).toBe(welcome.id);
+    const deeper = desktopTabReducer(back, { type: "goBack" });
+    expect(deeper.activeTabId).toBe(firstNote.id);
+    expect(canGoBackInTabs(back)).toBe(false);
   });
 });
 

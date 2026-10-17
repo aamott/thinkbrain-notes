@@ -52,6 +52,13 @@ export interface PhoneHistoryIntegration {
    * skipped in the direction of travel rather than reopened.
    */
   readonly isVisitLive?: (visitId: number) => boolean;
+  /**
+   * Save-first gate for pops that leave a document: awaited before the
+   * popped route is adopted so the shell can flush a dirty document first.
+   * `false` bounces the browser back to the previous physical depth and the
+   * target is never adopted. Overlay/menu dismissal never reaches this.
+   */
+  readonly beforeNavigate?: () => Promise<boolean>;
 }
 
 /**
@@ -102,6 +109,13 @@ export interface PhoneNavigation {
   readonly dismissOverlay: (wholeFlow?: boolean) => void;
   readonly back: () => void;
   readonly forward: () => void;
+  /**
+   * Rebuilds the browser segment for a logical-trail switch: fresh session,
+   * Files at the root, `routes` (the selected trail's retained visits)
+   * pushed in order, then one `history.go` hop back to the `cursor`th route
+   * when it is not the tip — Forward visits after it survive.
+   */
+  readonly rebaseTabHistory: (routes: readonly PhoneRoute[], cursor: number) => void;
 }
 
 /** History-state envelope. The marker distinguishes our entries from anything
@@ -225,11 +239,9 @@ function nearestLiveDepth(
  * button dismiss them before content history. Every other overlay — the
  * navigation drawer, tab switcher, action-items menu, New-note popup — is
  * ephemeral React state and never touches history, so Back closes them and
- * Forward can never revisit them.
- * `window.history`
- * is shared, so only states carrying our marker *and* the current workspace
- * are trusted; anything else falls back to Files rather than trusting a
- * foreign shape.
+ * Forward can never revisit them. `window.history` is shared, so only states
+ * carrying our marker *and* the current workspace are trusted; anything else
+ * falls back to Files rather than trusting a foreign shape.
  *
  * The workspace root keys every entry: switching workspaces reads as Files
  * (the entry's workspace no longer matches, so the current entry is derived,
@@ -244,10 +256,9 @@ export function usePhoneNavigation(
   workspaceRoot: string | null,
   integration?: PhoneHistoryIntegration
 ): PhoneNavigation {
-  // Session token minted once per workspace reset (below): it, not the
-  // workspace string, is what an A→B→A round-trip invalidates. Only physical
-  // history entries are vetted by it — the pre-reset React-side states below
-  // are never pushed, so their `""` session is a placeholder, not a credential.
+  // Session token minted once per reset/rebase: it, not the workspace
+  // string, is what an A→B→A round-trip invalidates. Only physical history
+  // entries are vetted by it — the `""` placeholder never gets pushed.
   const sessionRef = useRef("");
   const [entry, setEntry] = useState<PhoneNavState>(
     () => navState(workspaceRoot, filesRoute, null, 0, "")
@@ -262,19 +273,21 @@ export function usePhoneNavigation(
   const [ephemeralMenu, setEphemeralMenuState] = useState<PhoneMenuOverlay | null>(null);
   const ephemeralMenuRef = useRef<PhoneMenuOverlay | null>(null);
   const overlay = ephemeralMenu ?? current.overlay;
-  // Branch tip: the deepest depth of the current history branch. A push past a
-  // Back'd-from entry truncates it, so the tip always tracks the last write;
-  // a workspace-mismatched entry reads as tip 0 like its derived Files route.
+  // Branch tip: the deepest depth of the current branch. A push past a
+  // Back'd-from entry truncates it; a foreign-workspace entry reads as 0.
   const [tip, setTip] = useState(0);
   const tipRef = useRef(0);
   const skipParentMenuOnPopRef = useRef(false);
-  // One-hop bounce guard: a dead-entry pop issues `history.go` to the nearest
-  // live depth, and the landing pop adopts without a second bounce or a
-  // second departure capture.
+  // One-hop bounce guard: a dead-entry pop or a trail-rebase hop issues
+  // `history.go`, and the landing pop adopts without a second departure
+  // capture, navigation guard, or bounce.
   const bouncePendingRef = useRef(false);
+  // One pending guarded hop at a time: later pops bounce back to the depth
+  // the guard is deciding on. The record carries its session so a reset or
+  // rebase invalidates it without adopting a stale target.
+  const guardPendingRef = useRef<{ readonly depth: number; readonly session: string } | null>(null);
   // Route-only metadata keyed by physical depth — the liveness ledger Back
-  // and Forward target from. No editor locations and no duplicated core
-  // visits: a bound route's `visitId` is the only identity it needs.
+  // and Forward target from; a bound route's `visitId` is its only identity.
   const [routeAtDepth, setRouteAtDepthState] = useState<ReadonlyMap<number, PhoneRoute>>(
     () => new Map([[0, filesRoute]])
   );
@@ -318,6 +331,7 @@ export function usePhoneNavigation(
     tipRef.current = 0;
     skipParentMenuOnPopRef.current = false;
     bouncePendingRef.current = false;
+    guardPendingRef.current = null;
     ephemeralMenuRef.current = null;
     /* eslint-disable react-hooks/set-state-in-effect -- A workspace switch is a
        genuine reset, not state derived from props: the derived-Files read above
@@ -437,19 +451,15 @@ export function usePhoneNavigation(
       }
       const bouncing = bouncePendingRef.current;
       bouncePendingRef.current = false;
-      // Snapshot the departing tab's location into its visit *before* the
-      // route effect turns the tab/route around — the DOM still shows the
-      // document being left. Runs for every user-driven pop; the landing pop
-      // of our own bounce skips it (the departure was already captured, and
-      // re-capturing here could overwrite it under a different visit).
+      // Snapshot the departing tab's location into its visit before the
+      // route effect turns the DOM around. The landing pop of our own bounce
+      // skips it — the departure was already captured.
       if (!bouncing && previous.route.kind === "tab") {
         integrationRef.current?.captureDeparture?.();
       }
-      // A popped tab route naming a visit the core has since scrubbed (its
-      // tab was explicitly closed) must not reopen the resource. Step
-      // straight to the nearest live entry in the direction of travel — or,
-      // when the tail ahead is all dead, back to the live entry the gesture
-      // came from — instead of rewriting the slot into a phantom Home.
+      // A popped visit the core scrubbed (its tab was closed) must not
+      // reopen. Step to the nearest live entry in the direction of travel —
+      // or back to where the gesture came from — instead of a phantom Home.
       const poppedVisitId = next.route.kind === "tab" ? next.route.visitId : undefined;
       const isVisitLive = integrationRef.current?.isVisitLive;
       if (poppedVisitId !== undefined && isVisitLive?.(poppedVisitId) === false) {
@@ -484,14 +494,63 @@ export function usePhoneNavigation(
       const restoreActionsMenu =
         !skipParentMenuOnPopRef.current && previous.overlay?.parent === "actions";
       skipParentMenuOnPopRef.current = false;
-      setEphemeralMenu(restoreActionsMenu ? { kind: "actions" } : null);
-      entryRef.current = next;
-      setEntry(next);
-      if (marked) {
-        const nextMap = new Map(routeAtDepthRef.current);
-        nextMap.set(next.depth, next.route);
-        setDepthMap(nextMap);
+      const adopt = () => {
+        setEphemeralMenu(restoreActionsMenu ? { kind: "actions" } : null);
+        entryRef.current = next;
+        setEntry(next);
+        if (marked) {
+          const nextMap = new Map(routeAtDepthRef.current);
+          nextMap.set(next.depth, next.route);
+          setDepthMap(nextMap);
+        }
+      };
+      // Leaving a document may have to save it first: adopt the popped
+      // route only once the guard answers; `false` bounces back.
+      const leavingDocument =
+        previous.route.kind === "tab" &&
+        !(next.route.kind === "tab" && next.route.tabId === previous.route.tabId);
+      const beforeNavigate = integrationRef.current?.beforeNavigate;
+      if (guardPendingRef.current !== null) {
+        // One guarded hop at a time: duplicate pops return to the depth the
+        // pending guard is already deciding on.
+        const delta = guardPendingRef.current.depth - next.depth;
+        if (delta !== 0) window.history.go(delta);
+        return;
       }
+      if (!bouncing && leavingDocument && beforeNavigate) {
+        const pending = { depth: next.depth, session: sessionRef.current };
+        guardPendingRef.current = pending;
+        void Promise.resolve()
+          .then(beforeNavigate)
+          .then((ok) => {
+            // A newer pending record, reset or rebase supersedes this hop.
+            if (guardPendingRef.current !== pending || pending.session !== sessionRef.current) {
+              return;
+            }
+            guardPendingRef.current = null;
+            // A newer transition or a workspace/session change invalidates the hop.
+            if (entryRef.current !== previous) return;
+            if (!ok) {
+              window.history.go(previous.depth - next.depth);
+              return;
+            }
+            // Recapture so the departing visit keeps where the user ended
+            // up while the save was in flight.
+            integrationRef.current?.captureDeparture?.();
+            adopt();
+          })
+          .catch((error: unknown) => {
+            // A rejecting guard must not wedge every later pop: clear the
+            // record and bounce back to the depth the user left.
+            if (guardPendingRef.current === pending) guardPendingRef.current = null;
+            console.error("[usePhoneNavigation] navigation save guard failed", error);
+            if (entryRef.current === previous) {
+              window.history.go(previous.depth - next.depth);
+            }
+          });
+        return;
+      }
+      adopt();
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -653,6 +712,46 @@ export function usePhoneNavigation(
     if (target !== null) window.history.go(target - depth);
   }, [setEphemeralMenu]);
 
+  /**
+   * A manual logical-tab switch rebuilds the whole browser segment: the
+   * current entry is rewritten as Files Home under a fresh session token
+   * (old entries become foreign), the selected trail's visits are pushed in
+   * order, and — when the trail's selected visit is not the newest — one
+   * `history.go` lands the browser on it while Forward keeps the tail.
+   */
+  const rebaseTabHistory = useCallback(
+    (routes: readonly PhoneRoute[], cursor: number) => {
+      const session = crypto.randomUUID();
+      sessionRef.current = session;
+      const stampSession = (route: PhoneRoute, depth: number): PhoneNavState =>
+        navState(workspaceRoot, route, null, depth, session);
+      window.history.replaceState(stampSession(filesRoute, 0), "");
+      const map = new Map<number, PhoneRoute>([[0, filesRoute]]);
+      routes.forEach((tabRoute, index) => {
+        window.history.pushState(stampSession(tabRoute, index + 1), "");
+        map.set(index + 1, tabRoute);
+      });
+      const tip = routes.length;
+      tipRef.current = tip;
+      setTip(tip);
+      setDepthMap(map);
+      setEphemeralMenu(null);
+      guardPendingRef.current = null;
+      const selectedDepth = Math.max(0, cursor + 1);
+      // Adopt the selected route in React *before* the hop: the landing pop
+      // then finds React already there instead of restoring the stale tip.
+      entryRef.current = stampSession(routes[cursor] ?? filesRoute, selectedDepth);
+      setEntry(entryRef.current);
+      if (selectedDepth < tip) {
+        // The hop's landing pop must not capture a second departure or run
+        // the navigation guard — the same flag a dead-visit bounce uses.
+        bouncePendingRef.current = true;
+        window.history.go(selectedDepth - tip);
+      }
+    },
+    [workspaceRoot, setDepthMap, setEphemeralMenu]
+  );
+
   // Forward only exists while a *live* entry sits deeper on this branch —
   // a tail of scrubbed visits is not a destination. Without visit liveness
   // the depth bound alone answers, as it always did.
@@ -678,6 +777,7 @@ export function usePhoneNavigation(
       dismissOverlay,
       back,
       forward,
+      rebaseTabHistory,
     }),
     [
       route,
@@ -692,7 +792,8 @@ export function usePhoneNavigation(
       showOverlay,
       dismissOverlay,
       back,
-      forward
+      forward,
+      rebaseTabHistory
     ]
   );
 }

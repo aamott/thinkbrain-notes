@@ -66,7 +66,7 @@ describe("one-tab file opening on the phone", () => {
     expect(shell().tabState.tabs[0]?.resource?.relativePath).toBe("b.md");
   });
 
-  it("appends instead of displacing edits when the save cannot land", async () => {
+  it("stays in place when the save cannot land — no open, no append", async () => {
     const { host, shell } = await renderWithShell();
     await tap(host, "Probe note a.md");
     const tabId = shell().tabState.tabs[0]!.id;
@@ -77,12 +77,14 @@ describe("one-tab file opening on the phone", () => {
 
     await tap(host, "Probe note b.md");
 
+    // A failed save means the tap did nothing: the dirty tab keeps its edits
+    // and no second tab or visit was created.
     const tabs = shell().tabState.tabs;
-    expect(tabs).toHaveLength(2);
+    expect(tabs).toHaveLength(1);
     expect(tabs[0]?.id).toBe(tabId);
-    // The tab that could not be replaced kept its edits.
     expect(shell().documents[tabId]?.contents).toBe("unsaved work");
     expect(tabs[0]?.isDirty).toBe(true);
+    expect(shell().tabState.history.entries).toHaveLength(1);
   });
 
   it("opens a blank new tab from the switcher's trailing card and navigates to it", async () => {

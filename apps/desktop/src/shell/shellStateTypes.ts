@@ -51,14 +51,13 @@ export interface ShellState {
    */
   readonly navigateToLine: (line: number) => void;
   /**
-   * Restores a recorded visit by its numeric id — moves the history cursor
-   * and reopens the visit's tab descriptor if it was displaced. For chrome
-   * history UIs (the phone's go-to-visit) rather than recording a new visit.
-   * `placement` governs how an absent destination rejoins the strip: the
-   * desktop default refills a displaced preview slot, while `"replace-active"`
-   * takes over the tab in use — the phone's always-one-surface restore.
+   * Restores a recorded visit by its numeric id within the active trail —
+   * moves the history cursor and puts the visit's document into the active
+   * strip slot, reopening it from its retained descriptor when displaced.
+   * Other trails' visits are refused: switching trails is an explicit
+   * `activate`, not a traversal.
    */
-  readonly goToVisit: (visitId: number, placement?: TabOpenPlacement) => void;
+  readonly goToVisit: (visitId: number) => void;
   /**
    * Snapshots the live editor's position into the current visit — for a
    * chrome about to hide the tab surface (phone: leaving a tab for Home or a
@@ -71,10 +70,18 @@ export interface ShellState {
   readonly conflicts: ReadonlySet<string>;
   readonly unsavedNoteContents: string | null;
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
+  /**
+   * The save-first guard every navigation that could displace the on-screen
+   * document must pass: saves the active tab when dirty and answers `false`
+   * — stay in place — when the save fails or newer edits remain unsaved.
+   */
+  readonly beforeNavigate: () => Promise<boolean>;
   readonly updateDocument: (tabId: string, contents: string) => void;
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
-  readonly openFileDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
+  /** Returns the destination view's actual tab id — collision suffix included. */
+  readonly openMarkdownDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => string;
+  /** Returns the destination view's actual tab id — collision suffix included. */
+  readonly openFileDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => string;
   /** Opens a blank landing tab; returns its id so the chrome can navigate to it. */
   readonly openNewTab: () => string;
   readonly keepMyVersion: (tab: DesktopTab) => void;

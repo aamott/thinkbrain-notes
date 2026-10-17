@@ -1,3 +1,4 @@
+import { history, undoDepth } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -54,6 +55,21 @@ describe("what the editor parks between tab switches", () => {
     expect(recallEditorState("tab-a")).toBeUndefined();
     expect(parkedDoc("tab-b")).toBe("beta");
     expect(recallEditorState("tab-c")).toBeUndefined();
+  });
+
+  /**
+   * A link displaces A's view without closing it: the shell sweeps by open
+   * tabs plus retained visits, so the parked state — undo depth included —
+   * survives for Back to land on.
+   */
+  it("keeps the undo depth of a view a retained visit still names", () => {
+    let state = EditorState.create({ doc: "alpha", extensions: history() });
+    state = state.update({ changes: { from: 0, insert: "edit " } }).state;
+    rememberEditorState("tab-a", { state });
+
+    releaseEditorStatesExcept(new Set(["tab-a", "tab-b"]));
+
+    expect(undoDepth(recallEditorState("tab-a")!.state)).toBeGreaterThan(0);
   });
 
   /**

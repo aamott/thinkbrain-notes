@@ -1,5 +1,5 @@
 import { BottomSheet, FloatingBubbles } from "@thinkbrain/ui";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
@@ -9,7 +9,7 @@ import {
 } from "../../panels/panelRegistryModel";
 import { usePanelNotificationCounts } from "../../notifications/usePanelNotificationCounts";
 import { useSettingsStore } from "../../settings/settingsStore";
-import { findVisit, inspectableRelativePath, isNoteTab } from "../../tabs/tabModel";
+import { findVisit, inspectableRelativePath, isNoteTab, tabTrailId } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, type RightPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { useNoteTitle } from "../useNoteTitle";
@@ -74,15 +74,28 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // ref — so the navigation's render-time availability recomputes the moment
   // a close scrubs a visit.
   const captureCurrentLocation = shell.captureCurrentLocation;
+  const beforeNavigate = shell.beforeNavigate;
   const history = shell.tabState.history;
+  // The trail the browser segment belongs to: the route sync writes it, and
+  // visit liveness reads it so a hop never targets another trail's visits.
+  const browserTrailRef = useRef<string | null>(null);
   const historyIntegration = useMemo<PhoneHistoryIntegration>(
     () => ({
       captureDeparture: () => {
         captureCurrentLocation();
       },
-      isVisitLive: (visitId) => findVisit(history, visitId) !== null
+      isVisitLive: (visitId) => {
+        const visit = findVisit(history, visitId);
+        return (
+          visit !== null &&
+          (browserTrailRef.current === null ||
+            tabTrailId(visit.visit.tab) === browserTrailRef.current)
+        );
+      },
+      // A pop that leaves a document may have to save it first.
+      beforeNavigate: () => beforeNavigate()
     }),
-    [captureCurrentLocation, history]
+    [captureCurrentLocation, beforeNavigate, history]
   );
   const navigation = usePhoneNavigation(shell.restoredWorkspacePath, historyIntegration);
   const route = navigation.route;
@@ -125,11 +138,11 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const activePath = activeTab?.resource?.relativePath ?? null;
   const showNoteTitle = useNoteTitle(activeTab);
 
-  // Back on the phone restores a displaced resource into the one safe slot —
-  // the tab in use — never spawning a second strip entry. A dirty tab is
-  // never displaced: the reducer appends instead.
+  // Back on the phone restores a visit into the active trail's strip slot —
+  // the phone's always-one-surface is just the active slot. A dirty document
+  // is never displaced: the reducer refuses, after the save guard ran.
   const goToVisit = useCallback(
-    (visitId: number) => shellGoToVisit(visitId, "replace-active"),
+    (visitId: number) => shellGoToVisit(visitId),
     [shellGoToVisit]
   );
 
@@ -140,7 +153,8 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     stateRestored: shell.stateRestored,
     dispatchTabs,
     goToVisit,
-    setLeftPanel
+    setLeftPanel,
+    browserTrailRef
   });
 
   const {
@@ -150,8 +164,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     createNewNote,
     explorerProps
   } = usePhoneOpeners({
-    activeTab,
-    saveDocument,
+    beforeNavigate,
     openMarkdownDocument,
     openFileDocument,
     openNewTabDocument,

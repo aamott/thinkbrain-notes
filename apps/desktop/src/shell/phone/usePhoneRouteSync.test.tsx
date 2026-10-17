@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, useCallback, useReducer, useState, type Dispatch, type SetStateAction } from "react";
+import { act, useCallback, useReducer, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -10,6 +10,7 @@ import {
   editorTabId,
   findVisit,
   initialDesktopTabState,
+  tabTrailId,
   type DesktopTab,
   type DesktopTabAction,
   type DesktopTabState,
@@ -54,13 +55,23 @@ const renderSync = async (): Promise<() => ProbeHandle> => {
   const Probe = () => {
     const [tabState, dispatch] = useReducer(desktopTabReducer, initialDesktopTabState);
     // Same integration PhoneShell passes: visit liveness answers from the
-    // current history so closes scrub routes out of Back/Forward reach.
+    // current history scoped to the browser segment's owner trail — closes
+    // scrub routes out of Back/Forward reach and another trail's visits are
+    // never content targets.
+    const browserTrailRef = useRef<string | null>(null);
     const navigation = usePhoneNavigation("/vault", {
-      isVisitLive: (visitId) => findVisit(tabState.history, visitId) !== null
+      isVisitLive: (visitId) => {
+        const found = findVisit(tabState.history, visitId);
+        return (
+          found !== null &&
+          (browserTrailRef.current === null ||
+            tabTrailId(found.visit.tab) === browserTrailRef.current)
+        );
+      }
     });
     // Same wrapping PhoneShell applies: the phone's one-slot restore.
     const goToVisit = useCallback(
-      (visitId: number) => dispatch({ type: "restoreVisit", visitId, placement: "replace-active" }),
+      (visitId: number) => dispatch({ type: "restoreVisit", visitId }),
       []
     );
     const [, setLeftPanel] = useState<LeftPanel | null>(null);
@@ -71,7 +82,8 @@ const renderSync = async (): Promise<() => ProbeHandle> => {
       stateRestored: true,
       dispatchTabs: dispatch,
       goToVisit,
-      setLeftPanel: setLeftPanel as Dispatch<SetStateAction<LeftPanel | null>>
+      setLeftPanel: setLeftPanel as Dispatch<SetStateAction<LeftPanel | null>>,
+      browserTrailRef
     });
     box.current = { navigation, tabState, dispatch };
     return null;
@@ -239,12 +251,14 @@ describe("usePhoneRouteSync", () => {
     const tabA = noteTab("a.md");
     const tabB = noteTab("b.md");
     await act(async () => probe().dispatch({ type: "open", tab: tabA }));
+    // B is a second physical tab — its own trail — so the browser segment
+    // rebases to Home + B's visits rather than stacking A's behind it.
     await act(async () => probe().dispatch({ type: "open", tab: tabB }));
     const routeBefore = probe().navigation.route;
     expect(routeBefore.kind).toBe("tab");
-    expect(historyDepth()).toBe(2);
+    expect(historyDepth()).toBe(1);
 
-    // An explicit close scrubs B's visits; the route the browser entry named
+    // An explicit close scrubs B's trail; the route the browser entry named
     // is rewritten to the survivor — it must never reopen B.
     await act(async () => probe().dispatch({ type: "requestClose", tabId: tabB.id }));
 
@@ -254,7 +268,7 @@ describe("usePhoneRouteSync", () => {
       tabId: tabA.id,
       visitId: survivor?.id
     });
-    expect(historyDepth()).toBe(2);
+    expect(historyDepth()).toBe(1);
     expect(probe().tabState.tabs).toHaveLength(1);
   });
 
@@ -291,34 +305,116 @@ describe("usePhoneRouteSync", () => {
     const tabB = probe().tabState.tabs[0]!.id;
     await act(async () => probe().dispatch({ type: "setDirty", tabId: tabB, isDirty: true }));
 
-    // B holds unsaved work: restoring A must append its descriptor rather
-    // than take over B's slot.
+    // B holds unsaved work: the restore is refused outright — the user stays
+    // on B, the cursor does not move, nothing is appended.
     await act(async () => probe().navigation.back());
 
-    expect(probe().tabState.tabs).toHaveLength(2);
+    expect(probe().tabState.tabs).toHaveLength(1);
     expect(probe().tabState.tabs.find((tab) => tab.id === tabB)?.isDirty).toBe(true);
-    expect(probe().tabState.activeTabId).toBe(
-      editorTabId({ rootPath: "/vault", relativePath: "a.md" })
-    );
+    expect(probe().tabState.activeTabId).toBe(tabB);
   });
 
-  it("observes a background activation from Files as one bound entry", async () => {
+  it("observes a background trail switch from Files as a rebased segment", async () => {
     const probe = await renderSync();
     const tabA = noteTab("a.md");
     const tabB = noteTab("b.md");
     await act(async () => probe().dispatch({ type: "open", tab: tabA }));
     await act(async () => probe().dispatch({ type: "open", tab: tabB }));
     await act(async () => probe().navigation.back());
-    await act(async () => probe().navigation.back());
     expect(probe().navigation.route.kind).toBe("files");
 
-    // Some outside path activates B while the route is Files: the observer
-    // pushes it as a fresh bound entry, truncating the walked-back tail.
-    await act(async () => probe().dispatch({ type: "activate", tabId: tabB.id }));
+    // Some outside path selects A's trail while the route is Files: the
+    // browser segment rebases to Home + that trail's visits — a switch is
+    // not a new visit, so nothing truncates and nothing stacks.
+    await act(async () => probe().dispatch({ type: "activate", tabId: tabA.id }));
 
     const visit = currentVisit(probe().tabState.history);
-    expect(visit?.tab.id).toBe(tabB.id);
-    expect(probe().navigation.route).toEqual({ kind: "tab", tabId: tabB.id, visitId: visit?.id });
+    expect(visit?.tab.id).toBe(tabA.id);
+    expect(probe().navigation.route).toEqual({ kind: "tab", tabId: tabA.id, visitId: visit?.id });
+    expect(historyDepth()).toBe(1);
+    expect(probe().navigation.canGoForward).toBe(false);
+  });
+
+  it("closing the active trail rebases the segment to the fallback's own trail", async () => {
+    const probe = await renderSync();
+    const tabA = noteTab("a.md");
+    await act(async () => probe().dispatch({ type: "open", tab: tabA }));
+    const visitA1 = currentVisit(probe().tabState.history)!;
+    // A second visit in A's trail, then Back, so its remembered selection
+    // sits mid-stack and has a Forward tail worth preserving.
+    await act(async () => probe().dispatch({ type: "navigateToLocation", location: jump }));
+    const visitA2 = currentVisit(probe().tabState.history)!;
+    await act(async () => probe().dispatch({ type: "goBack" }));
+
+    // B opens as a second physical tab — its own trail owns the segment.
+    await act(async () => probe().dispatch({ type: "open", tab: noteTab("b.md") }));
+    expect(historyDepth()).toBe(1);
+
+    // The visible active tab closes: the reducer's fallback to A is a trail
+    // switch, so the whole segment rebuilds for A — never a push over the
+    // dead B entry, and B's scrubbed visits never appear on Back.
+    const tabB = probe().tabState.activeTabId!;
+    await act(async () => probe().dispatch({ type: "requestClose", tabId: tabB }));
+
+    expect(probe().navigation.route).toEqual({
+      kind: "tab",
+      tabId: tabA.id,
+      visitId: visitA1.id
+    });
+    expect(historyDepth()).toBe(1);
+
+    // Forward walks A's retained tail; Back reaches only A then Files.
+    expect(probe().navigation.canGoForward).toBe(true);
+    await act(async () => probe().navigation.forward());
+    expect(probe().navigation.route).toEqual({
+      kind: "tab",
+      tabId: tabA.id,
+      visitId: visitA2.id
+    });
+    await act(async () => probe().navigation.back());
+    expect(probe().navigation.route).toEqual({
+      kind: "tab",
+      tabId: tabA.id,
+      visitId: visitA1.id
+    });
+    await act(async () => probe().navigation.back());
+    expect(probe().navigation.route).toEqual({ kind: "files" });
+    expect(probe().navigation.canGoForward).toBe(true);
+    // …and Forward still offers A — never a ghost of B's trail.
+    await act(async () => probe().navigation.forward());
+    expect(probe().navigation.route).toEqual({
+      kind: "tab",
+      tabId: tabA.id,
+      visitId: visitA1.id
+    });
+  });
+
+  it("keeps Files when a trail dies underneath it, rebasing when a tab shows", async () => {
+    const probe = await renderSync();
+    const tabA = noteTab("a.md");
+    await act(async () => probe().dispatch({ type: "open", tab: tabA }));
+    const visitA = currentVisit(probe().tabState.history)!;
+    await act(async () => probe().dispatch({ type: "open", tab: noteTab("b.md") }));
+    await act(async () => probe().navigation.back());
+    expect(probe().navigation.route).toEqual({ kind: "files" });
+
+    // Closing the active B while the user sits on Files leaves Files alone —
+    // the fallback to A is deferred, not pushed over the visible surface.
+    const tabB = probe().tabState.activeTabId!;
+    await act(async () => probe().dispatch({ type: "requestClose", tabId: tabB }));
+    expect(probe().tabState.activeTabId).toBe(tabA.id);
+    expect(probe().navigation.route).toEqual({ kind: "files" });
+    // B's dead entry is not a Forward target either.
+    expect(probe().navigation.canGoForward).toBe(false);
+
+    // The next time a tab route actually shows — here an opener pushing the
+    // now-active A — the segment is rebuilt for A's trail.
+    await act(async () => probe().navigation.push({ kind: "tab", tabId: tabA.id }));
+    expect(probe().navigation.route).toEqual({
+      kind: "tab",
+      tabId: tabA.id,
+      visitId: visitA.id
+    });
     expect(historyDepth()).toBe(1);
     expect(probe().navigation.canGoForward).toBe(false);
   });
@@ -383,20 +479,16 @@ describe("usePhoneRouteSync", () => {
     expect(probe().tabState.activeTabId).toBe(tabIdA);
     expect(probe().tabState.tabs).toHaveLength(1);
 
-    // Back to Files keeps A's tab in the strip; closing it there scrubs vA,
-    // leaving a dead slot *between* live entries (Files and B's visit).
+    // Back to Files keeps A's tab in the strip; closing it there drops the
+    // whole logical trail — B's visit dies with it, since A→B was one trail.
     await act(async () => probe().navigation.back());
     expect(probe().navigation.route).toEqual({ kind: "files" });
     await act(async () => probe().dispatch({ type: "requestClose", tabId: tabIdA }));
     expect(findVisit(probe().tabState.history, visitA!.id)).toBeNull();
+    expect(findVisit(probe().tabState.history, visitB!.id)).toBeNull();
 
-    // Forward steps over the dead A entry to B's live visit; Back steps over
-    // it again to the root.
+    // Nothing live sits beyond Home: Forward has nowhere to land.
     await act(async () => probe().navigation.forward());
-    expect(probe().navigation.route).toMatchObject({ visitId: visitB?.id });
-    expect(currentVisit(probe().tabState.history)?.id).toBe(visitB?.id);
-
-    await act(async () => probe().navigation.back());
     expect(probe().navigation.route).toEqual({ kind: "files" });
   });
 });

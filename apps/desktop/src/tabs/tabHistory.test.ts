@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   currentVisit,
-  dropTabVisits,
+  dropTrailVisits,
   emptyTabHistory,
   findVisit,
   HISTORY_LIMIT,
@@ -11,8 +11,8 @@ import {
   mapVisitLocations,
   recordVisit,
   resetHistory,
-  retargetVisits,
   setVisitLocation,
+  updateVisitTabs,
   type DesktopTabHistory,
   type EditorLocation,
   type HistoryVisit,
@@ -20,7 +20,12 @@ import {
 } from "./tabHistory";
 import type { DesktopTab } from "./tabModel";
 
-const note = (id: string, title = id): DesktopTab => ({ id, title, kind: "editor" });
+const note = (id: string, title = id, trailId?: string): DesktopTab => ({
+  id,
+  title,
+  kind: "editor",
+  ...(trailId === undefined ? {} : { trailId })
+});
 const at = (anchor: number, head = anchor): EditorLocation => ({ anchor, head });
 
 /**
@@ -60,18 +65,34 @@ describe("recordVisit", () => {
     expect(currentVisit(history)?.tab.id).toBe("a");
   });
 
-  it("truncates the Forward tail when a visit lands mid-history", () => {
-    const state = historyOf([located(1, note("a")), located(2, note("b")), located(3, note("c"))], 0);
-    const history = recordVisit(state, note("d"));
+  it("truncates only the active trail's Forward tail, keeping other trails' visits", () => {
+    const state = historyOf(
+      [
+        located(1, note("a", "a", "t1")),
+        located(2, note("b", "b", "t1")),
+        located(3, note("c", "c", "t2"))
+      ],
+      0
+    );
+    const history = recordVisit(state, note("d", "d", "t1"));
 
-    expect(history.entries.map((entry) => entry.tab.id)).toEqual(["a", "d"]);
-    expect(history.cursor).toBe(1);
+    // b's forward visit inside t1 dies; c's visit in t2 stays put.
+    expect(history.entries.map((entry) => entry.tab.id)).toEqual(["a", "c", "d"]);
+    expect(history.cursor).toBe(2);
   });
 
-  it("re-arriving at the same tab records nothing", () => {
+  it("re-arriving at the same trail's tip records nothing", () => {
     const state = historyOf([located(1, note("a")), located(2, note("b"))]);
 
     expect(recordVisit(state, note("b"))).toBe(state);
+  });
+
+  it("records the same file as a new visit in a trail that did not arrive there", () => {
+    const state = historyOf([located(1, note("a", "a", "t1")), located(2, note("b", "b", "t2"))]);
+    const history = recordVisit(state, note("a", "a", "t2"));
+
+    expect(history.entries.map((entry) => entry.tab.id)).toEqual(["a", "b", "a"]);
+    expect(history.cursor).toBe(2);
   });
 
   it("records an in-file visit for the same tab at a different position", () => {
@@ -167,13 +188,17 @@ describe("mapVisitLocations", () => {
   });
 });
 
-describe("retargetVisits", () => {
+describe("updateVisitTabs", () => {
   it("rewrites a retained descriptor's identity while keeping its position", () => {
     const displaced = { ...note("old"), preview: true };
     const moved = note("new", "Renamed");
     const state = historyOf([located(1, displaced, at(7)), located(2, note("other"))]);
 
-    const history = retargetVisits(state, new Set(["old"]), moved);
+    const history = updateVisitTabs(
+      state,
+      (tab) => tab.id === "old",
+      (tab) => ({ ...moved, preview: tab.preview })
+    );
 
     expect(history.entries[0]!.tab).toMatchObject({ id: "new", title: "Renamed", preview: true });
     expect(history.entries[0]!.location).toEqual(at(7));
@@ -181,14 +206,14 @@ describe("retargetVisits", () => {
   });
 });
 
-describe("dropTabVisits", () => {
-  it("drops every visit for the tab and counts the ones before the cursor", () => {
+describe("dropTrailVisits", () => {
+  it("drops every visit for the trail and counts the ones before the cursor", () => {
     const state = historyOf(
       [located(1, note("a")), located(2, note("b")), located(3, note("a")), located(4, note("c"))],
       3
     );
 
-    const { entries, removedBeforeCursor } = dropTabVisits(state, "a");
+    const { entries, removedBeforeCursor } = dropTrailVisits(state, "a");
 
     expect(entries.map((entry) => entry.tab.id)).toEqual(["b", "c"]);
     expect(removedBeforeCursor).toBe(2);

@@ -245,6 +245,80 @@ describe("usePhoneNavigation visit integration", () => {
     expect(historyDepth()).toBe(0);
   });
 
+  it("adopts the popped route only after the save guard answers, recapturing the departure", async () => {
+    const captured: number[] = [];
+    let release: ((ok: boolean) => void) | null = null;
+    const nav = await renderNav("/vault", {
+      captureDeparture: () => captured.push(1),
+      beforeNavigate: () =>
+        new Promise<boolean>((resolve) => {
+          release = resolve;
+        })
+    });
+    await act(async () => nav().push({ kind: "tab", tabId: "a", visitId: 1 }));
+    await act(async () => nav().push({ kind: "tab", tabId: "b", visitId: 2 }));
+    captured.length = 0;
+
+    await act(async () => window.history.back());
+    // Guard still deciding: the popped route is not adopted yet, and the
+    // pop-time departure was captured once.
+    expect(nav().route).toEqual({ kind: "tab", tabId: "b", visitId: 2 });
+    expect(captured).toHaveLength(1);
+
+    await act(async () => release?.(true));
+    expect(nav().route).toEqual({ kind: "tab", tabId: "a", visitId: 1 });
+    // A second capture ran right before adopting — scrolling during the
+    // save is filed under the visit being left, not lost.
+    expect(captured).toHaveLength(2);
+  });
+
+  it("bounces back to the tab when the save guard refuses", async () => {
+    const nav = await renderNav("/vault", { beforeNavigate: async () => false });
+    await act(async () => nav().push({ kind: "tab", tabId: "a", visitId: 1 }));
+    await act(async () => nav().push({ kind: "tab", tabId: "b", visitId: 2 }));
+
+    await act(async () => window.history.back());
+    expect(nav().route).toEqual({ kind: "tab", tabId: "b", visitId: 2 });
+    expect(historyDepth()).toBe(2);
+  });
+
+  it("clears a wedged hop when the guard rejects, logging instead of adopting", async () => {
+    const nav = await renderNav("/vault", {
+      beforeNavigate: () => Promise.reject(new Error("write failed"))
+    });
+    await act(async () => nav().push({ kind: "tab", tabId: "a", visitId: 1 }));
+    await act(async () => nav().push({ kind: "tab", tabId: "b", visitId: 2 }));
+
+    await act(async () => window.history.back());
+    // The rejection bounced back to B — the target was never adopted and
+    // no later pop is stuck behind the dead record.
+    expect(nav().route).toEqual({ kind: "tab", tabId: "b", visitId: 2 });
+    await act(async () => nav().push({ kind: "panel", panel: "search" }));
+    expect(nav().route).toEqual({ kind: "panel", panel: "search" });
+  });
+
+  it("a rebase or reset during a pending guard abandons the old hop", async () => {
+    let release: ((ok: boolean) => void) | null = null;
+    const nav = await renderNav("/vault", {
+      beforeNavigate: () =>
+        new Promise<boolean>((resolve) => {
+          release = resolve;
+        })
+    });
+    await act(async () => nav().push({ kind: "tab", tabId: "a", visitId: 1 }));
+    await act(async () => nav().push({ kind: "tab", tabId: "b", visitId: 2 }));
+
+    await act(async () => window.history.back());
+    // A trail rebase lands before the save answers: its fresh session
+    // invalidates the pending record — resolving it must not adopt A.
+    await act(async () =>
+      nav().rebaseTabHistory([{ kind: "tab", tabId: "c", visitId: 3 }], 0)
+    );
+    await act(async () => release?.(true));
+    expect(nav().route).toEqual({ kind: "tab", tabId: "c", visitId: 3 });
+    expect(historyDepth()).toBe(1);
+  });
+
   it("drops slots beyond the newest ledger window, never targeting pruned depths", async () => {
     // Liveness wired so Back consults the ledger — with no integration the
     // hook steps physical entries blind and the bound only saves memory.

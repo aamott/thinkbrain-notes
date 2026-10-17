@@ -1,8 +1,9 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 
 import {
   currentVisit,
   findVisit,
+  tabTrailId,
   type DesktopTabAction,
   type DesktopTabState
 } from "../../tabs/tabModel";
@@ -23,6 +24,13 @@ export interface UsePhoneRouteSyncParams {
    */
   readonly goToVisit: (visitId: number) => void;
   readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
+  /**
+   * The logical trail the current browser segment belongs to — written by
+   * the sync (and read by the caller's `isVisitLive`, so entries of another
+   * trail are never content targets). `null` before the first tab route:
+   * the segment is still the seed's Files root.
+   */
+  readonly browserTrailRef: MutableRefObject<string | null>;
 }
 
 /**
@@ -74,7 +82,8 @@ export function usePhoneRouteSync({
   stateRestored,
   dispatchTabs,
   goToVisit,
-  setLeftPanel
+  setLeftPanel,
+  browserTrailRef
 }: UsePhoneRouteSyncParams): void {
   // Files/panel routes own the left surface; a tab route hides it. Small and
   // keyed on the route alone — reconciliation below never writes panel state.
@@ -83,25 +92,67 @@ export function usePhoneRouteSync({
   }, [route, setLeftPanel]);
 
   // The one reconciliation pass. Runs every commit; `prev` holds the route,
-  // visit and active tab as of the last one, which is what lets a
+  // visit, active tab and trail as of the last one, which is what lets a
   // route-driven restore be told apart from a core-driven new visit.
   const prevRef = useRef<{
     readonly route: PhoneRoute;
     readonly visitId: number | null;
     readonly activeTabId: string | null;
+    readonly trailId: string | null;
   } | null>(null);
   useEffect(() => {
     const prev = prevRef.current;
     const visit = currentVisit(tabState.history);
-    prevRef.current = { route, visitId: visit?.id ?? null, activeTabId: tabState.activeTabId };
+    const activeTab = tabState.tabs.find((tab) => tab.id === tabState.activeTabId) ?? null;
+    const trailId = activeTab === null ? null : tabTrailId(activeTab);
+    prevRef.current = {
+      route,
+      visitId: visit?.id ?? null,
+      activeTabId: tabState.activeTabId,
+      trailId
+    };
     // Seeding observes without navigating — a restored session or a cold
     // mount belongs at Files, not mid-stack.
     if (!stateRestored || prev === null) return;
 
+    // The browser segment belongs to one logical trail at a time — tracked
+    // on `browserTrailRef`, independent of the previous core trail, so the
+    // reducer's close-fallback counts too. Whenever a *tab* route is showing
+    // and the selected trail is not the segment's owner, the segment is
+    // rebuilt: Files Home plus the selected trail's retained visits, cursor
+    // on its selected one. A trail change under Files (a background close's
+    // fallback, a switch made from the drawer) leaves the visible surface
+    // alone and waits until a tab route is actually showing.
+    if (route.kind === "tab" && trailId !== null && browserTrailRef.current !== trailId) {
+      if (browserTrailRef.current === null) {
+        // The seed segment gains its owner without a rebuild — the visits
+        // below mirror or bind the entry that is already on screen.
+        browserTrailRef.current = trailId;
+      } else {
+        const trailVisits = tabState.history.entries.filter(
+          (entry) => tabTrailId(entry.tab) === trailId
+        );
+        const cursor = trailVisits.findIndex((entry) => entry.id === visit?.id);
+        if (trailVisits.length > 0 && cursor >= 0) {
+          browserTrailRef.current = trailId;
+          navigation.rebaseTabHistory(
+            trailVisits.map((entry) => ({
+              kind: "tab" as const,
+              tabId: entry.tab.id,
+              visitId: entry.id
+            })),
+            cursor
+          );
+          return;
+        }
+      }
+    }
+
+    const openIds = new Set(tabState.tabs.map((tab) => tab.id));
+
     const routeChanged = !sameSyncRoute(prev.route, route);
     const visitChanged = prev.visitId !== (visit?.id ?? null);
     const tabChanged = prev.activeTabId !== tabState.activeTabId;
-    const openIds = new Set(tabState.tabs.map((tab) => tab.id));
     const activeRoute = tabState.activeTabId !== null
       ? ({ kind: "tab", tabId: tabState.activeTabId } as const)
       : ({ kind: "files" } as const);

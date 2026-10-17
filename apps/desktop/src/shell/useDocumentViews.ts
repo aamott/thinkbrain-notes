@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from
 
 import { appEvents } from "../events/appEvents";
 import { releaseEditorStatesExcept } from "../tabs/editorStateCache";
-import { createEditorTab, createFileTab, createNewTab, isMediaViewerKind, type DesktopTab, type DesktopTabAction, type DesktopTabState, type TabOpenPlacement } from "../tabs/tabModel";
+import { createEditorTab, createFileTab, createNewTab, isMediaViewerKind, prepareTabOpen, type DesktopTab, type DesktopTabAction, type DesktopTabState, type TabOpenPlacement } from "../tabs/tabModel";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { workspaceDocumentApi } from "../workspace/workspaceDocumentAdapter";
 import { textFileApi } from "../workspace/textFileAdapter";
@@ -49,17 +49,17 @@ export interface DocumentViews {
   readonly conflicts: ReadonlySet<string>;
   /** Loads a document into a tab that already exists (or is about to). `kind` picks the loader — a code editor reads through the text-file API, not the Markdown one. */
   readonly loadDocumentIntoView: (tabId: string, rootPath: string, relativePath: string, kind?: string) => void;
-  /** Opens a note: makes the tab, announces it, loads it. `placement` decides whether it may take over the tab on screen — see {@link TabOpenPlacement}. */
-  readonly openMarkdownDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
-  /** Opens any file: infers tab kind from extension, loads via the right API. */
-  readonly openFileDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => void;
+  /** Opens a note: makes the tab, announces it, loads it. `placement` decides whether it may take over the tab on screen — see {@link TabOpenPlacement}. Returns the destination view's actual tab id. */
+  readonly openMarkdownDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => string;
+  /** Opens any file: infers tab kind from extension, loads via the right API. Returns the destination view's actual tab id. */
+  readonly openFileDocument: (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => string;
   /** Opens a blank landing tab; returns its id so a chrome can navigate to it. */
   readonly openNewTab: () => string;
   /** Re-reads a changed file into the tab already showing it. */
   readonly reloadDocumentInPlace: (tabId: string, rootPath: string, relativePath: string) => void;
   /** Records an edit and marks the tab dirty. */
   readonly updateDocument: (tabId: string, contents: string) => void;
-  /** Writes a tab to disk. Resolves `true` when the write succeeded. */
+  /** Writes a tab to disk. Resolves `true` only when the snapshot fully landed — newer edits still unsaved mean `false`. */
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
   /** Keeps the tab's edits and re-anchors it to what is now on disk. */
   readonly keepMyVersion: (tab: DesktopTab) => void;
@@ -80,11 +80,16 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
   // Read by callbacks that must see the latest documents without being rebuilt
   // — and by `saveDocument`, which compares before and after an await.
   const documentsRef = useRef(documents);
+  // Latest tab state for the openers, which must plan against the same state
+  // the reducer will see — the view id they load into is the view id the
+  // reducer creates, collision suffixes included.
+  const tabStateRef = useRef(tabState);
   const [conflicts, setConflicts] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     documentsRef.current = documents;
-  }, [documents]);
+    tabStateRef.current = tabState;
+  }, [documents, tabState]);
 
   // Everything a closed tab leaves behind, dropped together.
   //
@@ -113,11 +118,19 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
   if (prunedConflicts !== conflicts) setConflicts(prunedConflicts);
 
   // An unmount cannot tell a switch away from a close, so the editor parks its
-  // cursor and undo history either way and the shell — which knows which tabs
-  // are left — drops the ones nobody can return to.
+  // cursor and undo history either way and the shell sweeps the keys nobody
+  // can return to: open tabs AND the view ids retained visits still name —
+  // a link replacement is navigation, not close, so a displaced document's
+  // parked state survives for Back. A closed tab drops its whole trail, so
+  // its visited views fall out here naturally.
+  const parkedIds = useMemo(() => {
+    const ids = new Set(openTabIds);
+    for (const visit of tabState.history.entries) ids.add(visit.tab.id);
+    return ids;
+  }, [openTabIds, tabState.history.entries]);
   useEffect(() => {
-    releaseEditorStatesExcept(openTabIds);
-  }, [openTabIds]);
+    releaseEditorStatesExcept(parkedIds);
+  }, [parkedIds]);
 
   /**
    * Loads a workspace document into the view-state map.
@@ -159,15 +172,18 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
   );
 
   const openMarkdownDocument = useCallback(
-    (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => {
+    (rootPath: string, relativePath: string, placement?: TabOpenPlacement): string => {
       const tab = createEditorTab({ rootPath, relativePath });
+      const prepared = prepareTabOpen(tabStateRef.current, tab, placement);
+      const tabId = "tabId" in prepared ? prepared.tabId : prepared.tab.id;
       dispatchTabs({ type: "open", tab, placement });
       appEvents.emit("note.opened", { rootPath, relativePath });
 
       // Already open: raising the tab is the whole action, and re-reading would
       // throw away edits the user has not saved.
-      if (documentsRef.current[tab.id]) return;
-      loadDocumentIntoView(tab.id, rootPath, relativePath);
+      if (documentsRef.current[tabId]) return tabId;
+      loadDocumentIntoView(tabId, rootPath, relativePath);
+      return tabId;
     },
     [dispatchTabs, loadDocumentIntoView]
   );
@@ -178,18 +194,21 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
    * (image/audio/video) open as read-only viewer tabs with no document state.
    */
   const openFileDocument = useCallback(
-    (rootPath: string, relativePath: string, placement?: TabOpenPlacement) => {
+    (rootPath: string, relativePath: string, placement?: TabOpenPlacement): string => {
       const tab = createFileTab({ rootPath, relativePath });
+      const prepared = prepareTabOpen(tabStateRef.current, tab, placement);
+      const tabId = "tabId" in prepared ? prepared.tabId : prepared.tab.id;
       dispatchTabs({ type: "open", tab, placement });
       appEvents.emit("note.opened", { rootPath, relativePath });
 
       // Media viewer tabs have no document state — they load directly from disk
       // via the asset protocol in the viewer component.
-      if (isMediaViewerKind(tab.kind)) return;
+      if (isMediaViewerKind(tab.kind)) return tabId;
 
       // Already open: raising the tab is the whole action.
-      if (documentsRef.current[tab.id]) return;
-      loadDocumentIntoView(tab.id, rootPath, relativePath, tab.kind);
+      if (documentsRef.current[tabId]) return tabId;
+      loadDocumentIntoView(tabId, rootPath, relativePath, tab.kind);
+      return tabId;
     },
     [dispatchTabs, loadDocumentIntoView]
   );
@@ -241,7 +260,9 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
    * watcher saw the change and the tab was already dirty, whereas the
    * precondition is checked on every save whatever the tab knew.
    *
-   * @returns `true` when the write succeeded.
+   * @returns `true` when the write succeeded *and* nothing newer remains
+   *   unsaved — text typed during the round trip still needs another save,
+   *   so callers deciding whether to navigate treat it as "still dirty".
    */
   const saveDocument = useCallback(async (tab: DesktopTab): Promise<boolean> => {
     const document = documentsRef.current[tab.id];
@@ -280,7 +301,7 @@ export function useDocumentViews({ tabState, dispatchTabs }: DocumentViewsProps)
     // Saving settles any conflict this tab was holding: the user answered it by
     // writing their version, and the file is now theirs.
     setConflicts((current) => clearConflict(current, tab.id));
-    return true;
+    return !hasNewerEdits;
   }, [dispatchTabs]);
 
   /**

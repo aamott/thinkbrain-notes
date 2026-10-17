@@ -16,7 +16,7 @@ import { useEffect, type Dispatch, type RefObject } from "react";
 
 import { appEvents } from "../events/appEvents";
 import { subscribeToNoteChanges } from "../events/noteChangeSubscription";
-import { documentTabId, editorTabId, fileTabId, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
+import { isFileResourceTab, retargetIdAllocator, type DesktopTabAction, type DesktopTabState } from "../tabs/tabModel";
 import { planDocumentSync, type OpenDocument } from "./externalDocumentSync";
 
 /** Props for {@link useExternalDocumentSync}. */
@@ -60,21 +60,21 @@ export function useExternalDocumentSync({
     if (!workspacePath) return;
     const rootPath = workspacePath;
 
-    // A tab is identified by the path of its file, so a rename moves the tab
-    // rather than changing what it holds. Markdown files keep `editor:` tabs
-    // and everything else keeps `file:` tabs, so either id may be the match.
-    // This is not only about outside renames: renaming from the explorer left
-    // the tab pointing at a path nothing lived at, and saving it recreated
-    // the old file.
+    // Resource matching, not id assumptions: the file may be open in several
+    // trails under different view ids — every one follows. This is not only
+    // about outside renames: renaming from the explorer left the tab pointing
+    // at a path nothing lived at, and saving it recreated the old file.
     const retargetOpenTab = (oldRelativePath: string, newRelativePath: string) => {
       const from = { rootPath, relativePath: oldRelativePath };
       const to = { rootPath, relativePath: newRelativePath };
-      const open = tabStateRef.current.tabs.find(
-        (tab) => tab.id === editorTabId(from) || tab.id === fileTabId(from)
-      );
-      // The destination's own inferred kind decides the new id — an
-      // extension-changing rename moves the document to the other id scheme.
-      if (open) moveDocument(open.id, documentTabId(to));
+      // Move each open view's document to the id the retarget gives it —
+      // before dispatching, so no render sees a moved view without its text.
+      // The shared allocator means a rename colliding with another trail's
+      // view id lands the document on the same collision id the tab gets.
+      const movedId = retargetIdAllocator(tabStateRef.current, from, to);
+      for (const tab of tabStateRef.current.tabs) {
+        if (isFileResourceTab(tab, from)) moveDocument(tab.id, movedId(tab.id));
+      }
       // The retarget runs even when nothing open shows `from`: history keeps
       // displaced visits (a taken-over preview, say) whose descriptor still
       // names the old path — without this, Back lands on a path nothing

@@ -3,7 +3,6 @@ import { useCallback, useMemo } from "react";
 
 import type { DesktopCommand } from "../../commands/commandRegistry";
 import { openUrl } from "../../native/opener";
-import { documentTabId, editorTabId, type DesktopTab } from "../../tabs/tabModel";
 import type { WorkspaceExplorerProps } from "../../workspace/WorkspaceExplorer";
 import type { ShellState } from "../useShellState";
 import type { PhoneNavigation } from "./usePhoneNavigation";
@@ -11,8 +10,7 @@ import type { PhoneNavigation } from "./usePhoneNavigation";
 /** The shell values {@link usePhoneOpeners} reads, taken as values (never the
  *  `shell` object itself — useShellState returns a new object every render). */
 export interface UsePhoneOpenersParams {
-  readonly activeTab: DesktopTab | null;
-  readonly saveDocument: ShellState["saveDocument"];
+  readonly beforeNavigate: ShellState["beforeNavigate"];
   readonly openMarkdownDocument: ShellState["openMarkdownDocument"];
   readonly openFileDocument: ShellState["openFileDocument"];
   readonly openNewTabDocument: ShellState["openNewTab"];
@@ -41,8 +39,7 @@ export interface PhoneOpeners {
  * they open as one Back entry, not two.
  */
 export function usePhoneOpeners({
-  activeTab,
-  saveDocument,
+  beforeNavigate,
   openMarkdownDocument,
   openFileDocument,
   openNewTabDocument,
@@ -52,39 +49,34 @@ export function usePhoneOpeners({
   navigation,
   explorerProps
 }: UsePhoneOpenersParams): PhoneOpeners {
-  // The phone rule is one tab: a file tap fills the tab on screen. When that
-  // tab is dirty it is saved first — autosave fires on a 1.5s idle, and a tap
-  // inside that window would otherwise replace unsaved text. A failed save
-  // leaves the tab dirty, which is exactly when the reducer appends rather
-  // than displacing the edits.
+  // Use the shell's save/context guard, so a delayed file tap cannot replace
+  // a different tab or workspace selected while the save was in flight.
   const flushThen = useCallback(
     (open: () => void) => {
-      if (activeTab?.isDirty) void saveDocument(activeTab).finally(open);
-      else open();
+      void beforeNavigate().then((allowed) => {
+        if (allowed) open();
+      });
     },
-    [activeTab, saveDocument]
+    [beforeNavigate]
   );
 
   // Opens that *do* pass through the phone chrome push explicitly, so the note
-  // they land on is one history entry — not two. The observer above skips the
-  // resulting active-tab change because the route already names the same tab.
+  // they land on is one history entry — not two. The pushed route names the
+  // view id the opener actually created — collision suffixes included.
   const openMarkdown = useCallback(
     (rootPath: string, relativePath: string) => {
       flushThen(() => {
-        openMarkdownDocument(rootPath, relativePath, "replace-active");
-        navigation.push({ kind: "tab", tabId: editorTabId({ rootPath, relativePath }) });
+        const tabId = openMarkdownDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId });
       });
     },
     [openMarkdownDocument, navigation, flushThen]
   );
-  // The pushed route must name the tab `openFileDocument` actually creates —
-  // `documentTabId` — so a `.md` tap lands on its `editor:` id, not a `file:`
-  // route that misses the tab that was just made.
   const openFile = useCallback(
     (rootPath: string, relativePath: string) => {
       flushThen(() => {
-        openFileDocument(rootPath, relativePath, "replace-active");
-        navigation.push({ kind: "tab", tabId: documentTabId({ rootPath, relativePath }) });
+        const tabId = openFileDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId });
       });
     },
     [openFileDocument, navigation, flushThen]
@@ -121,10 +113,13 @@ export function usePhoneOpeners({
   // on top of the new tab route rather than underneath it.
   const showVersions = useCallback(
     (rootPath: string, relativePath: string) => {
-      openFile(rootPath, relativePath);
-      navigation.showOverlay({ kind: "inspector", panel: "history", parent: "content" });
+      flushThen(() => {
+        const tabId = openFileDocument(rootPath, relativePath, "replace-active");
+        navigation.push({ kind: "tab", tabId });
+        navigation.showOverlay({ kind: "inspector", panel: "history", parent: "content" });
+      });
     },
-    [openFile, navigation]
+    [flushThen, openFileDocument, navigation]
   );
 
   // The popup's create path runs the canonical command — the existing

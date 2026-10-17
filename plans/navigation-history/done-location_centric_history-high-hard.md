@@ -5,6 +5,10 @@
 Make global Back/Forward return to document locations, including within one
 file. Preserve the latest text and undo state; navigation is never Undo.
 
+The global tab-activation policy below is superseded by
+`tab_local_link_navigation`. Position capture/restoration remains reusable;
+tab selection must no longer be a navigation visit.
+
 ## Architecture
 
 - Keep one bounded, in-memory `entries + cursor` timeline. Each entry has a

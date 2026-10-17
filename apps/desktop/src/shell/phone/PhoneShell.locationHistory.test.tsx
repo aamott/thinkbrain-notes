@@ -107,49 +107,47 @@ describe("PhoneShell location history", () => {
     await act(async () => shell().openMarkdownDocument("/vault", "bravo.md"));
     const tabB = shell().tabState.tabs[1]!.id;
 
-    // Back to A's visit, then close B behind the route — B's forward entry
-    // now names a visit the explicit close scrubbed.
+    // B's trail rebased the browser segment to Home + its visits: Back goes
+    // to Files, leaving B's entry in the Forward tail.
     await click(host, "Back");
-    expect(noteTitle(host)?.value).toBe("alpha");
+    expect(filesVisible(host)).toBe(true);
     await act(async () => shell().dispatchTabs({ type: "requestClose", tabId: tabB }));
     expect(shell().tabState.tabs).toHaveLength(1);
 
-    // Nothing live sits deeper: the header button and the palette command
-    // both report there is nowhere to go.
+    // The forward entry named B's now-scrubbed visit: nothing live sits
+    // deeper, so the header button and the palette command both grey out.
     expect(forwardButton(host)?.disabled).toBe(true);
     const goForward = shell().paletteCommands.find((command) => command.id === "go-forward");
     expect(goForward?.availability).toBe("unavailable");
 
-    // A raw OS-level forward pop onto the dead tail bounces back to A —
-    // never a phantom Home and never the closed resource.
+    // A raw OS-level forward pop onto the dead tail bounces back to Files —
+    // never a phantom note and never the closed resource.
     await act(async () => window.history.forward());
-    expect(noteTitle(host)?.value).toBe("alpha");
-    expect(filesVisible(host)).toBe(false);
+    expect(filesVisible(host)).toBe(true);
+    expect(noteTitleVisible(host)).toBe(false);
     expect(shell().tabState.tabs).toHaveLength(1);
   });
 
-  it("skips the closed tab's visit in both directions", async () => {
+  it("Back inside a trail never steps onto another tab's visits", async () => {
     const { host, shell } = await renderWithShell();
+    // One trail: A replaced by B replaced by C in the same slot.
     await act(async () => shell().openMarkdownDocument("/vault", "alpha.md"));
-    await act(async () => shell().openMarkdownDocument("/vault", "bravo.md"));
-    await act(async () => shell().openMarkdownDocument("/vault", "charlie.md"));
-    const tabB = shell().tabState.tabs[1]!.id;
+    await act(async () =>
+      shell().openMarkdownDocument("/vault", "bravo.md", "replace-active")
+    );
+    await act(async () =>
+      shell().openMarkdownDocument("/vault", "charlie.md", "replace-active")
+    );
+    expect(shell().tabState.tabs).toHaveLength(1);
 
-    // Back twice reaches A through B's (still live) route entry.
     await click(host, "Back");
     await click(host, "Back");
     expect(noteTitle(host)?.value).toBe("alpha");
 
-    // Close B behind the route: Forward must step over its dead entry to C.
-    await act(async () => shell().dispatchTabs({ type: "requestClose", tabId: tabB }));
-    expect(forwardButton(host)?.disabled).toBe(false);
+    // Forward walks the same trail back to C — nothing else interleaves.
+    await click(host, "Forward");
     await click(host, "Forward");
     expect(noteTitle(host)?.value).toBe("charlie");
-
-    // Back from C skips B's dead entry the same way, landing on A.
-    await click(host, "Back");
-    expect(noteTitle(host)?.value).toBe("alpha");
-    expect(shell().tabState.tabs).toHaveLength(2);
   });
 
   it("offers palette Back/Forward on Home→note even when tab history has nowhere to go", async () => {
@@ -175,7 +173,9 @@ describe("PhoneShell location history", () => {
   it("the recent-note row records a fresh visit and clears Forward", async () => {
     const { host, shell } = await renderWithShell({ restoredWorkspacePath: "/vault" });
     await act(async () => shell().openMarkdownDocument("/vault", "alpha.md"));
-    await act(async () => shell().openMarkdownDocument("/vault", "bravo.md"));
+    await act(async () =>
+      shell().openMarkdownDocument("/vault", "bravo.md", "replace-active")
+    );
     const visitB = shell().tabState.history.entries.at(-1);
 
     // Back to A's visit, then pick B from the New-note menu: this is fresh
@@ -194,7 +194,7 @@ describe("PhoneShell location history", () => {
     expect(current?.id).not.toBe(visitB?.id);
     expect(shell().tabState.history.entries).toHaveLength(2);
     expect(forwardButton(host)?.disabled).toBe(true);
-    expect(shell().tabState.tabs).toHaveLength(2);
+    expect(shell().tabState.tabs).toHaveLength(1);
   });
 
   it("closing the only open note from the switcher lands Files, not a dead tab surface", async () => {
