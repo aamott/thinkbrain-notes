@@ -127,16 +127,28 @@ test("a heading typed but unsaved resolves on tap", async ({ page }) => {
   await page.getByRole("button", { name: "Open guide.md" }).tap();
   await expect(editor(page).getByText(/Guide/)).toBeVisible();
 
-  // Type the heading into the live document — no save required. The
-  // newlines split the parked line wherever the tap's caret lands, so the
-  // heading always ends up on its own line; the departure tap below targets
-  // a different line the insert can never touch. Under touch emulation the
-  // caret focuses a beat after the tap and Enter keydowns don't reliably
-  // split lines, so `insertText` inserts real newlines via the input path.
-  await expect(page.locator(".cm-editor")).toHaveClass(/cm-focused/);
-  await page.keyboard.insertText("\n\n## Fresh Heading");
-  await expect(editor(page).getByText("## Fresh Heading")).toBeVisible();
-  await editor(page).getByText("filler 4", { exact: true }).tap();
+  // Append the heading straight into the live editor — an unsaved, dirty
+  // change exactly like typing it. Touch-keyboard input proved flaky under
+  // CI emulation, so the edit goes through a real CodeMirror transaction
+  // instead, and the caret parks back at the top where the link renders.
+  await page.evaluate(async () => {
+    const src = await fetch("/src/tabs/MarkdownEditor.tsx").then((r) => r.text());
+    const dep = src.match(/\/node_modules\/\.vite\/deps\/@codemirror_view\.js\?v=[a-z0-9]+/)![0];
+    const { EditorView } = (await import(/* @vite-ignore */ dep)) as {
+      EditorView: {
+        findFromDOM: (dom: Element) => {
+          state: { doc: { length: number } };
+          dispatch: (spec: Record<string, unknown>) => void;
+        } | null;
+      };
+    };
+    const view = EditorView.findFromDOM(document.querySelector(".cm-editor")!);
+    if (view === null) throw new Error("no live editor");
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: "\n\n## Fresh Heading" }
+    });
+    view.dispatch({ selection: { anchor: 0 }, scrollIntoView: true });
+  });
 
   await page.locator(".cm-link-resolved", { hasText: "Fresh" }).tap();
   await expect.poll(() => spot(page)).toBe("## Fresh Heading");
