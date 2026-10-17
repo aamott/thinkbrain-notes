@@ -32,6 +32,8 @@ export interface DesktopCommandContext {
   readonly toggleAssistant: () => void;
   readonly toggleBottomPanel: () => void;
   readonly toggleLivePreview: () => void;
+  readonly moveTabLeft: () => void;
+  readonly moveTabRight: () => void;
   /** Reveals a panel by its fully-qualified id, opening its side popout — either dock. */
   readonly revealPanel: (panelId: string) => void;
   /** Reveals a left-side panel by id; admits registered extension panels too. */
@@ -96,6 +98,18 @@ const withClosePalette = (action: NoArgContextAction) => (context: DesktopComman
 
 /** First-party command ownership and availability are explicit and testable. */
 export const builtInDesktopCommands: readonly DesktopCommand[] = [
+  available({
+    id: "move-tab-left",
+    title: "Move tab left",
+    keywords: ["reorder"],
+    handler: withClosePalette("moveTabLeft")
+  }),
+  available({
+    id: "move-tab-right",
+    title: "Move tab right",
+    keywords: ["reorder"],
+    handler: withClosePalette("moveTabRight")
+  }),
   available({
     id: "new-note",
     title: "New note",

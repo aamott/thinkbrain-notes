@@ -16,6 +16,8 @@ const commandContext: DesktopCommandContext = {
   toggleAssistant: () => undefined,
   toggleBottomPanel: () => undefined,
   toggleLivePreview: () => undefined,
+  moveTabLeft: () => undefined,
+  moveTabRight: () => undefined,
   revealPanel: () => undefined,
   revealLeftPanel: () => undefined,
   openSettings: () => undefined,
@@ -25,10 +27,23 @@ const commandContext: DesktopCommandContext = {
 };
 
 describe("desktop command registry", () => {
+  it("runs tab movement through the shell and closes the palette", () => {
+    const moveTabLeft = vi.fn();
+    const moveTabRight = vi.fn();
+    const closePalette = vi.fn();
+    const context = { ...commandContext, moveTabLeft, moveTabRight, closePalette };
+    const registry = createDesktopCommandRegistry();
+    registry.get("move-tab-left")?.handler(context);
+    registry.get("move-tab-right")?.handler(context);
+    expect(moveTabLeft).toHaveBeenCalledOnce();
+    expect(moveTabRight).toHaveBeenCalledOnce();
+    expect(closePalette).toHaveBeenCalledTimes(2);
+  });
   it("provides the shell commands needed by the command palette", () => {
     const registry = createDesktopCommandRegistry();
 
     expect(registry.entries().map((command) => command.id)).toEqual([
+      "move-tab-left", "move-tab-right",
       "new-note", "search", "go-back", "go-forward",
       "toggle-live-preview", "toggle-theme",
       "toggle-explorer", "toggle-outline", "toggle-assistant", "toggle-bottom-panel",

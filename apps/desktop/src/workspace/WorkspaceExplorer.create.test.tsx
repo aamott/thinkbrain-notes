@@ -622,6 +622,8 @@ describe("desktop canonical New note command integration", () => {
         toggleAssistant: vi.fn(),
         toggleBottomPanel: vi.fn(),
         toggleLivePreview: vi.fn(),
+        moveTabLeft: vi.fn(),
+        moveTabRight: vi.fn(),
         revealPanel: vi.fn(),
         revealLeftPanel: vi.fn(),
         openSettings: vi.fn(),

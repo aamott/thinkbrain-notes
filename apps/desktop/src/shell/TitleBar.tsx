@@ -16,6 +16,7 @@ import {
   serializePinnedActionItems
 } from "./actionItemsModel";
 import { WorkspaceSwitchingSelector } from "../workspace/WorkspaceSwitching";
+import { useTabStripDrag } from "./useTabStripDrag";
 
 /**
  * Back/Forward chrome: the ⌘ command-palette button's sizing, with hover
@@ -61,6 +62,7 @@ type TitleBarProps = {
   readonly onRequestCloseTab: (tabId: string) => void;
   /** Called when the user double-clicks a tab, keeping a preview open. */
   readonly onKeepTab: (tabId: string) => void;
+  readonly onReorderTab: (tabId: string, toIndex: number) => void;
   /** Called when the user clicks the strip's "+" affordance. */
   readonly onNewTab: () => void;
   /** Called when the user toggles a right-dock panel button. */
@@ -107,6 +109,7 @@ export function TitleBar({
   onSelectTab,
   onRequestCloseTab,
   onKeepTab,
+  onReorderTab,
   onNewTab,
   onToggleRightPanel,
   onOpenCommandPalette,
@@ -175,6 +178,7 @@ export function TitleBar({
   // non-passive native listener so preventDefault works (React's onWheel is
   // passive at the root and would warn / no-op on preventDefault).
   const tabStripRef = useRef<HTMLElement>(null);
+  const tabDrag = useTabStripDrag(tabStripRef, tabs, onReorderTab);
   useEffect(() => {
     const el = tabStripRef.current;
     if (!el) return;
@@ -293,8 +297,17 @@ export function TitleBar({
           className="tn-scrollbar-none flex items-end gap-0.5 h-full min-w-0 overflow-x-auto"
           aria-label="Open tabs"
           onScroll={measureScrollEdges}
+          onClickCapture={(event) => {
+            if (event.detail > 0 && tabDrag.suppressClick()) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          onDoubleClickCapture={(event) => {
+            if (tabDrag.suppressClick()) event.stopPropagation();
+          }}
         >
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = tab.id === activeTabId;
           // Restore previews of one file share a title; the accessible name
           // and tooltip carry the version's date so they stay distinct.
@@ -303,19 +316,23 @@ export function TitleBar({
             <div
               key={tab.id}
               data-tab-id={tab.id}
+              style={tabDrag.tabStyle(index)}
               ref={(el) => {
                 if (el) tabElementsRef.current.set(tab.id, el);
                 else tabElementsRef.current.delete(tab.id);
               }}
               className={cn(
                 "flex items-center bg-tab-inactive text-tab-inactive-foreground border-t-2 border-t-transparent rounded-t-small flex-[0_0_clamp(7.5rem,15vw,12.5rem)] max-[760px]:flex-basis-[7.25rem] text-xs h-[calc(100%-3px)] min-w-0 hover:bg-secondary",
-                isActive && "bg-tab-active border-t-primary text-tab-active-foreground"
+                isActive && "bg-tab-active border-t-primary text-tab-active-foreground",
+                tabDrag.draggedTabId === tab.id && "relative z-10 opacity-90 shadow-md ring-1 ring-border"
               )}
             >
               <button
                 type="button"
                 className="flex flex-1 items-center min-w-0 gap-[0.45rem] h-full border-0 py-0 pr-1 pl-[0.65rem] text-inherit bg-transparent cursor-pointer font-inherit text-left focus-visible:text-foreground focus-visible:outline-1 focus-visible:outline-primary focus-visible:-outline-offset-2"
                 onClick={() => onSelectTab(tab.id)}
+                onPointerDown={(event) => tabDrag.onPointerDown(event, tab.id)}
+                onDragStart={(event) => event.preventDefault()}
                 onDoubleClick={() => onKeepTab(tab.id)}
                 // Only restore tabs get an explicit name: an explicit
                 // aria-label would override the dirty dot's "Unsaved changes"

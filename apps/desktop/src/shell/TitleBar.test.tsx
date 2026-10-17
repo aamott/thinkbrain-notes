@@ -47,6 +47,7 @@ const render = async (props: {
         onSelectTab={() => undefined}
         onRequestCloseTab={() => undefined}
         onKeepTab={props.onKeepTab ?? (() => undefined)}
+        onReorderTab={() => undefined}
         onNewTab={props.onNewTab ?? (() => undefined)}
         onToggleRightPanel={props.onToggleRightPanel ?? (() => undefined)}
         onOpenCommandPalette={() => undefined}

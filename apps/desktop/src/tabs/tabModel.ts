@@ -1,6 +1,7 @@
 import type { Tab, TabKind, TabResource } from "@thinkbrain/core";
 import { inferTabKind } from "@thinkbrain/core";
 import type { ChangeDesc } from "@codemirror/state";
+import { reorderTab, type TabReorderAction } from "./tabReorder";
 
 import {
   activateExistingTab,
@@ -111,6 +112,7 @@ export interface DesktopTabState {
 export type TabOpenPlacement = "new" | "preview" | "replace-active";
 
 export type DesktopTabAction =
+  | TabReorderAction
   | { readonly type: "open"; readonly tab: DesktopTab; readonly placement?: TabOpenPlacement }
   | { readonly type: "keep"; readonly tabId: string }
   | { readonly type: "activate"; readonly tabId: string }
@@ -358,6 +360,7 @@ export function desktopTabReducer(
   action: DesktopTabAction
 ): DesktopTabState {
   switch (action.type) {
+    case "reorder": return reorderTab(state, action);
     case "open": {
       const prepared = prepareTabOpen(state, action.tab, action.placement);
       if (prepared.kind === "noop") return state;

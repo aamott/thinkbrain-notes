@@ -165,6 +165,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
           onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
           onKeepTab={(tabId) => dispatchTabs({ type: "keep", tabId })}
+          onReorderTab={(tabId, toIndex) => dispatchTabs({ type: "reorder", tabId, toIndex })}
           onNewTab={() => shell.openNewTab()}
           onToggleRightPanel={shell.toggleRightPanel}
           onOpenCommandPalette={shell.openPalette}
