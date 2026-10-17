@@ -37,3 +37,16 @@ Found while testing `workspace_session_owner` (merged with main through #50):
   spelling than events carry.
 - `useWorkspaceIndexes` watch effect not re-running when the session root
   changes (deps: `restoredWorkspacePath`, `setWorkspaceFiles`).
+
+## Native Recheck (2026-10-17)
+
+Rechecked with an isolated native Tauri/WebKitGTK app at `9f66ba13`
+(application code matches `d82658a3`), a temporary vault and separate app data.
+Real filesystem edits reload a clean tab; creations refresh the explorer;
+renames retarget the open tab and explorer. A dirty tab retains local edits
+and shows the external-change warning; loading the disk version resolves it.
+Opening through a symlink is canonicalized and still receives outside edits.
+
+Not reproduced in this environment. Keep this report pending until the
+original workspace/launch conditions can be reproduced; do not infer a fix
+from passing unit tests or introduce a speculative change.
