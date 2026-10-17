@@ -16,6 +16,7 @@
 import type { ChangeDesc } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
+import { resolveHeadingLine } from "../panels/outlineModel";
 import type { EditorLocation } from "./tabHistory";
 
 const liveViews = new Map<string, EditorView>();
@@ -176,6 +177,22 @@ export function isEditorAtLine(key: string, line: number): boolean {
     targetRect.top >= scrollerRect.top &&
     targetRect.bottom <= scrollerRect.bottom
   );
+}
+
+/**
+ * The 1-based line the decoded heading `fragment` resolves to in `key`'s
+ * live editor document — read off the mounted `EditorView` state, so edits
+ * the documents map has not synced yet still count. `undefined` when no
+ * visible view is registered; `null` when the view answers but no heading
+ * matches.
+ */
+export function editorHeadingLine(
+  key: string,
+  fragment: string
+): number | null | undefined {
+  const view = liveViews.get(key);
+  if (!view || !isEditorVisible(view)) return undefined;
+  return resolveHeadingLine(view.state.doc.toString(), fragment);
 }
 
 /** `line` clamped to the document plus its start offset, for both helpers above. */

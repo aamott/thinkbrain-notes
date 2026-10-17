@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveMarkdownLinkTarget, resolveWikiLinkTarget, type NoteIndexEntry } from "./linkResolver";
+import {
+  resolveMarkdownLinkTarget,
+  resolveWikiLinkNavigationTarget,
+  resolveWikiLinkTarget,
+  type NoteIndexEntry
+} from "./linkResolver";
 
 /** Helper: builds a NoteIndexEntry with sensible defaults. */
 function entry(
@@ -233,10 +238,52 @@ describe("resolveMarkdownLinkTarget", () => {
     });
   });
 
-  it("returns null for empty, anchor-only, and escaping targets", () => {
+  it("returns null for empty and escaping targets", () => {
     expect(resolveMarkdownLinkTarget("", "a.md", notes)).toBeNull();
     expect(resolveMarkdownLinkTarget("   ", "a.md", notes)).toBeNull();
-    expect(resolveMarkdownLinkTarget("#section", "a.md", notes)).toBeNull();
     expect(resolveMarkdownLinkTarget("../../outside.md", "a/b.md", notes)).toBeNull();
+  });
+
+  it("resolves an anchor-only target as a same-note heading jump", () => {
+    expect(resolveMarkdownLinkTarget("#section", "a.md", notes)).toEqual({
+      kind: "heading",
+      fragment: "section"
+    });
+    // Encoded exactly once: `%20` becomes a space, `%2520` becomes `%20`.
+    expect(resolveMarkdownLinkTarget("#My%20Heading", "a.md", notes)).toEqual({
+      kind: "heading",
+      fragment: "My Heading"
+    });
+    expect(resolveMarkdownLinkTarget("#My%2520Heading", "a.md", notes)).toEqual({
+      kind: "heading",
+      fragment: "My%20Heading"
+    });
+    // `#` alone is the top of the note.
+    expect(resolveMarkdownLinkTarget("#", "a.md", notes)).toEqual({
+      kind: "heading",
+      fragment: ""
+    });
+  });
+});
+
+describe("resolveWikiLinkNavigationTarget", () => {
+  it("resolves `[[#Heading]]` as a same-note heading with no index", () => {
+    expect(resolveWikiLinkNavigationTarget("#Deep Section", [])).toEqual({
+      kind: "heading",
+      fragment: "Deep Section"
+    });
+    expect(resolveWikiLinkNavigationTarget(" # ", [])).toEqual({
+      kind: "heading",
+      fragment: ""
+    });
+  });
+
+  it("delegates ordinary targets to the note index", () => {
+    const notes = [entry("folder/Note.md")];
+    expect(resolveWikiLinkNavigationTarget("Note", notes)).toEqual({
+      kind: "internal",
+      relativePath: "folder/Note.md"
+    });
+    expect(resolveWikiLinkNavigationTarget("Missing", notes)).toBeNull();
   });
 });

@@ -25,7 +25,10 @@ describe("extractHeadings", () => {
   });
 
   it("does not treat non-ATX heading syntax as an outline entry", () => {
+    // Setext is outside ATX scope and stays out — but up to three leading
+    // spaces are a real ATX heading (CommonMark), which the old regex missed.
     expect(extractHeadings("Heading\n===\n # Indented\n# Valid")).toEqual([
+      { level: 1, text: "Indented", line: 3 },
       { level: 1, text: "Valid", line: 4 },
     ]);
   });

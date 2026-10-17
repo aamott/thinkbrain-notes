@@ -1,5 +1,5 @@
 import { BottomSheet, FloatingBubbles } from "@thinkbrain/ui";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BottomPanel } from "../../panels/BottomPanel";
 import { LeftPopout } from "../../panels/LeftPopout";
@@ -8,6 +8,7 @@ import {
   type RightPanelContext
 } from "../../panels/panelRegistryModel";
 import { usePanelNotificationCounts } from "../../notifications/usePanelNotificationCounts";
+import { useNotificationStore } from "../../notifications/notificationStore";
 import { useSettingsStore } from "../../settings/settingsStore";
 import { findVisit, inspectableRelativePath, isNoteTab, tabTrailId } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, type RightPanel } from "../shellTypes";
@@ -130,6 +131,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     paletteCommands,
     runCommand: runPaletteCommand,
     navigateToLine,
+    navigateToHeading,
     goToVisit: shellGoToVisit
   } = shell;
 
@@ -167,6 +169,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     beforeNavigate,
     openMarkdownDocument,
     openFileDocument,
+    navigateToHeading,
     openNewTabDocument,
     restoredWorkspacePath: shell.restoredWorkspacePath,
     paletteCommands,
@@ -300,6 +303,24 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // phone has no status bar to surface it anywhere else.
   const conflictCount = Object.values(shell.conflictBadges).reduce((sum, count) => sum + count, 0);
 
+  // Phone has no status bar, so navigation warnings ("heading not found")
+  // would be invisible — surface the latest undismissed one as an
+  // absolutely-positioned banner under the header. It never shifts layout
+  // and auto-dismisses like the desktop toast does.
+  const navigationWarning = useNotificationStore((state) => {
+    for (let index = state.notifications.length - 1; index >= 0; index -= 1) {
+      const item = state.notifications[index]!;
+      if (item.source === "navigation" && !item.dismissed) return item;
+    }
+    return null;
+  });
+  const dismissNotification = useNotificationStore((state) => state.dismissNotification);
+  useEffect(() => {
+    if (navigationWarning === null) return;
+    const timer = setTimeout(() => dismissNotification(navigationWarning.id), 8000);
+    return () => clearTimeout(timer);
+  }, [navigationWarning, dismissNotification]);
+
   // `ui.mobileBubbleLabels` turns the circles into labelled pills.
   const showBubbleLabels =
     useSettingsStore((state) => state.getEffectiveValue("ui.mobileBubbleLabels")) === true;
@@ -361,6 +382,33 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
             drawerOpen ? navigation.dismissOverlay() : navigation.showOverlay({ kind: "navigation" })
           }
         />
+
+        {/* Navigation warnings float over content — the phone has no status
+            bar to toast in, and the banner must not push the document down. */}
+        {navigationWarning !== null && (
+          <aside
+            role="alert"
+            className="absolute inset-x-3 z-50 rounded-lg border border-warning bg-popover p-3 text-popover-foreground shadow-soft"
+            style={{ top: "calc(3.5rem + env(safe-area-inset-top))" }}
+          >
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{navigationWarning.title}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {navigationWarning.message}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss navigation warning"
+                className="tn-focus-ring -m-1 flex size-11 shrink-0 items-center justify-center rounded-small text-muted-foreground hover:text-foreground"
+                onClick={() => dismissNotification(navigationWarning.id)}
+              >
+                ×
+              </button>
+            </div>
+          </aside>
+        )}
 
         {/* `isolate` confines the popout's `z-30` (and any in-panel overlays)
             to this stacking context so the floating bubbles always paint above
