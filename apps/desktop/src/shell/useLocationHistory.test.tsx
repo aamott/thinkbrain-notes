@@ -6,6 +6,7 @@ import { act, useEffect, useReducer, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { resetNotificationStore, useNotificationStore } from "../notifications/notificationStore";
 import {
   notifyEditorMapped,
   notifyEditorVisibility,
@@ -171,6 +172,7 @@ afterEach(async () => {
   container?.remove();
   container = null;
   document.body.replaceChildren();
+  resetNotificationStore();
 });
 
 describe("useLocationHistory", () => {
@@ -493,6 +495,80 @@ describe("useLocationHistory", () => {
     });
     expect(view.state.selection.main.anchor).toBe(8);
     expect(focusCalls()).toBe(focusWhenCovered + 1);
+  });
+});
+
+describe("navigateToHeading", () => {
+  it("jumps to the heading's line as one in-file visit — Back/Forward are exact", async () => {
+    const sinkRef = await mountProbe();
+    let view!: EditorView;
+    await act(async () => {
+      view = mountEditor(noteA.id, "# Top\nalpha\nbeta\n## Deep Section\ntail");
+    });
+    await act(async () => sinkRef.current!.dispatch({ type: "open", tab: noteA }));
+    await act(async () => view.dispatch({ selection: { anchor: 7 } }));
+
+    await act(async () => sinkRef.current!.api.navigateToHeading("deep-section"));
+
+    const history = sinkRef.current!.state.history;
+    expect(history.entries).toHaveLength(2);
+    const line4 = view.state.doc.line(4).from;
+    expect(view.state.selection.main.anchor).toBe(line4);
+    expect(history.entries[1]!.location).toMatchObject({ anchor: line4 });
+
+    // Back restores the parked caret; Forward lands on the heading again.
+    await act(async () => sinkRef.current!.dispatch({ type: "goBack" }));
+    expect(view.state.selection.main.anchor).toBe(7);
+    await act(async () => sinkRef.current!.dispatch({ type: "goForward" }));
+    expect(view.state.selection.main.anchor).toBe(line4);
+  });
+
+  it("sees a heading typed into the live document before any save", async () => {
+    const sinkRef = await mountProbe();
+    let view!: EditorView;
+    await act(async () => {
+      view = mountEditor(noteA.id, "# Top\nbody");
+    });
+    await act(async () => sinkRef.current!.dispatch({ type: "open", tab: noteA }));
+    // The documents map is stale — only the editor view carries the heading.
+    await act(async () =>
+      view.dispatch({ changes: { from: view.state.doc.length, insert: "\n## Unsaved" } })
+    );
+
+    await act(async () => sinkRef.current!.api.navigateToHeading("unsaved"));
+    expect(view.state.selection.main.anchor).toBe(view.state.doc.line(3).from);
+    expect(sinkRef.current!.state.history.entries).toHaveLength(2);
+  });
+
+  it("a missing heading warns and records nothing — no jump, no load", async () => {
+    const sinkRef = await mountProbe();
+    const view = mountEditor(noteA.id, "# Only\nbody");
+    await act(async () => registerEditorView(noteA.id, view));
+    await act(async () => sinkRef.current!.dispatch({ type: "open", tab: noteA }));
+    const anchor = view.state.selection.main.anchor;
+    const loads = sinkRef.current!.loadDocumentIntoView.mock.calls.length;
+
+    await act(async () => sinkRef.current!.api.navigateToHeading("nope"));
+
+    expect(sinkRef.current!.state.history.entries).toHaveLength(1);
+    expect(view.state.selection.main.anchor).toBe(anchor);
+    // The miss never touches the loader — the open's own load stands alone.
+    expect(sinkRef.current!.loadDocumentIntoView.mock.calls.length).toBe(loads);
+    const warning = useNotificationStore.getState().notifications.at(-1);
+    expect(warning).toMatchObject({
+      source: "navigation",
+      title: "Heading not found",
+      variant: "warning"
+    });
+  });
+
+  it("is a no-op on a non-editor tab or without a live view", async () => {
+    const sinkRef = await mountProbe();
+    // No registered editor: resolution cannot run — silently inert.
+    await act(async () => sinkRef.current!.dispatch({ type: "open", tab: noteA }));
+    await act(async () => sinkRef.current!.api.navigateToHeading("anything"));
+    expect(sinkRef.current!.state.history.entries).toHaveLength(1);
+    expect(useNotificationStore.getState().notifications).toHaveLength(0);
   });
 });
 

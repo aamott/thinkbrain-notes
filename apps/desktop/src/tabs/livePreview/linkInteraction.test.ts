@@ -176,3 +176,70 @@ describe("link gesture tracking", () => {
     expect(follow).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("same-note heading targets", () => {
+  it("follows a wiki heading link without needing a vault index", () => {
+    const follow = vi.fn();
+    preview = mountPreview("go [[#Deep%20Dive]]", 0, {
+      noteIndex: [],
+      relativePath: "home.md",
+      onOpenLink: follow
+    });
+    const linkEl = resolvedLink();
+
+    linkEl.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    linkEl.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(follow).toHaveBeenCalledWith({ kind: "heading", fragment: "Deep Dive" });
+  });
+
+  it("follows a markdown anchor link the same way", () => {
+    const follow = vi.fn();
+    preview = mountPreview("go [section](#Deep%20Dive)", 0, OPTIONS(follow));
+    const linkEl = resolvedLink();
+
+    linkEl.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    linkEl.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(follow).toHaveBeenCalledWith({ kind: "heading", fragment: "Deep Dive" });
+  });
+});
+
+describe("touch presses", () => {
+  const touchDown = (el: HTMLElement): MouseEvent => {
+    const event = new MouseEvent("pointerdown", { bubbles: true });
+    // PointerEvent is unavailable in happy-dom — stamp pointerType on a
+    // MouseEvent so the gesture records a touch press.
+    Object.defineProperty(event, "pointerType", { value: "touch" });
+    el.dispatchEvent(event);
+    return event;
+  };
+
+  it("consumes the compat mousedown on a touch press too — no caret plant", () => {
+    const follow = vi.fn();
+    preview = mountPreview("see [the note](My%20Note.md) now", 0, OPTIONS(follow));
+    const linkEl = resolvedLink();
+
+    touchDown(linkEl);
+    const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    linkEl.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true);
+
+    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(follow).toHaveBeenCalledTimes(1);
+    expect(preview.view.state.selection.main.head).toBe(0);
+  });
+
+  it("a contextmenu cancels an armed touch gesture — no follow on release", () => {
+    const follow = vi.fn();
+    preview = mountPreview("see [the note](My%20Note.md) now", 0, OPTIONS(follow));
+    const linkEl = resolvedLink();
+
+    touchDown(linkEl);
+    linkEl.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    // The long-press menu arrives where a tap's click would have.
+    linkEl.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    linkEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(follow).not.toHaveBeenCalled();
+  });
+});

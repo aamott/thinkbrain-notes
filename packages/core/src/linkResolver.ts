@@ -100,6 +100,8 @@ export function resolveWikiLinkTarget(
 /** Where a `[text](target)` Markdown link points. */
 export type MarkdownLinkTarget =
   | { readonly kind: "internal"; readonly relativePath: string }
+  /** Same-note anchor — `#Heading`/`[[#Heading]]` jumps inside the open note. */
+  | { readonly kind: "heading"; readonly fragment: string }
   | { readonly kind: "external"; readonly url: string };
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
@@ -143,16 +145,17 @@ const SAFE_EXTERNAL = /^(https?|mailto|tel):/i;
  * Resolves a `[text](target)` target. Allowed external schemes (`https:`,
  * `mailto:`, `//host/…`) come back as URLs to hand the OS — anything else
  * (`javascript:`, `data:`, `file:`, …) returns `null` rather than reaching
- * an OS handler that might run it. Internal targets resolve relative to the
- * containing note's folder — a `#anchor` suffix addresses the file part
- * only — then match the note index exactly before falling back to
- * vault-wide lookup. Non-note files have no index entry, so an internal
- * target with a non-Markdown extension resolves optimistically; the opener
- * reports it if the file is not there.
+ * an OS handler that might run it. An anchor-only target (`#heading`)
+ * names a heading in the *current* note — the fragment is percent-decoded
+ * once, so `#` alone yields `""` (jump to top). Internal targets resolve
+ * relative to the containing note's folder — a `#anchor` suffix addresses
+ * the file part only — then match the note index exactly before falling
+ * back to vault-wide lookup. Non-note files have no index entry, so an
+ * internal target with a non-Markdown extension resolves optimistically;
+ * the opener reports it if the file is not there.
  *
- * Returns `null` for empty targets, anchor-only targets (`#heading`),
- * disallowed schemes, and targets that escape the vault — callers render
- * those as broken.
+ * Returns `null` for empty targets, disallowed schemes, and targets that
+ * escape the vault — callers render those as broken.
  */
 export function resolveMarkdownLinkTarget(
   target: string,
@@ -161,7 +164,10 @@ export function resolveMarkdownLinkTarget(
 ): MarkdownLinkTarget | null {
   const raw = target.trim();
   const unwrapped = raw.startsWith("<") && raw.endsWith(">") ? raw.slice(1, -1).trim() : raw;
-  if (unwrapped === "" || unwrapped.startsWith("#")) return null;
+  if (unwrapped === "") return null;
+  if (unwrapped.startsWith("#")) {
+    return { kind: "heading", fragment: safeDecode(unwrapped.slice(1)) };
+  }
   if (unwrapped.startsWith("//")) {
     return { kind: "external", url: `https:${unwrapped}` };
   }
@@ -184,4 +190,22 @@ export function resolveMarkdownLinkTarget(
     return { kind: "internal", relativePath: joined };
   }
   return null;
+}
+
+/**
+ * Resolves a `[[Target]]` for navigation: a leading `#` names a heading in
+ * the current note (no vault index needed), anything else delegates to the
+ * ordinary {@link resolveWikiLinkTarget} note lookup. Returns the same
+ * target union Markdown links produce so one opener serves both.
+ */
+export function resolveWikiLinkNavigationTarget(
+  target: string,
+  notes: readonly NoteIndexEntry[]
+): MarkdownLinkTarget | null {
+  const trimmed = target.trim();
+  if (trimmed.startsWith("#")) {
+    return { kind: "heading", fragment: safeDecode(trimmed.slice(1)) };
+  }
+  const relativePath = resolveWikiLinkTarget(trimmed, notes);
+  return relativePath === null ? null : { kind: "internal", relativePath };
 }

@@ -2,7 +2,7 @@
 import { dismissTopOverlay, useDismissable } from "@thinkbrain/ui";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   usePhoneNavigation,
@@ -673,5 +673,29 @@ describe("usePhoneNavigation forward", () => {
 
     expect(nav().route).toEqual({ kind: "files" });
     expect(nav().canGoForward).toBe(false);
+  });
+
+  it("captures the departing location for overlay and non-tab pushes, not tab mirrors", async () => {
+    const captureDeparture = vi.fn();
+    const nav = await renderNav("/vault", {
+      captureDeparture,
+      isVisitLive: () => true,
+      beforeNavigate: () => Promise.resolve(true)
+    });
+
+    // A bare tab push mirrors a visit the core dispatch already captured —
+    // a second capture here would read the destination caret into the visit
+    // being left (the heading-jump corruption this guards).
+    await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
+    expect(captureDeparture).not.toHaveBeenCalled();
+
+    // An inspector pushed over the tab still departs the editor surface.
+    await act(async () =>
+      nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
+    );
+    expect(captureDeparture).toHaveBeenCalledTimes(1);
+
+    await act(async () => nav().push({ kind: "files" }));
+    expect(captureDeparture).toHaveBeenCalledTimes(2);
   });
 });
