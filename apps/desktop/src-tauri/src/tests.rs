@@ -11,6 +11,8 @@
 //! - [`settings`] — settings paths, read/write, atomic writes, quarantine,
 //!   write preconditions, theme.
 //! - [`desktop_state`] — desktop-state merge/version/tabs/workspace views.
+//! - [`blocking_commands`] — blocking-pool offload semantics and the async
+//!   boundary of the read commands that use it.
 //! - [`workspace_markdown`] — shell status, path normalization, markdown
 //!   detection, workspace entry CRUD, symlink escapes, backup/restore, note
 //!   write preconditions.
@@ -24,6 +26,7 @@
 //! The workspace-window lifecycle tests live in
 //! `crate::workspace_window_lifecycle_tests` (sibling module).
 
+mod blocking_commands;
 mod desktop_state;
 mod search;
 mod settings;

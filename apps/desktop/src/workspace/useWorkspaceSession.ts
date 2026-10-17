@@ -25,8 +25,9 @@ export interface UseWorkspaceSessionOptions {
  * per-workspace view settings first (the listing depends on `showHidden`),
  * then the snapshot, then the entry listing.
  *
- * Every step checks the root token after its `await`, so the last `open` wins
- * and an open, listing or failure for a root the window has left is dropped.
+ * Every step checks the root token and the open generation after its
+ * `await`, so the last `open` wins even when it reopens the same root — a
+ * stale A->B->A result or failure is dropped instead of overwriting it.
  * Any failure gives the root up, the same for a startup restore and an
  * in-window switch.
  */
@@ -41,6 +42,9 @@ export function useWorkspaceSession({
   const [showHidden, setShowHiddenState] = useState(DEFAULT_WORKSPACE_SETTINGS.showHidden);
   const [explorerSort, setExplorerSort] = useState<ExplorerSortOrder>(DEFAULT_EXPLORER_SORT);
   const rootRef = useRef<string | null>(null);
+  // Monotonic request identity: each `open` gets the next number, so an
+  // earlier open of the *same* root is stale too, not only other roots.
+  const openGeneration = useRef(0);
   const showHiddenRef = useRef(showHidden);
   // The latest inputs, read after each `await`. Updated in an effect per the
   // react-hooks/refs rule.
@@ -60,30 +64,33 @@ export function useWorkspaceSession({
       setShowHidden(DEFAULT_WORKSPACE_SETTINGS.showHidden);
       setExplorerSort(DEFAULT_EXPLORER_SORT);
     }
+    const generation = ++openGeneration.current;
     rootRef.current = next;
     setRootPath(next);
     dispatch({ type: "open" });
+    // Still the open this window wants: same root, and no newer open since.
+    const isCurrent = () => rootRef.current === next && openGeneration.current === generation;
     try {
       // A failed settings read falls back to defaults rather than blocking
       // the workspace from opening.
       try {
         const settings = await latest.current.api.readWorkspaceSettings(next);
-        if (rootRef.current !== next) return;
+        if (!isCurrent()) return;
         setShowHidden(settings.showHidden);
         // Mocked or older settings documents may carry no order at all.
         setExplorerSort(settings.explorerSort ?? DEFAULT_EXPLORER_SORT);
       } catch {
-        if (rootRef.current !== next) return;
+        if (!isCurrent()) return;
       }
       const snapshot = await latest.current.api.openWorkspace(next);
-      if (rootRef.current !== next) return;
+      if (!isCurrent()) return;
       const entries = await latest.current.api.listWorkspaceEntries(next, showHiddenRef.current);
-      if (rootRef.current !== next) return;
+      if (!isCurrent()) return;
       dispatch({ type: "opened", snapshot, entries });
       setFiles(snapshot.files);
       latest.current.onOpened?.(next, snapshot);
     } catch (error) {
-      if (rootRef.current !== next) return;
+      if (!isCurrent()) return;
       dispatch({ type: "failed", message: workspaceErrorMessage(error) });
       rootRef.current = null;
       setRootPath(null);
@@ -93,8 +100,9 @@ export function useWorkspaceSession({
   }, [setShowHidden]);
 
   const refreshEntries = useCallback(async (root: string): Promise<boolean> => {
+    const generation = openGeneration.current;
     const entries = await latest.current.api.listWorkspaceEntries(root, showHiddenRef.current);
-    if (rootRef.current !== root) return false;
+    if (rootRef.current !== root || openGeneration.current !== generation) return false;
     dispatch({ type: "listed", entries });
     return true;
   }, []);
