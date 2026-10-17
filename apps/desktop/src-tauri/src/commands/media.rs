@@ -23,12 +23,15 @@ use std::io::Read;
 pub const MAX_MEDIA_BYTES: u64 = 256 * 1024 * 1024;
 
 #[tauri::command]
-pub fn read_media_file(
+pub async fn read_media_file(
     root_path: String,
     relative_path: String,
 ) -> Result<tauri::ipc::Response, NativeError> {
-    read_media_file_bytes(&root_path, &relative_path, MAX_MEDIA_BYTES)
-        .map(tauri::ipc::Response::new)
+    crate::commands::blocking::run("workspace.read_media", move || {
+        read_media_file_bytes(&root_path, &relative_path, MAX_MEDIA_BYTES)
+    })
+    .await
+    .map(tauri::ipc::Response::new)
 }
 
 /// The command body, split out so tests can drive it without an `AppHandle`

@@ -515,11 +515,11 @@ fn list_workspace_entries_scopes_to_a_path_prefix() {
     )
     .expect("outside note is created");
 
-    let entries = list_workspace_entries(
+    let entries = tauri::async_runtime::block_on(list_workspace_entries(
         root.to_string_lossy().to_string(),
         false,
         Some("journal".to_string()),
-    )
+    ))
     .expect("prefixed listing succeeds");
 
     let paths: Vec<&str> = entries
@@ -557,11 +557,11 @@ fn list_workspace_entries_missing_prefix_is_an_empty_listing() {
     )
     .expect("note is created");
 
-    let entries = list_workspace_entries(
+    let entries = tauri::async_runtime::block_on(list_workspace_entries(
         root.to_string_lossy().to_string(),
         false,
         Some("journal".to_string()),
-    )
+    ))
     .expect("missing prefix is not an error");
 
     assert!(entries.is_empty());
@@ -573,11 +573,11 @@ fn list_workspace_entries_missing_prefix_is_an_empty_listing() {
 fn list_workspace_entries_rejects_a_prefix_that_escapes() {
     let root = temp_test_dir("list-escape-prefix");
 
-    let error = list_workspace_entries(
+    let error = tauri::async_runtime::block_on(list_workspace_entries(
         root.to_string_lossy().to_string(),
         false,
         Some("../".to_string()),
-    )
+    ))
     .expect_err("escaping prefix is rejected");
 
     assert_eq!(error.code, "workspace.invalid_path");
@@ -597,21 +597,21 @@ fn list_workspace_entries_hidden_prefix_is_an_empty_listing() {
 
     // A full scan never descends into `.private`, so a scoped walk under it
     // must answer empty rather than list what the tree hides.
-    let entries = list_workspace_entries(
+    let entries = tauri::async_runtime::block_on(list_workspace_entries(
         root.to_string_lossy().to_string(),
         false,
         Some(".private".to_string()),
-    )
+    ))
     .expect("hidden prefix is not an error");
     assert!(entries.is_empty());
 
     // `include_hidden` lifts the exclusion for the prefix as it does for the
     // walk's own entries.
-    let entries = list_workspace_entries(
+    let entries = tauri::async_runtime::block_on(list_workspace_entries(
         root.to_string_lossy().to_string(),
         true,
         Some(".private".to_string()),
-    )
+    ))
     .expect("hidden prefix with include_hidden succeeds");
     assert!(
         entries
@@ -641,11 +641,11 @@ fn list_workspace_entries_ignored_prefix_is_an_empty_listing() {
     // Direct hit and a buried one — either way the full scan never reaches
     // these files.
     for prefix in ["node_modules", "deep/node_modules/x"] {
-        let entries = list_workspace_entries(
+        let entries = tauri::async_runtime::block_on(list_workspace_entries(
             root.to_string_lossy().to_string(),
             false,
             Some(prefix.to_string()),
-        )
+        ))
         .expect("ignored prefix is not an error");
         assert!(
             entries.is_empty(),

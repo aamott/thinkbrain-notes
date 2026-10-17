@@ -28,30 +28,37 @@ pub struct WorkspaceSnapshot {
 }
 
 #[tauri::command]
-pub fn open_workspace(
+pub async fn open_workspace(
     app: tauri::AppHandle,
     root_path: String,
 ) -> Result<WorkspaceSnapshot, NativeError> {
-    let root = resolve_workspace_root(&root_path)?;
+    // Everything below — root resolution, the asset-scope grant, and the
+    // listing — runs when the blocking worker picks it up, keeping the vault
+    // scan off the async worker and validating the root as it is at run
+    // time. The grant keeps its original order inside the body.
+    crate::commands::blocking::run("workspace.open", move || {
+        let root = resolve_workspace_root(&root_path)?;
 
-    // Grant `asset://` reads for this vault only. The static scope in
-    // tauri.conf.json is empty, so the renderer can reach nothing until a
-    // workspace is deliberately opened, and then only inside it. This is what
-    // lets live preview render vault-relative images without handing the
-    // webview the whole filesystem.
-    if let Err(error) = app.asset_protocol_scope().allow_directory(&root, true) {
-        // Not fatal: the workspace still opens, images just fall back to alt
-        // text. Fail loudly so the cause is visible rather than mysterious.
-        eprintln!(
-            "[workspace] failed to grant asset scope for {}: {error}",
-            root.display()
-        );
-    }
+        // Grant `asset://` reads for this vault only. The static scope in
+        // tauri.conf.json is empty, so the renderer can reach nothing until a
+        // workspace is deliberately opened, and then only inside it. This is what
+        // lets live preview render vault-relative images without handing the
+        // webview the whole filesystem.
+        if let Err(error) = app.asset_protocol_scope().allow_directory(&root, true) {
+            // Not fatal: the workspace still opens, images just fall back to alt
+            // text. Fail loudly so the cause is visible rather than mysterious.
+            eprintln!(
+                "[workspace] failed to grant asset scope for {}: {error}",
+                root.display()
+            );
+        }
 
-    Ok(WorkspaceSnapshot {
-        workspace: describe_workspace(&root),
-        files: list_markdown_file_entries(&root)?,
+        Ok(WorkspaceSnapshot {
+            workspace: describe_workspace(&root),
+            files: list_markdown_file_entries(&root)?,
+        })
     })
+    .await
 }
 
 pub(crate) fn create_workspace_window_off_main_thread(

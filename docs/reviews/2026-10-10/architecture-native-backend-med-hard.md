@@ -5,7 +5,7 @@ Scope: `apps/desktop/src-tauri` — `lib.rs` setup, `commands/` (workspace*, sea
 ## Summary — top 5
 
 2. **Close the attach/release race in the background sync bootstrap.** `watch_workspace` acquires watcher interest, then spawns a thread that later calls `registry::attach` (`watcher/lifecycle.rs:132-165`). A window destroyed during bootstrap leaves `adopt()` holding interest for a dead label (`sync/registry.rs:76-80`) — a leaked engine that keeps recording a vault nobody has open, and can resurrect metadata after delete. Same root cause as the known `detach_engine_on_delete` story; fix them together.
-3. **All commands are synchronous `fn`s, so heavy work runs on the IPC/main path.** `index_documents` (SQLite batch), `sync_now` (network round trip), `list_workspace_entries` (10k-entry walk) are all `pub fn` (`search.rs:95`, `sync/round.rs:704`, `workspace_entries.rs:38`). The codebase already knows the cost — bootstrap was moved off-thread citing Windows AppHang (`watcher/lifecycle.rs:140-145`) — but the fix was applied only where it hurt first.
+3. **Finish moving heavy command work off the IPC/main path.** Revalidation and the first read-only worker fix are recorded in `native-command-io-followup-med-med.md`. Workspace scans and media reads now use blocking workers; search/index, history, and mutation lock paths remain separate work. `sync_now` no longer exists and network rounds are already threaded.
 4. **The TS↔Rust command contract is hand-mirrored with no mechanical check.** `app_command_list!` names each command once in Rust (`commands/mod.rs:58`), while `NativeCommandMap` in `commands.ts` re-declares names, args, and results by hand. Arg-name/casing drift fails only at runtime. Either generate bindings (tauri-specta/ts-rs) or add a CI check comparing `APP_COMMAND_PATHS` against the map's keys.
 5. **The pending `ipc_hardening` story has the right scope; extend it to the search pool.** Root-is-renderer-chosen (`workspace_paths.rs:65-91`), `csp: null`, and unreleased asset grants are correctly identified. The same root-authority fix would also stop `get_search_connection` creating an index for any existing directory the renderer names (`search.rs:26-41`).
 
@@ -33,13 +33,13 @@ Scope: `apps/desktop/src-tauri` — `lib.rs` setup, `commands/` (workspace*, sea
 
 ## 3. Blocking work on synchronous commands
 
-**Current decision.** Every command except `open_workspace_window` is a plain `fn` — Tauri runs those on the main/IPC path, not a worker. The codebase documents the consequence itself: bootstrap was threaded because "on a large vault that takes long enough to stall the Windows message pump and trigger an AppHang" (`watcher/lifecycle.rs:141-145`). Yet `index_documents` writes a SQLite batch (`search.rs:95`), `sync_now` does a full git round trip including fetch/push (`sync/round.rs:704-724`), and `list_workspace_entries` walks up to `MAX_WORKSPACE_ENTRIES` files (`workspace_entries.rs:38`, `workspace_paths.rs:14`) — all synchronously.
+**Current decision.** The original examples were partly stale: `sync_now` is gone, network rounds/imports already use background threads, and some command handlers were already async. The first follow-up moves workspace scans and media reads onto the blocking pool. Search command handlers still perform SQLite work synchronously, while history/maintenance and mutation paths include blocking disk work and lock waits. See `native-command-io-followup-med-med.md` for the revalidated command groups.
 
-**Cost.** A multi-second vault walk or a slow git fetch freezes UI for every window, not just the caller's. `sync_now` is the worst offender: network latency is unbounded, and the footer button that triggers it is exactly where a user notices a hang.
+**Cost.** Remaining synchronous disk work and lock waits can stall the main command path. This is a source-path finding, not a measured latency result. Moving only an index writer to a worker would still let a synchronous search or rename/delete cleanup block the main thread waiting for its connection mutex.
 
-**Alternative.** Mark I/O commands `async` and run the body via `tauri::async_runtime::spawn_blocking` — `sync/round.rs:379` and `sync/network.rs:348` already have `network_call`/`bounded` wrappers doing this pattern internally for threads; reuse it at the command boundary. Prioritize `sync_now`, `index_documents`, `list_workspace_entries`, `sync_history`, `read_version_diff`. Cheap reads (`read_markdown_file`, settings reads) can stay sync.
+**Alternative.** Use async command boundaries plus the shared `commands::blocking::run` helper for blocking bodies. Next handle the search command family together with its synchronous mutation callers, rechecking workspace ownership after yielding. Treat engine/lane lifecycle and mobile last-chance recording separately rather than converting every handler in one pass.
 
-**Effort/risk/payoff.** Med effort, low risk (signatures change, bodies don't), high payoff on Windows and Android especially.
+**Effort/risk/payoff.** Medium effort and concurrency risk for the remaining shared-state paths; potential responsiveness payoff on desktop and mobile.
 
 ## 4. TS command map is hand-synced with Rust
 

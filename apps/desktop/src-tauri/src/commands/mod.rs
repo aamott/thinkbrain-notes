@@ -6,6 +6,7 @@
 //! Submodules:
 //! - `atomic_write`: Temp-then-rename file replacement that never deletes the destination first.
 //! - `backup`: Per-note version safety net — lists the copy a save replaced and restores it.
+//! - `blocking`: Runs synchronous disk work on the blocking pool with typed worker errors.
 //! - `clipboard`: Puts workspace *files* on the OS clipboard so a system file manager can paste them.
 //! - `workspace`: Vault/workspace window lifecycle, file and directory hierarchy operations.
 //! - `workspace_known`: The read-only list of workspaces the app knows how to open — recents plus managed vaults.
@@ -35,6 +36,7 @@
 
 pub mod atomic_write;
 pub mod backup;
+pub(crate) mod blocking;
 pub mod clipboard;
 pub mod extensions;
 pub mod markdown;
