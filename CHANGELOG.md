@@ -3,6 +3,35 @@
 Newest first. Versions follow [semver](https://semver.org), except that before
 1.0 a minor bump may still change behaviour.
 
+## 0.5.0 — 2026-10-17
+
+Minor release — browser-like navigation history on desktop and phone.
+
+- **Back/Forward is location history** — every tab keeps its own trail of
+  places visited. Back and Forward restore the document, cursor/selection,
+  and scroll position of each visit — never the text or undo state, which
+  stay untouched.
+- **Links navigate in the current tab** — clicking a resolved link follows
+  it in place instead of opening a new tab; a target already open in
+  another tab leaves that tab alone. Explicitly closing a tab erases its
+  history, but navigating away from a preview keeps the old destination
+  reachable via Back.
+- **Click vs. edit on links** — a plain click follows a link while its
+  Markdown symbols are concealed; once the cursor reveals the syntax,
+  clicks edit it instead (Obsidian-style). Mod+click follows either way.
+- **Same-note heading links** — `[label](#heading)` and `[[#Heading]]`
+  jump to the heading, including unsaved ones; missing targets warn
+  without moving the caret or recording history.
+- **Phone parity** — Android/hardware Back walks the same location
+  history: dismiss an overlay first, then navigate content, then land on
+  Files (home). Outline headings are tappable in-file jumps too.
+- **Dirty-note safety** — navigating away from an unsaved note saves it
+  first; if the save fails or something newer happens meanwhile, you stay
+  put and lose nothing.
+- Also in: workspace-session single-owner fix, cloud-conflict merge bases,
+  a watcher spawn race fix, markdown `[text](target)` link following, and
+  another dead-code sweep.
+
 ## 0.4.2 — 2026-10-12
 
 Patch release — removes a feature that never worked on real devices and a

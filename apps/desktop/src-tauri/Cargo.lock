@@ -6030,7 +6030,7 @@ dependencies = [
 
 [[package]]
 name = "thinkbrain-notes-desktop"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "agent-client-protocol",
  "android-native-keyring-store",
