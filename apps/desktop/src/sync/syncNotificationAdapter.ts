@@ -68,7 +68,7 @@ export const STICKY_SYNC_CODES: ReadonlySet<string> = new Set([
 const HISTORY_CLEANUP_FAILED = "sync.history_cleanup_failed";
 
 /** Props for {@link useSyncNotificationAdapter}. */
-export interface SyncNotificationAdapterProps {
+interface SyncNotificationAdapterProps {
   /** Current workspace sync status, as read by `useSyncStatus`. */
   readonly syncStatus: SyncStatus;
   /** Opens the sync history/conflicts panel — the recovery action for ordinary problems. */

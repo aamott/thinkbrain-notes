@@ -5,7 +5,6 @@ export interface NoteDiagnostic {
   readonly message: string;
   readonly severity: NoteDiagnosticSeverity;
   readonly line?: number;
-  readonly column?: number;
 }
 
 export interface NoteMetadata extends Readonly<Record<string, unknown>> {
@@ -18,8 +17,6 @@ export interface NoteMetadata extends Readonly<Record<string, unknown>> {
 }
 
 export interface ParsedFrontmatterBlock {
-  readonly raw: string;
-  readonly startOffset: number;
   readonly endOffset: number;
 }
 
@@ -32,10 +29,7 @@ export interface FrontmatterParseResult {
 
 export interface WikiLink {
   readonly target: string;
-  readonly displayText?: string;
-  readonly position: number;
   readonly startOffset: number;
-  readonly endOffset: number;
 }
 
 export interface MarkdownTask {
@@ -54,7 +48,6 @@ export interface IndexMetadataField {
 }
 
 export interface ParsedNote extends FrontmatterParseResult {
-  readonly inlineTags: readonly string[];
   readonly tags: readonly string[];
   readonly aliases: readonly string[];
   readonly indexMetadata: readonly IndexMetadataField[];

@@ -123,8 +123,6 @@ interface DragSession {
    * releasing there opens the context menu rather than dropping.
    */
   phase: "pending" | "touch-ready" | "dragging" | "keyboard" | "dropping";
-  /** Set when `cancel()` runs so a settled-but-cancelled drop skips focus. */
-  cancelled: boolean;
   readonly inputKind: "pointer" | "touch" | "keyboard";
   readonly pointerType: string;
   pointerId: number;
@@ -204,7 +202,6 @@ function newSession(entry: NativeWorkspaceEntry, over: Partial<DragSession>): Dr
   return {
     entry,
     phase: "pending",
-    cancelled: false,
     inputKind: "pointer",
     pointerType: "",
     pointerId: -1,
@@ -243,7 +240,7 @@ export function useWorkspaceTreeDrag({
   readonly expandFolder: (path: string) => void;
   readonly moveEntry: (source: NativeWorkspaceEntry, destinationParentPath: string) => Promise<boolean>;
   /** Opens the row's existing context menu after a stationary touch hold. */
-  readonly openContextMenu?: (entry: NativeWorkspaceEntry, x: number, y: number) => void;
+  readonly openContextMenu: (entry: NativeWorkspaceEntry, x: number, y: number) => void;
   /** The tree's scroll container, supplied by the host so auto-scroll can reach it. */
   readonly containerRef: RefObject<HTMLUListElement | null>;
   /**
@@ -252,7 +249,7 @@ export function useWorkspaceTreeDrag({
    * would show both the custom ghost and the browser's drag image. Touch
    * sessions still arm; the HTML5 path is off for coarse pointers.
    */
-  readonly html5Active?: boolean;
+  readonly html5Active: boolean;
 }): WorkspaceTreeDrag {
   const [draggedPath, setDraggedPath] = useState<string | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
@@ -311,7 +308,6 @@ export function useWorkspaceTreeDrag({
     const session = sessionRef.current;
     if (!session) return;
     sessionRef.current = null;
-    session.cancelled = true;
     endDomSession(session);
     clearVisualState();
     if (session.phase !== "pending") {
@@ -548,7 +544,7 @@ export function useWorkspaceTreeDrag({
     const openHeldMenu = () => {
       if (session.contextMenuOpened) return;
       session.contextMenuOpened = true;
-      handlersRef.current.openContextMenu?.(entry, session.lastX, session.lastY);
+      handlersRef.current.openContextMenu(entry, session.lastX, session.lastY);
     };
 
     session.upListener = (event: Event) => {

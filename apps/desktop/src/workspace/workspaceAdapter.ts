@@ -11,6 +11,7 @@ import {
 } from "../native/commands";
 import { pickDirectoryPath } from "../native/dialogs";
 import { appEvents } from "../events/appEvents";
+import { readWorkspaceSettings, type WorkspaceSettings } from "./workspaceSettings";
 
 export interface WorkspaceDesktopApi {
   workspaceAccessCapabilities(): Promise<NativeWorkspaceAccessCapabilities>;
@@ -20,6 +21,8 @@ export interface WorkspaceDesktopApi {
   /** Deletes a managed vault and its app-side metadata. Android-only. */
   deleteManagedWorkspace(rootPath: string): Promise<null>;
   pickWorkspaceDirectory(): Promise<string | null>;
+  /** Per-workspace view settings (hidden entries, sort order); defaults when absent. */
+  readWorkspaceSettings(rootPath: string): Promise<WorkspaceSettings>;
   openWorkspace(rootPath: string): Promise<NativeWorkspaceSnapshot>;
   listWorkspaceEntries(
     rootPath: string,
@@ -65,6 +68,9 @@ export const workspaceDesktopApi: WorkspaceDesktopApi = {
   },
   pickWorkspaceDirectory() {
     return pickDirectoryPath("Open workspace");
+  },
+  readWorkspaceSettings(rootPath) {
+    return readWorkspaceSettings(rootPath);
   },
   // Every workspace load funnels through here — explicit opens and startup
   // restores alike — so this is the one place `workspace.opened` can be

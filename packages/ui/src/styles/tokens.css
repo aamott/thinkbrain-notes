@@ -14,7 +14,6 @@
   --tn-color-primary: hsl(262 83% 58%);
   --tn-color-primary-foreground: hsl(0 0% 100%);
   --tn-color-secondary: hsl(220 14% 96%);
-  --tn-color-secondary-foreground: hsl(222 47% 11%);
   --tn-color-muted: hsl(220 14% 96%);
   --tn-color-muted-foreground: hsl(220 9% 46%);
   --tn-color-accent: hsl(262 83% 96%);
@@ -66,7 +65,6 @@
   --tn-color-syntax-variable: hsl(222 47% 11%);
   --tn-color-syntax-property: hsl(200 85% 38%);
   --tn-color-syntax-operator: hsl(220 9% 46%);
-  --tn-color-syntax-punctuation: hsl(220 9% 46%);
   --tn-color-syntax-invalid: hsl(0 84% 60%);
 
   --tn-radius-small: 0.25rem;
@@ -107,7 +105,6 @@
   --tn-color-primary: hsl(152 60% 38%);
   --tn-color-primary-foreground: hsl(0 0% 100%);
   --tn-color-secondary: hsl(0 0% 16%);
-  --tn-color-secondary-foreground: hsl(0 0% 98%);
   --tn-color-muted: hsl(0 0% 16%);
   --tn-color-muted-foreground: hsl(0 0% 60%);
   --tn-color-accent: hsl(152 40% 18%);
@@ -154,7 +151,6 @@
   --tn-color-syntax-variable: hsl(0 0% 98%);
   --tn-color-syntax-property: hsl(200 85% 60%);
   --tn-color-syntax-operator: hsl(0 0% 65%);
-  --tn-color-syntax-punctuation: hsl(0 0% 65%);
   --tn-color-syntax-invalid: hsl(0 72% 51%);
 
   /* Stronger popout shadow for dark palettes. */

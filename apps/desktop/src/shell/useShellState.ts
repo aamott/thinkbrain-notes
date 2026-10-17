@@ -362,7 +362,6 @@ export function useShellState(): ShellState {
     workspaceSession,
     switching,
     explorerProps,
-    showVersionsOf,
     openSyncPanel,
     compareVersion,
     restoreVersionSafely,

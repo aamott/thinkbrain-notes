@@ -9,12 +9,12 @@ import type { EditorView } from "@codemirror/view";
 
 import { displaySettingsExtension } from "./editorDisplaySettings";
 
-export interface EditorDisplayState {
+interface EditorDisplayState {
   readonly fontSize: number;
   readonly lineWrapping: boolean;
 }
 
-export interface EditorDisplayController {
+interface EditorDisplayController {
   /** The extension appended on mount and when a parked state rebinds. */
   extension(): Extension;
   /** Values last committed to the compartment. */

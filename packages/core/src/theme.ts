@@ -69,7 +69,6 @@ export const KNOWN_THEME_TOKENS: readonly string[] = [
   "--tn-color-primary",
   "--tn-color-primary-foreground",
   "--tn-color-secondary",
-  "--tn-color-secondary-foreground",
   "--tn-color-muted",
   "--tn-color-muted-foreground",
   "--tn-color-accent",
@@ -115,7 +114,6 @@ export const KNOWN_THEME_TOKENS: readonly string[] = [
   "--tn-color-syntax-variable",
   "--tn-color-syntax-property",
   "--tn-color-syntax-operator",
-  "--tn-color-syntax-punctuation",
   "--tn-color-syntax-invalid"
 ];
 

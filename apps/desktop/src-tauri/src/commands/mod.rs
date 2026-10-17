@@ -26,7 +26,7 @@
 //! API — `workspaceBridge`, the contribution registries, the settings bridge.
 //! A command may be promoted to a contract deliberately, in writing, with a
 //! reason; until then an unused command is deletable like any dead code. See
-//! `plans/extensions/done-ipc_surface_is_not_the_contract-med-easy.md`.
+//! `plans/extensions/done-summary.md` (`ipc_surface_is_not_the_contract`).
 //!
 //! Security Guarantees & Safety Invariants:
 //! - Path Scoping: File and directory operations must validate paths to prevent directory traversal outside workspace boundaries.
@@ -114,7 +114,6 @@ macro_rules! app_command_list {
         sync::maintain::sync_free_space,
         sync::maintain::sync_clear_undo_history,
         sync::status::sync_status,
-        sync::round::sync_now,
         sync::sign_in::save_sync_credentials,
         sync::sign_in::save_sync_link,
         sync::sign_in::sync_sign_in_status,
@@ -154,7 +153,7 @@ macro_rules! app_command_handlers {
 ///
 /// Built with `concat!` over per-segment `stringify!` rather than `stringify!`
 /// on the whole path: stringifying a path inserts spaces around `::`, which
-/// would yield "sync :: round :: sync_now".
+/// would yield "sync :: round :: sync".
 #[cfg(test)]
 #[macro_export]
 macro_rules! app_command_paths_expand {
@@ -195,7 +194,7 @@ mod tests {
         );
         assert_eq!(
             APP_COMMAND_PATHS.len(),
-            61,
+            60,
             "the number of registered commands changed; update this count if it was deliberate"
         );
     }
@@ -203,7 +202,7 @@ mod tests {
     /// The path strings must survive macro expansion intact.
     ///
     /// `stringify!` on a whole path inserts spaces around `::`, so a naive
-    /// expansion yields "sync :: round :: sync_now". The list is built with
+    /// expansion yields "sync :: round :: sync". The list is built with
     /// `concat!` over per-segment `stringify!` to avoid that, and this proves
     /// it, because nothing else would notice: the strings are only read by
     /// this test.
@@ -219,7 +218,7 @@ mod tests {
                 "generated path {path:?} has a dangling separator"
             );
         }
-        assert!(APP_COMMAND_PATHS.contains(&"sync::round::sync_now"));
+        assert!(APP_COMMAND_PATHS.contains(&"sync::status::sync_status"));
         assert!(APP_COMMAND_PATHS.contains(&"workspace::platform_capabilities"));
     }
 }

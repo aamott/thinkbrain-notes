@@ -6,8 +6,7 @@
  * updates, and ACP will follow. Adding a producer only requires a new adapter
  * that calls `addNotification` — the store and UI do not change.
  *
- * `severity` replaces a boolean "sticky" flag because three states are real:
- * - `silent`   — logged to the bell only, no toast.
+ * `severity` names how loudly a notification is surfaced:
  * - `transient`— toasts with an 8s auto-dismiss (hover-paused), then logs.
  * - `sticky`   — toasts until the user dismisses or the source clears it.
  *
@@ -17,7 +16,7 @@
  */
 
 /** How loudly a notification should be surfaced. */
-type NotificationSeverity = "silent" | "transient" | "sticky";
+type NotificationSeverity = "transient" | "sticky";
 
 /** Visual tone, mapped to theme tokens (success/warning/destructive/info). */
 export type NotificationVariant = "error" | "warning" | "info" | "success";

@@ -66,8 +66,6 @@ export function parseFrontmatter(markdown: string): FrontmatterParseResult {
 
   const rawFrontmatter = markdown.slice(frontmatterStart, closingMatch.index);
   const frontmatterBlock: ParsedFrontmatterBlock = {
-    raw: rawFrontmatter,
-    startOffset: 0,
     endOffset: closingMatch.index + closingMatch[0].length
   };
   const document = parseDocument(rawFrontmatter, { prettyErrors: false });
@@ -119,7 +117,7 @@ export function serializeFrontmatter(metadata: Readonly<Record<string, unknown>>
 
 
 
-export function normalizeNoteMetadata(
+function normalizeNoteMetadata(
   fields: Readonly<Record<string, unknown>>,
   diagnostics: NoteDiagnostic[] = []
 ): NoteMetadata {
@@ -207,8 +205,7 @@ function yamlIssuesToDiagnostics(
       code,
       message: issue.message,
       severity,
-      line: position?.line,
-      column: position?.col
+      line: position?.line
     };
   });
 }

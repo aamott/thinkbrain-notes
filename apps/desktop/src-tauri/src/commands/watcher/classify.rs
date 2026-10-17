@@ -93,7 +93,7 @@ fn is_never_recorded_path(path: &Path) -> bool {
 /// to without being Markdown itself. Both the note filter and the rescan
 /// escalation route through here, so an ignored area cannot be reachable by one
 /// and not the other — which is how `.git` churn once rebuilt the whole index.
-pub fn is_in_watched_area(root: &Path, path: &Path) -> bool {
+fn is_in_watched_area(root: &Path, path: &Path) -> bool {
     let Some(relative) = workspace_relative_path(root, path) else {
         return false;
     };

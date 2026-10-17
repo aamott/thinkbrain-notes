@@ -54,7 +54,7 @@ export function useShellShortcuts({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
-      const isTab = event.key === "Tab" || event.code === "Tab";
+      const isTab = event.key === "Tab";
       if (modifier && isTab) {
         event.preventDefault();
         event.stopPropagation();

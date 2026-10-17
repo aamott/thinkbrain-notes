@@ -10,7 +10,7 @@ import { failureMessage } from "./syncCopy";
  * comparison ready to draw (whatever shape that comparison takes), or a
  * failure with a message approved for the surface.
  */
-export type ComparisonPhase<T> =
+type ComparisonPhase<T> =
   | { readonly at: "loading" }
   | { readonly at: "ready"; readonly result: T }
   | { readonly at: "failed"; readonly message: string };

@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
-import { FilePlus2, Folder, FolderCog, FolderOpen, FolderPlus, Link, Search } from "lucide-react";
+import { FilePlus2, FolderOpen, Search } from "lucide-react";
 import { CommandPalette, type WorkspaceFileResult } from "../commands/CommandPalette";
 import { BottomPanel as BottomPanelContent } from "../panels/BottomPanel";
 import { LeftPopout } from "../panels/LeftPopout";
@@ -23,7 +23,6 @@ import { useNoteTitle } from "./useNoteTitle";
 import { NoteTitleRow } from "./phone/NoteTitleRow";
 import { useSettingsStore } from "../settings/settingsStore";
 import { StatusBar } from "./StatusBar";
-import { type NewTabAction } from "../tabs/NewTabView";
 import { TabBoundary } from "./TabBoundary";
 import { TabCloseRequest } from "./TabCloseRequest";
 import { TabContent } from "./TabContent";
@@ -35,7 +34,7 @@ import {
 } from "../tabs/tabModel";
 import { TitleBar } from "./TitleBar";
 import { WorkspaceHeaderBar } from "./WorkspaceHeaderBar";
-import { CREATE_MANAGED_WORKSPACE_LABEL, IMPORT_FROM_GIT_LABEL, MANAGE_WORKSPACES_LABEL, OPEN_FOLDER_LABEL } from "../workspace/gitLinkImportCopy";
+import { noWorkspaceActions } from "./newTabActions";
 import { WorkspaceProviders, WorkspaceSwitchingDialogs } from "../workspace/WorkspaceSwitching";
 import type { ShellState } from "./useShellState";
 
@@ -107,20 +106,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
   // the shell-level switching controller whose dialogs live here too.
   const newTab = useMemo(() => {
     if (workspaceName === null) {
-      const actions: NewTabAction[] = [];
-      if (switching.accessCapabilities?.canCreateManagedWorkspace) {
-        actions.push({ id: "create-vault", label: CREATE_MANAGED_WORKSPACE_LABEL, icon: <FolderPlus aria-hidden="true" className="size-4" />, onSelect: () => switching.setCreateManagedWorkspaceOpen(true) });
-      }
-      if (switching.accessCapabilities?.canOpenFolder) {
-        actions.push({ id: "open-folder", label: OPEN_FOLDER_LABEL, icon: <FolderOpen aria-hidden="true" className="size-4" />, onSelect: () => void switching.openWorkspace() });
-      }
-      actions.push({ id: "import-git", label: IMPORT_FROM_GIT_LABEL, icon: <Link aria-hidden="true" className="size-4" />, onSelect: switching.openGitLinkImport });
-      for (const workspace of switching.knownWorkspaces) {
-        if (workspace.missing) continue;
-        actions.push({ id: `open:${workspace.rootPath}`, label: workspace.name, icon: <Folder aria-hidden="true" className="size-4" />, onSelect: () => void switching.launchWorkspace(workspace.rootPath) });
-      }
-      actions.push({ id: "manage-workspaces", label: MANAGE_WORKSPACES_LABEL, icon: <FolderCog aria-hidden="true" className="size-4" />, onSelect: switching.openManageWorkspaces });
-      return { workspaceName, actions };
+      return { workspaceName, actions: noWorkspaceActions(switching) };
     }
     const runById = (id: string) => {
       const command = paletteCommands.find((candidate) => candidate.id === id);

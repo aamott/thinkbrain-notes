@@ -44,15 +44,6 @@ describe("addNotification", () => {
     expect(item?.createdAt).toBeLessThanOrEqual(after);
   });
 
-  it("silent notifications log but never become the active toast", () => {
-    useNotificationStore.getState().addNotification(
-      transientError({ severity: "silent", dedupKey: "sync:silent" })
-    );
-
-    const state = useNotificationStore.getState();
-    expect(state.notifications).toHaveLength(1);
-    expect(state.activeToast).toBeNull();
-  });
 });
 
 describe("dedup by dedupKey", () => {
@@ -148,7 +139,7 @@ describe("clearBySource", () => {
     expect(state.activeToast?.source).toBe("extension:x");
   });
 
-  it("promotes the next non-silent notification to the toast after clearing", () => {
+  it("promotes the next undismissed notification to the toast after clearing", () => {
     useNotificationStore.getState().addNotification(
       transientError({ source: "sync", dedupKey: "sync:1", severity: "sticky" })
     );
@@ -169,7 +160,7 @@ describe("clearBySource", () => {
 });
 
 describe("activeToast selection", () => {
-  it("picks the most recent non-dismissed, non-silent notification", () => {
+  it("picks the most recent non-dismissed notification", () => {
     const first = useNotificationStore.getState().addNotification(
       transientError({ dedupKey: "sync:1", message: "first" })
     );

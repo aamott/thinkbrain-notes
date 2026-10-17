@@ -71,7 +71,7 @@ describe("ExtensionsPanel", () => {
             name: "Broken",
             status: "incompatible",
       source: "built-in",
-            reasons: [{ code: "api-version", message: "Requires host api ^9.0.0", severity: "error" }]
+            reasons: [{ code: "api-version", message: "Requires host api ^9.0.0" }]
           }
         ]}
       />

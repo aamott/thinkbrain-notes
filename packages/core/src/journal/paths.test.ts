@@ -1,24 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { journalEntryFolder, resolveNewEntryPath } from "./paths";
+import { resolveNewEntryPath } from "./paths";
 
 const date = { year: 2026, month: 8, day: 7 };
-
-describe("journalEntryFolder", () => {
-  it("nests by year and zero-padded month under the configured root", () => {
-    expect(journalEntryFolder("journal", date)).toBe("journal/2026/08");
-  });
-
-  it("honours a nested or renamed root", () => {
-    expect(journalEntryFolder("notes/diary", { year: 2026, month: 1, day: 2 })).toBe(
-      "notes/diary/2026/01"
-    );
-  });
-
-  it("tolerates a root with a trailing separator", () => {
-    expect(journalEntryFolder("journal/", date)).toBe("journal/2026/08");
-  });
-});
 
 describe("resolveNewEntryPath", () => {
   const resolve = (taken: readonly string[], minuteOfDay = 13 * 60 + 7) =>
@@ -26,6 +10,24 @@ describe("resolveNewEntryPath", () => {
 
   it("writes D17's timed form when nothing collides", () => {
     expect(resolve([])).toBe("journal/2026/08/2026-08-07-1307.md");
+  });
+
+  it("nests by year and zero-padded month under the configured root", () => {
+    expect(resolve([])).toBe("journal/2026/08/2026-08-07-1307.md");
+    expect(
+      resolveNewEntryPath({
+        root: "notes/diary",
+        date: { year: 2026, month: 1, day: 2 },
+        minuteOfDay: 0,
+        taken: []
+      })
+    ).toBe("notes/diary/2026/01/2026-01-02-0000.md");
+  });
+
+  it("tolerates a root with a trailing separator", () => {
+    expect(
+      resolveNewEntryPath({ root: "journal/", date, minuteOfDay: 0, taken: [] })
+    ).toBe("journal/2026/08/2026-08-07-0000.md");
   });
 
   it("adds a counter of 2 on the first same-minute collision", () => {

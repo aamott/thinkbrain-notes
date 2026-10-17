@@ -143,7 +143,7 @@ export function parseDynamicAppSettings(
  * Returns:
  *   Canonical JSON string with settings + preserved non-setting keys.
  */
-export function serializeDynamicSettings(
+function serializeDynamicSettings(
   values: Record<string, unknown>,
   registry: SettingsRegistry,
   scope: SettingScope,

@@ -50,8 +50,7 @@ const render = async (
   const props: ControlProps = {
     definition: DEFINITION,
     value,
-    onChange,
-    disabled: false
+    onChange
   };
   await act(async () => root?.render(<JournalFieldDefinitionsControl {...props} />));
   return container;

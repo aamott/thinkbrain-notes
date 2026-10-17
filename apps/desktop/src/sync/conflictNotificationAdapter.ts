@@ -42,7 +42,7 @@ import type { SyncStatus } from "./historyTypes";
 export const CONFLICT_SOURCE = "sync-conflicts";
 
 /** Props for {@link useConflictNotificationAdapter}. */
-export interface ConflictNotificationAdapterProps {
+interface ConflictNotificationAdapterProps {
   /** Workspace root path, or null when no workspace is open. */
   readonly rootPath: string | null;
   /** Current sync status — a change is when conflicts may have moved. */

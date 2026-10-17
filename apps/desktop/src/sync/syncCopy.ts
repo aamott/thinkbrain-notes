@@ -13,7 +13,7 @@ import type { SyncPhase, SyncStatus } from "./historyTypes";
 /** How loudly the footer should say it. */
 type PillTone = "quiet" | "busy" | "warn";
 
-export interface PillCopy {
+interface PillCopy {
   readonly symbol: string;
   /** What fits in the footer. */
   readonly text: string;

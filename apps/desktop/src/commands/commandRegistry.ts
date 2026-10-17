@@ -8,7 +8,6 @@ import { usePlatformCapabilities } from "../native/platformCapabilities";
 
 /** Stable command identifiers owned by the desktop shell or an extension. */
 export type DesktopCommandId =
-  | "open-file"
   | "new-note"
   | "search"
   | "toggle-theme"
@@ -97,14 +96,6 @@ const withClosePalette = (action: NoArgContextAction) => (context: DesktopComman
 
 /** First-party command ownership and availability are explicit and testable. */
 export const builtInDesktopCommands: readonly DesktopCommand[] = [
-  unavailable({
-    id: "open-file",
-    title: "Open file",
-    keywords: ["file", "note", "workspace"],
-    keybinding: "Ctrl/Cmd+P",
-    unavailableMessage: "Open file is unavailable until the native file picker is connected.",
-    handler: () => undefined
-  }),
   available({
     id: "new-note",
     title: "New note",
@@ -184,7 +175,7 @@ export const builtInDesktopCommands: readonly DesktopCommand[] = [
     id: "open-graph",
     title: "Open graph",
     keywords: ["connections", "links"],
-    unavailableMessage: "Graph is unavailable until link indexing is connected.",
+    unavailableMessage: "Graph is unavailable until a graph view is implemented.",
     handler: () => undefined
   }),
   available({

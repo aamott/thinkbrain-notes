@@ -29,17 +29,15 @@ export const EXPLORER_REFRESH_DELAY_MS = 120;
  *   currentRootPath: The workspace the tree is showing, asked at delivery time
  *     so switching workspaces does not need the subscription rebuilt.
  *   refresh: Re-lists the workspace and dispatches the result.
- *   delayMs: How long to gather changes before listing.
  *
  * Returns:
  *   A function that stops listening and drops any listing not yet made.
  */
 export function subscribeExplorerToNoteChanges(
   currentRootPath: () => string | null | undefined,
-  refresh: () => void,
-  delayMs: number = EXPLORER_REFRESH_DELAY_MS
+  refresh: () => void
 ): () => void {
-  const scheduleRefresh = createDebounced(refresh, delayMs);
+  const scheduleRefresh = createDebounced(refresh, EXPLORER_REFRESH_DELAY_MS);
 
   const stopListening = subscribeToNoteChanges(currentRootPath, () => scheduleRefresh());
 

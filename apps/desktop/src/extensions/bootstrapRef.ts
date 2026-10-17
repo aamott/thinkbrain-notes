@@ -19,7 +19,6 @@ import type { LoadedExtension } from "./localDirectoryLoader";
 export interface BootstrapReason {
   readonly code: string;
   readonly message: string;
-  readonly severity: "error" | "warning";
 }
 
 /**

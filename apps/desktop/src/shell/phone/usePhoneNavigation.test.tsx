@@ -34,12 +34,16 @@ const renderNav = async (workspace: string | null): Promise<() => PhoneNavigatio
   };
 };
 
+/** The routed depth written into the current history entry. */
+const historyDepth = (): number | undefined =>
+  (window.history.state as { depth?: number } | null)?.depth;
+
 describe("usePhoneNavigation", () => {
   it("starts at Files, depth 0, with nothing to go back to", async () => {
     const nav = await renderNav("/vault");
 
     expect(nav().route).toEqual({ kind: "files" });
-    expect(nav().depth).toBe(0);
+    expect(historyDepth()).toBe(0);
     expect(nav().canGoBack).toBe(false);
     expect(nav().canGoForward).toBe(false);
     expect((window.history.state as { tnPhoneNav?: boolean }).tnPhoneNav).toBe(true);
@@ -52,7 +56,7 @@ describe("usePhoneNavigation", () => {
     await act(async () => nav().push({ kind: "tab", tabId: "editor:a:b" }));
 
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
-    expect(nav().depth).toBe(2);
+    expect(historyDepth()).toBe(2);
     expect(nav().canGoBack).toBe(true);
   });
 
@@ -62,7 +66,7 @@ describe("usePhoneNavigation", () => {
 
     await act(async () => nav().push({ kind: "panel", panel: "search" }));
 
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
   });
 
   it("restores the previous route when browser history pops", async () => {
@@ -72,11 +76,11 @@ describe("usePhoneNavigation", () => {
 
     await act(async () => window.history.back());
     expect(nav().route).toEqual({ kind: "panel", panel: "search" });
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
 
     await act(async () => window.history.back());
     expect(nav().route).toEqual({ kind: "files" });
-    expect(nav().depth).toBe(0);
+    expect(historyDepth()).toBe(0);
     expect(nav().canGoBack).toBe(false);
   });
 
@@ -102,7 +106,8 @@ describe("usePhoneNavigation", () => {
     });
 
     expect(nav().route).toEqual({ kind: "files" });
-    expect(nav().depth).toBe(0);
+    // The derived root depth is 0: nothing to go back to, no menu open.
+    expect(nav().canGoBack).toBe(false);
   });
 
   it("replace keeps depth but rewrites the current entry", async () => {
@@ -112,7 +117,7 @@ describe("usePhoneNavigation", () => {
     await act(async () => nav().replace({ kind: "tab", tabId: "editor:a:new" }));
 
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:new" });
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
     // Replaced, not pushed: one Back reaches the root.
     await act(async () => nav().back());
     expect(nav().route).toEqual({ kind: "files" });
@@ -139,7 +144,7 @@ describe("usePhoneNavigation", () => {
     });
 
     expect(box.current?.route).toEqual({ kind: "files" });
-    expect(box.current?.depth).toBe(0);
+    expect(historyDepth()).toBe(0);
     // The old workspace's branch tip must not leak Forward into the new one.
     expect(box.current?.canGoForward).toBe(false);
     expect((window.history.state as { workspace?: string }).workspace).toBe("/vault-b");
@@ -158,7 +163,7 @@ describe("usePhoneNavigation", () => {
       root?.render(<Probe ws="/vault-a" />);
     });
     await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
-    expect(box.current?.depth).toBe(1);
+    expect(historyDepth()).toBe(1);
 
     // Round-trip the workspace without any navigation: A's last entry is
     // history, not state to resurrect.
@@ -170,7 +175,7 @@ describe("usePhoneNavigation", () => {
     });
 
     expect(box.current?.route).toEqual({ kind: "files" });
-    expect(box.current?.depth).toBe(0);
+    expect(historyDepth()).toBe(0);
     expect(box.current?.canGoBack).toBe(false);
     expect(box.current?.canGoForward).toBe(false);
   });
@@ -188,7 +193,7 @@ describe("usePhoneNavigation overlays", () => {
 
     expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
-    expect(nav().depth).toBe(2);
+    expect(historyDepth()).toBe(2);
   });
 
   it.each(["actions", "navigation", "tabs", "new-note"] as const)(
@@ -202,14 +207,14 @@ describe("usePhoneNavigation overlays", () => {
       await act(async () => nav().showOverlay({ kind }));
 
       expect(nav().overlay).toEqual({ kind });
-      expect(nav().depth).toBe(0);
+      expect(historyDepth()).toBe(0);
       expect(nav().canGoBack).toBe(true);
       expect(nav().canGoForward).toBe(true);
 
       await act(async () => nav().dismissOverlay());
 
       expect(nav().overlay).toBeNull();
-      expect(nav().depth).toBe(0);
+      expect(historyDepth()).toBe(0);
       expect(nav().canGoBack).toBe(false);
       expect(nav().canGoForward).toBe(true);
 
@@ -226,7 +231,7 @@ describe("usePhoneNavigation overlays", () => {
     await act(async () => nav().pushOverlay({ kind: "tabs" }));
 
     expect(nav().overlay).toEqual({ kind: "tabs" });
-    expect(nav().depth).toBe(0);
+    expect(historyDepth()).toBe(0);
   });
 
   it("no-ops when the identical inspector is already current", async () => {
@@ -239,7 +244,7 @@ describe("usePhoneNavigation overlays", () => {
       nav().pushOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
 
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
     expect(window.history.state).toBe(before);
   });
 
@@ -322,7 +327,7 @@ describe("usePhoneNavigation overlays", () => {
 
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "panel", panel: "search" });
-    expect(nav().depth).toBe(0);
+    expect(historyDepth()).toBe(0);
   });
 
   it("showOverlay swaps one ephemeral menu for another without touching history", async () => {
@@ -335,11 +340,11 @@ describe("usePhoneNavigation overlays", () => {
     // Menus share one React-state slot: no entry was pushed or replaced, and
     // Back closes the popup, landing on the same tab — never on a stale menu.
     expect(nav().overlay).toEqual({ kind: "new-note" });
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
     await act(async () => nav().back());
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
   });
 
   it("showOverlay replaces an open inspector's entry instead of stacking it", async () => {
@@ -348,7 +353,7 @@ describe("usePhoneNavigation overlays", () => {
     await act(async () =>
       nav().showOverlay({ kind: "inspector", panel: "outline", parent: "content" })
     );
-    expect(nav().depth).toBe(2);
+    expect(historyDepth()).toBe(2);
 
     await act(async () =>
       nav().showOverlay({ kind: "inspector", panel: "backlinks", parent: "content" })
@@ -357,7 +362,7 @@ describe("usePhoneNavigation overlays", () => {
     // The outline entry was replaced, not pushed over: depth is unchanged and
     // one Back lands on the tab, never on the stale inspector.
     expect(nav().overlay).toEqual({ kind: "inspector", panel: "backlinks", parent: "content" });
-    expect(nav().depth).toBe(2);
+    expect(historyDepth()).toBe(2);
     await act(async () => nav().back());
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
@@ -375,7 +380,7 @@ describe("usePhoneNavigation overlays", () => {
     // The drawer's ephemeral slot is consumed and the inspector pushes over
     // the tab: one Back closes the inspector without resurrecting the drawer.
     expect(nav().overlay).toEqual({ kind: "inspector", panel: "outline", parent: "content" });
-    expect(nav().depth).toBe(2);
+    expect(historyDepth()).toBe(2);
     await act(async () => nav().back());
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
@@ -394,7 +399,7 @@ describe("usePhoneNavigation overlays", () => {
     // content and the switcher lives only in React state: Back lands on the
     // tab, not on a resurrected inspector.
     expect(nav().overlay).toEqual({ kind: "tabs" });
-    expect(nav().depth).toBe(2);
+    expect(historyDepth()).toBe(2);
     await act(async () => nav().back());
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
@@ -406,7 +411,7 @@ describe("usePhoneNavigation overlays", () => {
     const before = window.history.state;
     await act(async () => nav().showOverlay({ kind: "tabs" }));
 
-    expect(nav().depth).toBe(0);
+    expect(historyDepth()).toBe(0);
     expect(window.history.state).toBe(before);
   });
 
@@ -453,7 +458,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
       root = createRoot(container);
       await act(async () => root?.render(<Host />));
       await act(async () => box.current?.push({ kind: "tab", tabId: "editor:a:b" }));
-      const before = { route: box.current?.route, depth: box.current?.depth };
+      const before = { route: box.current?.route, depth: historyDepth() };
 
       let consumed = false;
       await act(async () => {
@@ -462,7 +467,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
 
       expect(consumed).toBe(true);
       expect(panelOpen).toBe(false);
-      expect({ route: box.current?.route, depth: box.current?.depth }).toEqual(before);
+      expect({ route: box.current?.route, depth: historyDepth() }).toEqual(before);
 
       await act(async () => root?.unmount());
       root = null;
@@ -494,7 +499,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
     expect(consumed).toBe(true);
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
     expect(window.history.state).toBe(before);
   });
 
@@ -514,7 +519,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
     expect(consumed).toBe(true);
     expect(nav().overlay).toBeNull();
     expect(nav().route).toEqual({ kind: "tab", tabId: "editor:a:b" });
-    expect(nav().depth).toBe(1);
+    expect(historyDepth()).toBe(1);
   });
 
   it("returns false and changes nothing at the root", async () => {
@@ -529,7 +534,7 @@ describe("usePhoneNavigation Android Back bridge", () => {
     expect(consumed).toBe(false);
     expect(window.history.state).toBe(before);
     expect(nav().route).toEqual({ kind: "files" });
-    expect(nav().depth).toBe(0);
+    expect(historyDepth()).toBe(0);
   });
 });
 

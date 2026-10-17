@@ -21,7 +21,7 @@ import { inputClassName, type ControlProps } from "../controlRegistry";
  * inside Tauri and resolves to `null` outside Tauri. When not in Tauri,
  * the button renders disabled with a tooltip explaining why.
  */
-export function PathControl({ definition, value, onChange, disabled }: ControlProps) {
+export function PathControl({ definition, value, onChange }: ControlProps) {
   // Cache the Tauri check once; it never changes during a session.
   const [nativeAvailable] = useState(() => isTauri());
   const pathValue = typeof value === "string" ? value : String(value ?? "");
@@ -37,14 +37,13 @@ export function PathControl({ definition, value, onChange, disabled }: ControlPr
         type="text"
         id={definition.key}
         value={pathValue}
-        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         className={`flex-1 ${inputClassName}`}
       />
       <button
         type="button"
         onClick={handleBrowse}
-        disabled={disabled || !nativeAvailable}
+        disabled={!nativeAvailable}
         title={nativeAvailable ? "Browse for file" : "File browser not yet available"}
         className="flex shrink-0 items-center gap-1 rounded-small border border-border bg-surface px-2 py-1 text-xs text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring disabled:opacity-50"
       >

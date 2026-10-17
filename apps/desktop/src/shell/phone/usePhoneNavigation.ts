@@ -45,7 +45,6 @@ type PhoneHistoryOverlay = Extract<PhoneOverlay, { readonly kind: "inspector" }>
 export interface PhoneNavigation {
   readonly route: PhoneRoute;
   readonly overlay: PhoneOverlay | null;
-  readonly depth: number;
   /** Whether Back can dismiss ephemeral chrome or visit an earlier route. */
   readonly canGoBack: boolean;
   /** Whether the current browser-history branch has a later route or overlay. */
@@ -92,7 +91,8 @@ function sameOverlay(a: PhoneOverlay | null, b: PhoneOverlay | null): boolean {
   if (a.kind === "inspector" && b.kind === "inspector") {
     return a.panel === b.panel && a.parent === b.parent;
   }
-  return a.kind !== "inspector";
+  // Kinds are already equal: whatever remains is a same-kind menu.
+  return true;
 }
 
 /** Menus are chrome state, not destinations users should revisit with Forward. */
@@ -372,7 +372,6 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     () => ({
       route,
       overlay,
-      depth,
       canGoBack: depth > 0 || ephemeralMenu !== null,
       canGoForward: depth < effectiveTip,
       push,

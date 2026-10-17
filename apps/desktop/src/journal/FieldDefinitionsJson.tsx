@@ -14,13 +14,11 @@ import { parseFieldDefinitions } from "./journalSettings";
 export function FieldDefinitionsJson({
   definition,
   stored,
-  disabled,
   onChange,
   onBack
 }: {
   readonly definition: ControlProps["definition"];
   readonly stored: string;
-  readonly disabled?: boolean;
   readonly onChange: (value: string) => void;
   readonly onBack: () => void;
 }) {
@@ -36,7 +34,6 @@ export function FieldDefinitionsJson({
         className="min-h-28 w-full rounded border border-border bg-input p-2 font-mono text-xs text-foreground"
         aria-label={`${definition.label}, JSON`}
         spellCheck={false}
-        disabled={disabled}
         value={jsonDraft}
         onChange={(event) => {
           const next = event.target.value;

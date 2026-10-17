@@ -16,7 +16,7 @@
 //! the same shape a sync daemon leaves behind. That is not a shortcut: it is
 //! the shape story 3 predicted, and it means the panel, the merge view, the
 //! settle rules and the checkpoints all apply here without a line added to
-//! them. See `plans/auto-sync/done-the_round_trip-high-hard.md`.
+//! them. See `plans/auto-sync/done-summary.md` (`the_round_trip`).
 
 use std::path::Path;
 use std::sync::Arc;
@@ -56,7 +56,7 @@ pub struct Synced {
     ///
     /// Held back from the frontend (`serde(skip)`): the UI only needs the
     /// count, and the panel learns about the copies through the engine. Kept
-    /// on the struct so `sync_now` can note them directly instead of re-walking
+    /// on the struct so `finish` can note them directly instead of re-walking
     /// the vault to rediscover what this sync just wrote.
     #[serde(skip)]
     pub conflict_copies: Vec<conflict::ConflictCopy>,
@@ -679,8 +679,8 @@ fn report_phase(engine: &super::engine::Engine, key: &str, phase: SyncPhase) {
 
 /// Records and announces anything a completed round left for the UI.
 ///
-/// Manual sync and credential-save sync both use this; otherwise the latter
-/// can write conflict copies without opening the same merge workflow.
+/// Conflict copies the round wrote beside their originals join the engine's
+/// tracked set so they open the same merge workflow as a daemon's.
 pub(super) fn finish(
     app: &tauri::AppHandle,
     engine: &super::engine::Engine,
@@ -697,32 +697,6 @@ pub(super) fn finish(
     }
     crate::commands::watcher::announce_sync_status(key);
     synced
-}
-
-/// Syncs this workspace once, now, because someone asked.
-#[tauri::command]
-pub fn sync_now(app: tauri::AppHandle, root_path: String) -> Result<Synced, NativeError> {
-    let (root, engine) = super::registry::workspace_and_engine(&root_path)?;
-    let key = root.to_string_lossy().to_string();
-    let app_data_dir = super::app_data_dir(&app)?;
-    let destination = destination(&app_data_dir, &root).ok_or_else(|| {
-        NativeError::new(
-            "sync.no_destination",
-            "This folder is not set up to sync anywhere yet.",
-        )
-    })?;
-    let engine = engine.ok_or_else(|| {
-        super::registry::failure(&key).unwrap_or_else(|| {
-            NativeError::new(
-                "sync.not_recording",
-                "This folder's history is not being kept, so there is nothing to sync.",
-            )
-        })
-    })?;
-
-    let profile = super::sign_in::selected_profile_id_for(&root);
-    let synced = sync(&engine, &key, &root, &destination, profile.as_deref())?;
-    Ok(finish(&app, &engine, &key, &root, synced))
 }
 
 #[cfg(test)]

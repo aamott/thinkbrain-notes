@@ -153,23 +153,13 @@ export function createLocalExtensions(options: LocalExtensionsOptions): LocalExt
       } catch (error: unknown) {
         // The extension *is* loaded for this session — only remembering it for
         // the next one failed. Rejecting here would report a load failure and
-        // strand a retry behind `directory_already_loaded`, so the persistence
-        // failure rides along as a warning diagnostic instead.
+        // strand a retry behind `directory_already_loaded`, so the failure is
+        // logged rather than reported on the outcome.
         console.error(
           `[extensions] Failed to persist extension directory "${normalized}".`,
           error
         );
-        return {
-          loaded: true,
-          diagnostics: [
-            ...outcome.diagnostics,
-            {
-              code: "directory_persist_failed",
-              message: `The extension loaded, but "${normalized}" could not be remembered for next launch: ${getErrorMessage(error)}`,
-              severity: "warning" as const
-            }
-          ]
-        };
+        return outcome;
       }
       clearFailure(normalized);
       return outcome;

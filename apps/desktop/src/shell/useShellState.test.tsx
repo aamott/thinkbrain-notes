@@ -162,7 +162,7 @@ describe("useShellState", () => {
   it("opens a file and reveals its Version history from the explorer", async () => {
     const state = await renderShellState();
 
-    await act(async () => state().showVersionsOf("/vault", "note.md"));
+    await act(async () => state().explorerProps.onShowVersions?.("/vault", "note.md"));
 
     expect(state().tabState.tabs.map((tab) => tab.kind)).toContain("editor");
     expect(state().rightPanel).toBe("history");
@@ -171,7 +171,7 @@ describe("useShellState", () => {
   it("opens a non-Markdown file by its inferred kind for Previous versions", async () => {
     const state = await renderShellState();
 
-    await act(async () => state().showVersionsOf("/vault", "photo.png"));
+    await act(async () => state().explorerProps.onShowVersions?.("/vault", "photo.png"));
 
     expect(state().tabState.tabs[0]?.kind).toBe("image-viewer");
     expect(state().rightPanel).toBe("history");

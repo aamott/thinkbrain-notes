@@ -51,7 +51,6 @@ describe("useWikiLinkIndexStore", () => {
       wikiLinkIndex: {
         forward: new Map(),
         backlinks: new Map(),
-        unresolved: new Map(),
         noteIndex: []
       },
       noteIndex: [],

@@ -38,9 +38,7 @@ export interface WikiLinkIndexInput {
  *   note links to.
  * - `backlinks`: maps a resolved note `relativePath` to the notes that link to
  *   it. Used by the backlinks panel and graph view to compute edges.
- * - `unresolved`: maps a raw target string (that did not resolve to any note)
- *   to the notes that reference it. Lets a renamed note later surface dangling
- *   links that now point at it.
+ *   Unresolvable targets are simply absent from this map.
  * - `noteIndex`: the shared {@link NoteIndexEntry} list (fileName, title,
  *   aliases) that other features (clickable links, autocomplete) also consume.
  */
@@ -49,8 +47,6 @@ export interface WikiLinkIndex {
   readonly forward: ReadonlyMap<string, readonly IndexedWikiLink[]>;
   /** resolved note relativePath → source notes and contexts linking to it. */
   readonly backlinks: ReadonlyMap<string, readonly BacklinkDetail[]>;
-  /** unresolved raw target → source notes and contexts referencing it. */
-  readonly unresolved: ReadonlyMap<string, readonly BacklinkDetail[]>;
   /** shared note index entries derived from parsed notes. */
   readonly noteIndex: readonly NoteIndexEntry[];
 }
@@ -67,7 +63,6 @@ export interface WikiLinkIndex {
 export const EMPTY_WIKI_LINK_INDEX: WikiLinkIndex = Object.freeze({
   forward: new Map<string, readonly IndexedWikiLink[]>(),
   backlinks: new Map<string, readonly BacklinkDetail[]>(),
-  unresolved: new Map<string, readonly BacklinkDetail[]>(),
   noteIndex: Object.freeze([]) as readonly NoteIndexEntry[]
 }) as WikiLinkIndex;
 
@@ -78,7 +73,7 @@ export const EMPTY_WIKI_LINK_INDEX: WikiLinkIndex = Object.freeze({
  * {@link resolveWikiLinkTarget} and other consumers (autocomplete, clickable
  * links) without re-parsing the note.
  */
-export function buildNoteIndexEntry(input: WikiLinkIndexInput): NoteIndexEntry {
+function buildNoteIndexEntry(input: WikiLinkIndexInput): NoteIndexEntry {
   const { relativePath, parsedNote } = input;
   return {
     relativePath,
@@ -118,39 +113,33 @@ function dedupeLinks(input: WikiLinkIndexInput): IndexedWikiLink[] {
 }
 
 /**
- * Recomputes the `backlinks` and `unresolved` reverse maps from a forward map
- * and note index.
+ * Recomputes the `backlinks` reverse map from a forward map and note index.
  *
- * This is the single source of truth for the reverse maps: given the forward
+ * This is the single source of truth for the reverse map: given the forward
  * links and the current note index, every target is resolved and routed to
- * either `backlinks` (resolved) or `unresolved`. Recomputing on each mutation
+ * `backlinks` (unresolvable targets are skipped). Recomputing on each mutation
  * keeps the logic simple and correct — a note whose title/alias changed can
  * newly resolve (or unresolve) links from *other* notes, which a per-note
  * patch would miss.
  */
-function buildReverseMaps(
+function buildBacklinks(
   forward: ReadonlyMap<string, readonly IndexedWikiLink[]>,
   noteIndex: readonly NoteIndexEntry[]
-): {
-  backlinks: Map<string, BacklinkDetail[]>;
-  unresolved: Map<string, BacklinkDetail[]>;
-} {
+): Map<string, BacklinkDetail[]> {
   const backlinks = new Map<string, BacklinkDetail[]>();
-  const unresolved = new Map<string, BacklinkDetail[]>();
 
   for (const [sourcePath, links] of forward) {
     for (const { target, context } of links) {
       const resolvedPath = resolveWikiLinkTarget(target, noteIndex);
-      const map = resolvedPath === null ? unresolved : backlinks;
-      const key = resolvedPath ?? target;
+      if (resolvedPath === null) continue;
       const detail = { relativePath: sourcePath, context };
-      const list = map.get(key);
+      const list = backlinks.get(resolvedPath);
       if (list) list.push(detail);
-      else map.set(key, [detail]);
+      else backlinks.set(resolvedPath, [detail]);
     }
   }
 
-  return { backlinks, unresolved };
+  return backlinks;
 }
 
 /**
@@ -163,8 +152,7 @@ function finalizeWikiLinkIndex(
   forward: ReadonlyMap<string, readonly IndexedWikiLink[]>,
   noteIndex: readonly NoteIndexEntry[]
 ): WikiLinkIndex {
-  const { backlinks, unresolved } = buildReverseMaps(forward, noteIndex);
-  return { forward, backlinks, unresolved, noteIndex };
+  return { forward, backlinks: buildBacklinks(forward, noteIndex), noteIndex };
 }
 
 /**
@@ -174,7 +162,7 @@ function finalizeWikiLinkIndex(
  *  1. Builds the shared note index entries.
  *  2. Extracts deduplicated wiki-link targets from each note (forward map).
  *  3. Resolves each target against the note index and populates the backlinks
- *     reverse map and the unresolved map.
+ *     reverse map.
  *
  * Args:
  *   inputs: `{ relativePath, contents, parsedNote }` entries for every note.
@@ -217,35 +205,11 @@ export function getBacklinkDetails(
 }
 
 /**
- * Returns the raw wiki-link targets contained in the note at `relativePath`,
- * or an empty array if the note is not indexed.
- */
-export function getForwardLinks(
-  index: WikiLinkIndex,
-  relativePath: string
-): readonly string[] {
-  return (index.forward.get(relativePath) ?? []).map((link) => link.target);
-}
-
-/**
- * Returns the notes that reference the unresolved raw `target`, or an empty
- * array if the target resolves or is not referenced.
- */
-export function getUnresolvedReferences(
-  index: WikiLinkIndex,
-  target: string
-): readonly string[] {
-  return (index.unresolved.get(target) ?? []).map(
-    (detail) => detail.relativePath
-  );
-}
-
-/**
  * Removes a note from the index, returning a new (immutable) index.
  *
  * Drops the note's forward links, removes it from the note index, and
- * recomputes the backlinks/unresolved reverse maps so links from other notes
- * that previously resolved via this note's title/alias become unresolved.
+ * recomputes the backlinks reverse map so links from other notes that
+ * previously resolved via this note's title/alias no longer resolve.
  */
 export function removeNote(
   index: WikiLinkIndex,
@@ -268,7 +232,7 @@ export function removeNote(
  * `(index, entry, parsedNote)` signature let a caller pass a mismatched pair
  * and silently corrupt the index). Upserts the entry, replaces the note's
  * forward links with freshly extracted targets, and recomputes the
- * backlinks/unresolved reverse maps. Recomputing handles the case where a
+ * backlinks reverse map. Recomputing handles the case where a
  * note's title/alias changed and links from *other* notes now resolve (or
  * unresolve) differently.
  */

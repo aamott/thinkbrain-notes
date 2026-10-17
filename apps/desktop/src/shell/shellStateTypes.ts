@@ -85,11 +85,6 @@ export interface ShellState {
   /** The explorer's whole prop bag, assembled once so both chromes agree. */
   readonly explorerProps: WorkspaceExplorerProps;
   /**
-   * The explorer's "Previous versions…": opens the file — by its inferred
-   * kind, so media opens in a viewer — and reveals its Version history.
-   */
-  readonly showVersionsOf: (rootPath: string, relativePath: string) => void;
-  /**
    * Sync surfaces live on opposite docks: conflicts are an attention list on
    * the left, Version history inspects the active file on the right.
    */

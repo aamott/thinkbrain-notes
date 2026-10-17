@@ -368,10 +368,11 @@ describe("directory persistence", () => {
 
   /**
    * Persistence is not part of the load outcome: the extension is already
-   * registered when `save` runs, so a store failure must surface as a warning
-   * on a still-successful add rather than a rejection the user cannot retry.
+   * registered when `save` runs, so a store failure must not surface as a
+   * rejection the user cannot retry — it is logged and the add still
+   * reports success.
    */
-  it("reports a persist failure as a warning on an otherwise loaded extension", async () => {
+  it("keeps an extension loaded when remembering its directory fails", async () => {
     const store: ExtensionDirectoryStore = {
       load: async () => [],
       save: async () => {
@@ -384,10 +385,11 @@ describe("directory persistence", () => {
     try {
       const outcome = await local.add("/ext/a");
       expect(outcome.loaded).toBe(true);
-      expect(outcome.diagnostics.at(-1)).toMatchObject({
-        code: "directory_persist_failed",
-        severity: "warning"
-      });
+      expect(outcome.diagnostics).toEqual([]);
+      expect(spy).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to persist extension directory"),
+        expect.any(Error)
+      );
     } finally {
       spy.mockRestore();
     }

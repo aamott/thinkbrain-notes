@@ -9,7 +9,7 @@ import {
   workspaceExplorerReducer
 } from "./workspaceExplorerModel";
 import type { WorkspaceSession } from "./workspaceSession";
-import { DEFAULT_WORKSPACE_SETTINGS, readWorkspaceSettings } from "./workspaceSettings";
+import { DEFAULT_WORKSPACE_SETTINGS } from "./workspaceSettings";
 
 export interface UseWorkspaceSessionOptions {
   readonly api: WorkspaceDesktopApi;
@@ -67,7 +67,7 @@ export function useWorkspaceSession({
       // A failed settings read falls back to defaults rather than blocking
       // the workspace from opening.
       try {
-        const settings = await readWorkspaceSettings(next);
+        const settings = await latest.current.api.readWorkspaceSettings(next);
         if (rootRef.current !== next) return;
         setShowHidden(settings.showHidden);
         // Mocked or older settings documents may carry no order at all.

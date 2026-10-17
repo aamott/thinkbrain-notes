@@ -202,7 +202,7 @@ export const visibleDialog = (host: HTMLElement, label: string): Element | null 
   return el?.getAttribute("aria-hidden") === "true" ? null : el;
 };
 
-// The header's `⋯` button is labelled "Document tools", the menu it opens is
+// The bubble bar's `⋯` button is labelled "Actions", the menu it opens is
 // "Action items" (role="menu"), and the inspector it drills into is the
 // "Inspector" dialog — three distinct surfaces, matched by their own labels.
 export const inspector = (host: HTMLDivElement): Element | null =>
