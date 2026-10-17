@@ -36,8 +36,11 @@ dialog, and lifecycle callees.
   validation, traversal limits, exclusions, sorting, and error codes.
 - No new session/index/engine ownership is introduced. A dropped command future
   need not cancel a blocking read; it must not create persistent holdings.
-- The renderer's existing root checks after awaits in `useWorkspaceSession`
-  continue to reject results from a workspace the user has left.
+- The renderer checks a monotonic open generation *and* the root after each
+  `await` in `useWorkspaceSession`, so a stale result or failure is rejected
+  even when the newest open targets the same root (A->B->A). Root identity
+  alone was not enough: out-of-order worker completions make a late same-path
+  result practical.
 - Worker join/panic failures become logged, typed native errors; ordinary
   domain errors pass through unchanged.
 

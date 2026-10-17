@@ -232,6 +232,181 @@ describe("useWorkspaceSession", () => {
     expect(current().entries.map((item) => item.relative_path)).toEqual(["second.md"]);
   });
 
+  it("keeps the newest open when the same root returns out of order (A->B->A)", async () => {
+    const staleOpen = deferred<NativeWorkspaceSnapshot>();
+    const latestOpen = deferred<NativeWorkspaceSnapshot>();
+    const latestEntries = deferred<readonly NativeWorkspaceEntry[]>();
+    const onOpened = vi.fn();
+    const newestFile = {
+      relative_path: "newest.md",
+      file_name: "newest.md",
+      parent_path: "",
+      byte_size: 2,
+      updated_at: null
+    };
+    const latestSnapshot: NativeWorkspaceSnapshot = { ...snapshot("/first"), files: [newestFile] };
+    let opens = 0;
+    await render(
+      {
+        openWorkspace: (rootPath) => {
+          if (rootPath !== "/first") return Promise.resolve(snapshot(rootPath));
+          opens += 1;
+          return opens === 1 ? staleOpen.promise : latestOpen.promise;
+        },
+        listWorkspaceEntries: (rootPath) =>
+          rootPath === "/first" ? latestEntries.promise : Promise.resolve([entry("other.md")])
+      },
+      { onOpened }
+    );
+
+    let stale: Promise<void> | undefined;
+    await act(async () => {
+      stale = current().open("/first");
+    });
+    await act(async () => {
+      await current().open("/second");
+    });
+
+    let latest: Promise<void> | undefined;
+    await act(async () => {
+      latest = current().open("/first");
+      latestOpen.resolve(latestSnapshot);
+      latestEntries.resolve([entry("newest.md")]);
+      await latest;
+    });
+
+    // The first open for "/first" only finishes now — after a newer open of
+    // the same root already landed. Its result must not be applied.
+    await act(async () => {
+      staleOpen.resolve(snapshot("/first"));
+      await stale;
+    });
+
+    expect(current().rootPath).toBe("/first");
+    expect(current().snapshot).toEqual(latestSnapshot);
+    expect(current().files).toEqual(latestSnapshot.files);
+    expect(current().entries.map((item) => item.relative_path)).toEqual(["newest.md"]);
+    // The "/second" switch and the newest "/first" open each announced once;
+    // the stale open announced nothing.
+    expect(onOpened).toHaveBeenCalledTimes(2);
+    expect(onOpened).toHaveBeenNthCalledWith(1, "/second", snapshot("/second"));
+    expect(onOpened).toHaveBeenNthCalledWith(2, "/first", latestSnapshot);
+  });
+
+  it("lets the newest reopen of the same path win", async () => {
+    const staleOpen = deferred<NativeWorkspaceSnapshot>();
+    const latestOpen = deferred<NativeWorkspaceSnapshot>();
+    const latestEntries = deferred<readonly NativeWorkspaceEntry[]>();
+    const onOpened = vi.fn();
+    const latestSnapshot: NativeWorkspaceSnapshot = {
+      ...snapshot("/vault"),
+      files: [{ relative_path: "newest.md", file_name: "newest.md", parent_path: "", byte_size: 2, updated_at: null }]
+    };
+    let opens = 0;
+    await render(
+      {
+        openWorkspace: () => {
+          opens += 1;
+          return opens === 1 ? staleOpen.promise : latestOpen.promise;
+        },
+        listWorkspaceEntries: () => latestEntries.promise
+      },
+      { onOpened }
+    );
+
+    let stale: Promise<void> | undefined;
+    let latest: Promise<void> | undefined;
+    await act(async () => {
+      stale = current().open("/vault");
+    });
+    await act(async () => {
+      latest = current().open("/vault");
+      latestOpen.resolve(latestSnapshot);
+      latestEntries.resolve([entry("newest.md")]);
+      await latest;
+    });
+    await act(async () => {
+      staleOpen.resolve(snapshot("/vault"));
+      await stale;
+    });
+
+    expect(current().snapshot).toEqual(latestSnapshot);
+    expect(current().entries.map((item) => item.relative_path)).toEqual(["newest.md"]);
+    expect(onOpened).toHaveBeenCalledTimes(1);
+    expect(onOpened).toHaveBeenCalledWith("/vault", latestSnapshot);
+  });
+
+  it("ignores a superseded failure that lands after the same root reopened", async () => {
+    const staleOpen = deferred<NativeWorkspaceSnapshot>();
+    const latestOpen = deferred<NativeWorkspaceSnapshot>();
+    const onUnavailable = vi.fn();
+    let opens = 0;
+    await render(
+      {
+        openWorkspace: (rootPath) => {
+          if (rootPath !== "/first") return Promise.resolve(snapshot(rootPath));
+          opens += 1;
+          return opens === 1 ? staleOpen.promise : latestOpen.promise;
+        }
+      },
+      { onUnavailable }
+    );
+
+    let stale: Promise<void> | undefined;
+    await act(async () => {
+      stale = current().open("/first");
+    });
+    await act(async () => {
+      await current().open("/second");
+    });
+    await act(async () => {
+      const latest = current().open("/first");
+      latestOpen.resolve(snapshot("/first"));
+      await latest;
+    });
+    await act(async () => {
+      staleOpen.reject(new Error("too late"));
+      await stale;
+    });
+
+    expect(current()).toMatchObject({ phase: "ready", rootPath: "/first", error: null });
+    expect(current().entries.map((item) => item.relative_path)).toEqual(["first.md"]);
+    expect(onUnavailable).not.toHaveBeenCalled();
+  });
+
+  it("drops a refresh that straddles an A->B->A switch", async () => {
+    const refreshListing = deferred<readonly NativeWorkspaceEntry[]>();
+    let deferRefresh = false;
+    await render({
+      listWorkspaceEntries: (rootPath) =>
+        deferRefresh && rootPath === "/first"
+          ? refreshListing.promise
+          : Promise.resolve([entry(`${rootPath.slice(1)}.md`)])
+    });
+    await act(async () => {
+      await current().open("/first");
+    });
+
+    deferRefresh = true;
+    let refreshed: Promise<boolean> | undefined;
+    await act(async () => {
+      refreshed = current().refreshEntries("/first");
+    });
+    await act(async () => {
+      await current().open("/second");
+    });
+    deferRefresh = false;
+    await act(async () => {
+      await current().open("/first");
+    });
+    await act(async () => {
+      refreshListing.resolve([entry("stale.md")]);
+    });
+
+    await expect(refreshed).resolves.toBe(false);
+    expect(current().entries.map((item) => item.relative_path)).toEqual(["first.md"]);
+  });
+
   it("starts a new root from default view settings when its own cannot be read", async () => {
     vi.mocked(readWorkspaceSettings).mockResolvedValueOnce({ showHidden: true, explorerSort: "name-desc" });
     const listWorkspaceEntries = vi.fn(async () => [entry("a.md")]);
