@@ -4,7 +4,7 @@ import { isRecord } from "@thinkbrain/core";
 const DESKTOP_STATE_VERSION = 5;
 export const DESKTOP_STATE_KEY = "desktopState";
 const MAX_RECENT_WORKSPACES = 12;
-const MIN_PANEL_WIDTH = 224;
+const MIN_PANEL_WIDTH = 148;
 const MAX_PANEL_WIDTH = 480;
 export const DEFAULT_LEFT_PANEL_WIDTH = 288;
 export const DEFAULT_RIGHT_PANEL_WIDTH = 320;
