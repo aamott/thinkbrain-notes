@@ -28,6 +28,7 @@
     "android:dev": "pnpm desktop:tauri android dev",
     "android:build": "pnpm desktop:tauri android build --debug",
     "android:build:release": "pnpm desktop:tauri android build",
+    "android:smoke": "node scripts/android-startup-smoke.mjs",
     "prepare": "husky",
     "knip": "knip"
   },

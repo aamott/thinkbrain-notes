@@ -6042,7 +6042,6 @@ dependencies = [
  "jni 0.22.4",
  "keyring-core",
  "libc",
- "ndk-context",
  "notify",
  "notify-debouncer-full",
  "percent-encoding",
