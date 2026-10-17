@@ -127,15 +127,18 @@ test("a heading typed but unsaved resolves on tap", async ({ page }) => {
   await page.getByRole("button", { name: "Open guide.md" }).tap();
   await expect(editor(page).getByText(/Guide/)).toBeVisible();
 
-  // Type the heading in the visible middle — the live document resolves it,
-  // no save required. Park at a line end so Enter splits below it.
-  await editor(page).getByText("filler 10", { exact: true }).tap();
-  await page.keyboard.press("End");
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-  await page.keyboard.type("## Fresh Heading");
+  // Type the heading into the live document — no save required. The Enters
+  // split the parked line wherever the tap's caret lands, so the heading
+  // always ends up on its own line; the departure tap below targets a
+  // different line the insert can never touch.
+  await editor(page).getByText("filler 8", { exact: true }).tap();
+  // The touch caret focuses the editor a beat after the tap resolves, and
+  // Enter keydowns don't reliably split lines under touch emulation —
+  // `insertText` goes through the input path and inserts real newlines.
+  await expect(page.locator(".cm-editor")).toHaveClass(/cm-focused/);
+  await page.keyboard.insertText("\n\n## Fresh Heading");
   await expect(editor(page).getByText("## Fresh Heading")).toBeVisible();
-  await editor(page).getByText("filler 10", { exact: true }).tap();
+  await editor(page).getByText("filler 4", { exact: true }).tap();
 
   await page.locator(".cm-link-resolved", { hasText: "Fresh" }).tap();
   await expect.poll(() => spot(page)).toBe("## Fresh Heading");
