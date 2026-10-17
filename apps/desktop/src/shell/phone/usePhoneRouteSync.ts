@@ -1,8 +1,13 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
-import type { DesktopTabAction, DesktopTabState } from "../../tabs/tabModel";
+import {
+  currentVisit,
+  findVisit,
+  type DesktopTabAction,
+  type DesktopTabState
+} from "../../tabs/tabModel";
 import type { LeftPanel } from "../shellTypes";
-import type { PhoneNavigation, PhoneRoute } from "./usePhoneNavigation";
+import { samePhoneRoute, type PhoneNavigation, type PhoneRoute } from "./usePhoneNavigation";
 
 /** The inputs {@link usePhoneRouteSync} reads. */
 export interface UsePhoneRouteSyncParams {
@@ -11,24 +16,56 @@ export interface UsePhoneRouteSyncParams {
   readonly tabState: DesktopTabState;
   readonly stateRestored: boolean;
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
+  /**
+   * Restores a recorded visit by id — moves the cursor without recording.
+   * How an absent destination rejoins the strip is the caller's choice (the
+   * phone passes `replace-active`, its always-one-surface slot).
+   */
+  readonly goToVisit: (visitId: number) => void;
   readonly setLeftPanel: Dispatch<SetStateAction<LeftPanel | null>>;
 }
 
 /**
- * Keeps the browser-history route and the shared tab/panel state in agreement.
+ * Whether two routes ask for different reconciliation.
  *
- * Route → tab/panel synchronization. A tab route *activates* its tab through
- * the shared reducer rather than carrying document state of its own; a stale
- * route (tab closed or renamed since the entry was pushed) is rewritten to
- * Files in place, so Back can never strand the user on a ghost entry.
+ * Narrower than {@link samePhoneRoute}: two bound tab routes are the same
+ * destination only when they name the same *visit* — a same-document jump —
+ * and an unbound or re-pointed route for one tab counts as unchanged intent,
+ * so binding and rename-follow never look like a fresh route-driven restore.
+ */
+function sameSyncRoute(a: PhoneRoute, b: PhoneRoute): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "tab" && b.kind === "tab") {
+    if (a.visitId !== undefined && b.visitId !== undefined) {
+      return a.visitId === b.visitId;
+    }
+    return a.tabId === b.tabId;
+  }
+  return samePhoneRoute(a, b);
+}
+
+/**
+ * Keeps the browser-history route and the shared location history in
+ * agreement, with one authority per transition.
  *
- * The tab sync is keyed on `route` alone: the route is the authority here,
- * and re-running on tab changes would fight the observer below — when a new
- * tab opens under a tab route, activating the old route's tab and pushing
- * the new active tab ping-pong forever. Reconciliation on tab close/rename
- * is the observer's job, and it sees `openTabIds` through a ref. The effect
- * also re-runs when `navigation` changes identity, which is harmless — every
- * branch is idempotent.
+ * Route-driven (a pop or push just changed the route): a bound tab route
+ * restores its *visit* through `goToVisit` — never recording a fresh visit,
+ * and able to reopen a displaced resource the tab strip no longer shows. A dead route — visit scrubbed by an explicit close, or a tab
+ * gone with no visit bound — is rewritten in place so Back cannot strand the
+ * user on a ghost entry.
+ *
+ * Core-driven (the shared history moved under a stable route): a new visit —
+ * a same-document jump, an extension open, a conflict review — is mirrored
+ * as a phone browser entry. A jump arriving while an inspector sits on the
+ * tab consumes the inspector's history slot instead of burying it: Back must
+ * return to the bare pre-jump visit, not reopen the sheet that triggered it.
+ * Explicit openers that pushed a bare tab route are *bound* to their new
+ * visit in place: one open is one entry, and an open inspector survives.
+ *
+ * The split exists because restore and mirroring must never fight: a core
+ * visit arriving under a stable bound route is mirrored, never restored back
+ * to the route's older visit — and a route's own restore in flight is never
+ * mirrored as a new entry.
  */
 export function usePhoneRouteSync({
   route,
@@ -36,67 +73,111 @@ export function usePhoneRouteSync({
   tabState,
   stateRestored,
   dispatchTabs,
+  goToVisit,
   setLeftPanel
 }: UsePhoneRouteSyncParams): void {
-  // Ref mirrors of the values the two effects below read between renders;
-  // declared first so this sync runs before either consumer each commit.
-  const routeRef = useRef<PhoneRoute>(route);
-  const openTabIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const activeTabIdRef = useRef(tabState.activeTabId);
+  // Files/panel routes own the left surface; a tab route hides it. Small and
+  // keyed on the route alone — reconciliation below never writes panel state.
   useEffect(() => {
-    routeRef.current = route;
-    openTabIdsRef.current = new Set(tabState.tabs.map((tab) => tab.id));
-    activeTabIdRef.current = tabState.activeTabId;
-  });
+    setLeftPanel(route.kind === "panel" ? route.panel : route.kind === "files" ? "explorer" : null);
+  }, [route, setLeftPanel]);
 
+  // The one reconciliation pass. Runs every commit; `prev` holds the route,
+  // visit and active tab as of the last one, which is what lets a
+  // route-driven restore be told apart from a core-driven new visit.
+  const prevRef = useRef<{
+    readonly route: PhoneRoute;
+    readonly visitId: number | null;
+    readonly activeTabId: string | null;
+  } | null>(null);
   useEffect(() => {
-    if (route.kind === "tab") {
-      if (openTabIdsRef.current.has(route.tabId)) {
-        // `activate` returns a fresh state even for the already-active tab, so
-        // dispatch only on a real change — otherwise this effect loops.
-        if (activeTabIdRef.current !== route.tabId) {
-          dispatchTabs({ type: "activate", tabId: route.tabId });
+    const prev = prevRef.current;
+    const visit = currentVisit(tabState.history);
+    prevRef.current = { route, visitId: visit?.id ?? null, activeTabId: tabState.activeTabId };
+    // Seeding observes without navigating — a restored session or a cold
+    // mount belongs at Files, not mid-stack.
+    if (!stateRestored || prev === null) return;
+
+    const routeChanged = !sameSyncRoute(prev.route, route);
+    const visitChanged = prev.visitId !== (visit?.id ?? null);
+    const tabChanged = prev.activeTabId !== tabState.activeTabId;
+    const openIds = new Set(tabState.tabs.map((tab) => tab.id));
+    const activeRoute = tabState.activeTabId !== null
+      ? ({ kind: "tab", tabId: tabState.activeTabId } as const)
+      : ({ kind: "files" } as const);
+    // Pushes the new active tab as a fresh entry — but only for a genuine
+    // activation/open: when the previous tab is gone, the new active id is
+    // the reducer's close-fallback, and pushing it would shove a tab route
+    // over whatever surface (e.g. Files) the user closed the tab from.
+    const shouldPushActive =
+      tabChanged &&
+      visitChanged &&
+      tabState.activeTabId !== null &&
+      (prev.activeTabId === null || openIds.has(prev.activeTabId));
+
+    if (routeChanged) {
+      if (route.kind === "tab") {
+        const visitId = route.visitId;
+        if (visitId !== undefined) {
+          if (findVisit(tabState.history, visitId) !== null) {
+            // A revisit, not a new visit: restore moves the cursor without
+            // recording, and reopens a displaced descriptor when needed.
+            if (visit?.id !== visitId) goToVisit(visitId);
+          } else {
+            navigation.replace({ kind: "files" });
+          }
+        } else if (visit !== null && visit.tab.id === route.tabId) {
+          // Pushed before the visit id was known (dispatch + push in one
+          // batch): bind in place — no second entry, no lost inspector.
+          navigation.bindVisit(visit.id, route.tabId);
+        } else if (openIds.has(route.tabId)) {
+          // `activate` records a visit, so dispatch only on a real change.
+          if (tabState.activeTabId !== route.tabId) {
+            dispatchTabs({ type: "activate", tabId: route.tabId });
+          }
+        } else {
+          navigation.replace(activeRoute);
         }
-        setLeftPanel(null);
-      } else {
-        navigation.replace({ kind: "files" });
       }
-    } else {
-      setLeftPanel(route.kind === "panel" ? route.panel : "explorer");
-    }
-  }, [route, dispatchTabs, setLeftPanel, navigation]);
-
-  // Captures opens that bypass the phone wrappers — extension commands, the
-  // workspace bridge, a conflict review — so every externally driven active-tab
-  // change still lands on the Back stack. Restored tabs are seeded, not pushed:
-  // a cold start with a restored session belongs at Files, not mid-stack.
-  const observedTabIdRef = useRef<string | null>(null);
-  const seededTabRef = useRef(false);
-  const activeTabId = tabState.activeTabId;
-  useEffect(() => {
-    if (!stateRestored) return;
-    if (!seededTabRef.current) {
-      seededTabRef.current = true;
-      observedTabIdRef.current = activeTabId;
       return;
     }
-    if (activeTabId === observedTabIdRef.current) return;
-    const previousTabId = observedTabIdRef.current;
-    observedTabIdRef.current = activeTabId;
-    const current = routeRef.current;
-    if (current.kind === "tab" && current.tabId === activeTabId) return;
-    if (current.kind === "tab" && !openTabIdsRef.current.has(current.tabId)) {
-      navigation.replace(activeTabId ? { kind: "tab", tabId: activeTabId } : { kind: "files" });
-    } else if (
-      activeTabId &&
-      // Push only when the previously observed tab is still open (or there
-      // was none): then the new active id is a genuine activation/open. When
-      // the previous tab is gone, the new active id is the reducer's
-      // close-fallback — pushing it would shove a tab route over whatever
-      // surface (e.g. Files) the user closed the tab from.
-      (previousTabId === null || openTabIdsRef.current.has(previousTabId))
-    ) {
-      navigation.push({ kind: "tab", tabId: activeTabId });
+
+    if (route.kind === "tab") {
+      if (route.visitId !== undefined) {
+        if (visit === null && findVisit(tabState.history, route.visitId) === null) {
+          // The last tab closed and its visit is gone: no survivor visit to
+          // rewrite to. Falling back to Files in place keeps a dead tab
+          // surface (the fake Welcome) off screen and leaves Forward with
+          // nothing bound to reopen.
+          navigation.replace({ kind: "files" });
+        } else if (visit !== null && visit.id === route.visitId && visit.tab.id !== route.tabId) {
+          // Rename/retarget followed: the visit kept its id and moved
+          // descriptor — re-point the route in place.
+          navigation.bindVisit(route.visitId, visit.tab.id);
+        } else if (visit !== null && visit.id !== route.visitId) {
+          const next: PhoneRoute = { kind: "tab", tabId: visit.tab.id, visitId: visit.id };
+          if (findVisit(tabState.history, route.visitId) === null) {
+            // The routed visit died with an explicit close — rewrite the
+            // entry to the survivor visit in place, never reopening it.
+            navigation.replace(next);
+          } else if (navigation.overlay?.kind === "inspector" && visit.tab.id === route.tabId) {
+            navigation.replace(next);
+          } else {
+            navigation.push(next);
+          }
+        }
+      } else if (visit !== null && visit.tab.id === route.tabId) {
+        navigation.bindVisit(visit.id, route.tabId);
+      } else if (!openIds.has(route.tabId)) {
+        navigation.replace(activeRoute);
+      } else if (shouldPushActive) {
+        navigation.push({ kind: "tab", tabId: tabState.activeTabId! });
+      }
+      return;
     }
-  }, [activeTabId, stateRestored, navigation]);
+
+    if (shouldPushActive) {
+      navigation.push({ kind: "tab", tabId: tabState.activeTabId! });
+    }
+  });
 }

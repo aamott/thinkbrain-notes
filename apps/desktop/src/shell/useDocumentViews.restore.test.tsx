@@ -29,19 +29,18 @@ vi.mock("../events/appEvents", () => ({ appEvents: { emit: () => {} } }));
 vi.mock("../tabs/editorStateCache", () => ({ releaseEditorStatesExcept: () => {} }));
 
 const TAB_ID = "editor:/vault:note.md";
+const TAB = {
+  id: TAB_ID,
+  title: "note.md",
+  kind: "editor",
+  resource: { rootPath: "/vault", relativePath: "note.md" }
+} as const;
 const TABS: DesktopTabState = {
-  tabs: [
-    {
-      id: TAB_ID,
-      title: "note.md",
-      kind: "editor",
-      resource: { rootPath: "/vault", relativePath: "note.md" }
-    }
-  ],
+  tabs: [TAB],
   activeTabId: TAB_ID,
   closeRequest: null,
-  history: { entries: [TAB_ID], cursor: 0 }
-} as DesktopTabState;
+  history: { entries: [{ id: 1, tab: TAB }], cursor: 0, nextVisitId: 2 }
+};
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;

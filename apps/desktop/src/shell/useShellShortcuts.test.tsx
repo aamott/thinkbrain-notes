@@ -3,7 +3,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { DesktopCommandContext } from "../commands/commandRegistry";
 import { initialDesktopTabState, type DesktopTabAction } from "../tabs/tabModel";
+import { useCommandSurface } from "./useShellCommands";
 import { useShellShortcuts, type ShellShortcutsProps } from "./useShellShortcuts";
 
 // Minimal harness: mount the hook with stubbed shell plumbing and drive the
@@ -28,11 +30,29 @@ const Probe = (props: Partial<ShellShortcutsProps>) => {
   return null;
 };
 
-const mount = async (props: Partial<ShellShortcutsProps> = {}): Promise<void> => {
+// The mounted chrome's command surface — the same registration `PhoneShell`
+// installs — so shortcuts can be proven to honour it rather than always
+// dispatching the desktop tab-history action.
+const SurfaceProbe = ({ surface }: { readonly surface: Partial<DesktopCommandContext> }) => {
+  useCommandSurface(surface);
+  return null;
+};
+
+const mount = async (
+  props: Partial<ShellShortcutsProps> = {},
+  surface?: Partial<DesktopCommandContext>
+): Promise<void> => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  await act(async () => root!.render(<Probe {...props} />));
+  await act(async () =>
+    root!.render(
+      <>
+        <Probe {...props} />
+        {surface ? <SurfaceProbe surface={surface} /> : null}
+      </>
+    )
+  );
 };
 
 const keydown = async (init: KeyboardEventInit, target: EventTarget = window): Promise<void> => {
@@ -108,5 +128,63 @@ describe("useShellShortcuts history navigation", () => {
     expect(dispatchTabs).toHaveBeenNthCalledWith(1, { type: "goBack" });
     expect(dispatchTabs).toHaveBeenNthCalledWith(2, { type: "goForward" });
     expect(dispatchTabs).toHaveBeenCalledTimes(2);
+  });
+
+  it("routes every history gesture through the mounted command surface", async () => {
+    dispatchTabs = vi.fn();
+    const goBack = vi.fn();
+    const goForward = vi.fn();
+    await mount({}, { goBack, goForward });
+
+    await keydown({ key: "ArrowLeft", altKey: true });
+    await keydown({ key: "ArrowRight", altKey: true });
+    await keydown({ key: "[", metaKey: true });
+    await keydown({ key: "]", ctrlKey: true });
+    await mouseup(3);
+    await mouseup(4);
+
+    // Keyboard, brackets and thumb buttons all land on the chrome's own
+    // navigation — the tab-history dispatch stays untouched.
+    expect(goBack).toHaveBeenCalledTimes(3);
+    expect(goForward).toHaveBeenCalledTimes(3);
+    expect(dispatchTabs).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the tab dispatch when no chrome surface is mounted", async () => {
+    dispatchTabs = vi.fn();
+    await mount();
+
+    await keydown({ key: "ArrowLeft", altKey: true });
+
+    expect(dispatchTabs).toHaveBeenCalledWith({ type: "goBack" });
+  });
+
+  it("leaves Shift+Alt arrows to selection, never navigation", async () => {
+    dispatchTabs = vi.fn();
+    const goBack = vi.fn();
+    await mount({}, { goBack });
+
+    await keydown({ key: "ArrowLeft", altKey: true, shiftKey: true });
+
+    expect(goBack).not.toHaveBeenCalled();
+    expect(dispatchTabs).not.toHaveBeenCalled();
+  });
+
+  it("leaves Ctrl/Cmd+[/] inside editable fields to the editor", async () => {
+    dispatchTabs = vi.fn();
+    const goBack = vi.fn();
+    const goForward = vi.fn();
+    await mount({}, { goBack, goForward });
+
+    const editable = document.createElement("div");
+    editable.contentEditable = "true";
+    document.body.appendChild(editable);
+    await keydown({ key: "[", ctrlKey: true }, editable);
+    await keydown({ key: "]", metaKey: true }, editable);
+    editable.remove();
+
+    expect(goBack).not.toHaveBeenCalled();
+    expect(goForward).not.toHaveBeenCalled();
+    expect(dispatchTabs).not.toHaveBeenCalled();
   });
 });

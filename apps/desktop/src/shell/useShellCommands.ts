@@ -6,7 +6,16 @@
  * a command does — and the chromes only see the results.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type Dispatch,
+  type SetStateAction
+} from "react";
 
 import {
   useDesktopCommands,
@@ -46,18 +55,68 @@ import {
 let commandSurface: Partial<DesktopCommandContext> | null = null;
 
 /**
+ * Live availability the mounted chrome reports for the history commands it
+ * owns. The phone's route stack is its own history, so a Home→note walk can
+ * Back — and an open inspector can be dismissed — even while the tab history
+ * has nowhere to go. A field left `undefined` falls back to the desktop
+ * tab-history derivation.
+ */
+export interface CommandSurfaceAvailability {
+  readonly canGoBack?: boolean;
+  readonly canGoForward?: boolean;
+}
+
+let surfaceAvailability: CommandSurfaceAvailability | null = null;
+
+// The palette's availability derivation lives in `useShellCommands`, a level
+// above the chrome that registers the surface — a listener set re-reads the
+// snapshot so Home→note Back flips to enabled the moment the phone's depth
+// changes. `surfaceAvailability` only changes inside the registration
+// effect, which also notifies, so it is a valid external-store snapshot.
+const surfaceListeners = new Set<() => void>();
+const bumpSurface = (): void => {
+  surfaceListeners.forEach((listener) => listener());
+};
+const subscribeSurface = (listener: () => void): (() => void) => {
+  surfaceListeners.add(listener);
+  return () => {
+    surfaceListeners.delete(listener);
+  };
+};
+
+/**
+ * The mounted chrome's rerouted effect for `key`, or `undefined` for the
+ * desktop wiring — for callers outside the command path (window shortcuts,
+ * mouse thumb buttons) that must honour the same mounted surface.
+ */
+export function commandSurfaceEffect<K extends keyof DesktopCommandContext>(
+  key: K
+): DesktopCommandContext[K] | undefined {
+  return commandSurface?.[key];
+}
+
+/**
  * Registers `overrides` as the live command surface for as long as the calling
  * chrome is mounted, restoring the previous surface on unmount. ShellRoot
  * renders exactly one chrome at a time, so a single slot suffices.
+ * `availability` reports the chrome's own Back/Forward state for the palette.
  */
-export function useCommandSurface(overrides: Partial<DesktopCommandContext>): void {
+export function useCommandSurface(
+  overrides: Partial<DesktopCommandContext>,
+  availability?: CommandSurfaceAvailability
+): void {
   useEffect(() => {
-    const previous = commandSurface;
+    const previousSurface = commandSurface;
+    const previousAvailability = surfaceAvailability;
     commandSurface = overrides;
+    surfaceAvailability = availability ?? null;
+    bumpSurface();
     return () => {
-      commandSurface = previous;
+      commandSurface = previousSurface;
+      surfaceAvailability = previousAvailability;
+      bumpSurface();
     };
-  }, [overrides]);
+  }, [overrides, availability]);
 }
 
 interface UseShellCommandsOptions {
@@ -88,22 +147,34 @@ export function useShellCommands({
   toggleBottomPanel
 }: UseShellCommandsOptions) {
   const registeredCommands = useDesktopCommands();
+  // Re-read the mounted chrome's surface availability when it re-registers —
+  // the chrome's own re-render does not reach this hook, so the snapshot is
+  // how the palette learns the phone's Back depth changed.
+  const surfaceAvail = useSyncExternalStore(
+    subscribeSurface,
+    () => surfaceAvailability,
+    () => surfaceAvailability
+  );
   // Back/Forward are state-dependent like the title-bar buttons: when the
-  // history cursor has nowhere to go the palette greys the command out with
-  // a reason rather than running a no-op. (The desktop `requires` downgrade
-  // in `useDesktopCommands` is the same pattern, driven by platform
-  // capabilities; this one is driven by the live tab history.)
+  // history has nowhere to go the palette greys the command out with a reason
+  // rather than running a no-op. The mounted chrome's availability wins when
+  // it reports one — the phone's route stack can step back to Files or
+  // dismiss an inspector while the tab history itself has nowhere to go.
+  // (The desktop `requires` downgrade in `useDesktopCommands` is the same
+  // pattern, driven by platform capabilities; this one is live history.)
   const paletteCommands = useMemo(
     () =>
       registeredCommands.map((command) => {
-        if (command.id === "go-back" && !canGoBackInTabs(tabState)) {
+        const canBack = surfaceAvail?.canGoBack ?? canGoBackInTabs(tabState);
+        const canForward = surfaceAvail?.canGoForward ?? canGoForwardInTabs(tabState);
+        if (command.id === "go-back" && !canBack) {
           return {
             ...command,
             availability: "unavailable" as const,
             unavailableMessage: "No earlier visit in this workspace's history."
           };
         }
-        if (command.id === "go-forward" && !canGoForwardInTabs(tabState)) {
+        if (command.id === "go-forward" && !canForward) {
           return {
             ...command,
             availability: "unavailable" as const,
@@ -112,7 +183,7 @@ export function useShellCommands({
         }
         return command;
       }),
-    [registeredCommands, tabState]
+    [registeredCommands, tabState, surfaceAvail]
   );
   const paletteRestoreFocusRef = useRef<HTMLElement | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);

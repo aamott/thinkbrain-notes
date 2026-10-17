@@ -303,7 +303,7 @@ describe("useShellState", () => {
 
     await act(async () => state().openMarkdownDocument("/vault", "a.md"));
     await act(async () => state().openMarkdownDocument("/vault", "b.md"));
-    const first = state().tabState.history.entries[0]!;
+    const first = state().tabState.history.entries[0]!.tab.id;
 
     await act(async () => state().dispatchTabs({ type: "goBack" }));
     expect(state().tabState.activeTabId).toBe(first);

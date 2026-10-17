@@ -9,7 +9,7 @@ import {
 } from "../../panels/panelRegistryModel";
 import { usePanelNotificationCounts } from "../../notifications/usePanelNotificationCounts";
 import { useSettingsStore } from "../../settings/settingsStore";
-import { inspectableRelativePath, isNoteTab } from "../../tabs/tabModel";
+import { findVisit, inspectableRelativePath, isNoteTab } from "../../tabs/tabModel";
 import { isSelectableLeftPanel, type RightPanel } from "../shellTypes";
 import { TabCloseRequest } from "../TabCloseRequest";
 import { useNoteTitle } from "../useNoteTitle";
@@ -17,7 +17,7 @@ import { TabContent } from "../TabContent";
 import { useEditorCommands } from "../../tabs/editorCommands";
 import { FormattingBar } from "./FormattingBar";
 import type { ShellState } from "../useShellState";
-import { usePhoneNavigation } from "./usePhoneNavigation";
+import { usePhoneNavigation, type PhoneHistoryIntegration } from "./usePhoneNavigation";
 import { resolveBubbles } from "./bubbleModel";
 import { ActionItemsMenu } from "./ActionItemsMenu";
 import { InspectorSheet } from "./InspectorSheet";
@@ -66,7 +66,25 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   // drawer, tab switcher, action-items menu and New-note popup are ephemeral
   // chrome state — Back closes them, and neither Back nor Forward can
   // resurrect them.
-  const navigation = usePhoneNavigation(shell.restoredWorkspacePath);
+  //
+  // The integration callbacks tie the stack to the shared location history:
+  // leaving a tab route snapshots the editor's position into the visit being
+  // left, and a popped entry naming a scrubbed visit is skipped rather than
+  // reopened. `isVisitLive` closes over this render's history value — not a
+  // ref — so the navigation's render-time availability recomputes the moment
+  // a close scrubs a visit.
+  const captureCurrentLocation = shell.captureCurrentLocation;
+  const history = shell.tabState.history;
+  const historyIntegration = useMemo<PhoneHistoryIntegration>(
+    () => ({
+      captureDeparture: () => {
+        captureCurrentLocation();
+      },
+      isVisitLive: (visitId) => findVisit(history, visitId) !== null
+    }),
+    [captureCurrentLocation, history]
+  );
+  const navigation = usePhoneNavigation(shell.restoredWorkspacePath, historyIntegration);
   const route = navigation.route;
   const overlay = navigation.overlay;
   const drawerOpen = overlay?.kind === "navigation";
@@ -97,7 +115,9 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     openFileDocument,
     openNewTab: openNewTabDocument,
     paletteCommands,
-    runCommand: runPaletteCommand
+    runCommand: runPaletteCommand,
+    navigateToLine,
+    goToVisit: shellGoToVisit
   } = shell;
 
   // Journal entries render their own dateline, so the title row hides there —
@@ -105,12 +125,21 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
   const activePath = activeTab?.resource?.relativePath ?? null;
   const showNoteTitle = useNoteTitle(activeTab);
 
+  // Back on the phone restores a displaced resource into the one safe slot —
+  // the tab in use — never spawning a second strip entry. A dirty tab is
+  // never displaced: the reducer appends instead.
+  const goToVisit = useCallback(
+    (visitId: number) => shellGoToVisit(visitId, "replace-active"),
+    [shellGoToVisit]
+  );
+
   usePhoneRouteSync({
     route,
     navigation,
     tabState: shell.tabState,
     stateRestored: shell.stateRestored,
     dispatchTabs,
+    goToVisit,
     setLeftPanel
   });
 
@@ -137,7 +166,7 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     tabState: shell.tabState,
     activeTab,
     route,
-    navigation
+    openNote
   });
 
   usePhoneAutosave(activeTab, activeDocument?.contents, saveDocument);
@@ -206,6 +235,10 @@ export function PhoneShell({ shell }: { readonly shell: ShellState }) {
     documentContents: visibleDocumentContents,
     documentPath: visibleDocumentPath,
     onOpenNote: openNote,
+    // An outline heading tap records a same-document visit; the route sync
+    // mirrors it and consumes the inspector's history slot, so the sheet
+    // closes and Back returns to the bare pre-jump visit.
+    onNavigate: navigateToLine,
     onCompareVersion: shell.compareVersion,
     onRestoreVersion: shell.restoreVersionSafely
   };

@@ -76,8 +76,15 @@ describe("desktopTabReducer", () => {
     expect(dirty.closeRequest).toEqual({ tabId: firstNote.id });
     expect(cancelled.tabs).toHaveLength(1);
     expect(cancelled.closeRequest).toBeNull();
-    expect(discarded).toEqual(initialDesktopTabState);
-    expect(saved).toEqual(initialDesktopTabState);
+    // Closing the last tab leaves an empty shell — but visit ids are never
+    // recycled, so the counter stands where the discarded visit left it.
+    for (const closed of [discarded, saved]) {
+      expect(closed.tabs).toEqual([]);
+      expect(closed.activeTabId).toBeNull();
+      expect(closed.history.entries).toEqual([]);
+      expect(closed.history.cursor).toBe(-1);
+      expect(closed.history.nextVisitId).toBe(dirty.history.nextVisitId);
+    }
   });
 
   /**
@@ -295,7 +302,7 @@ describe("tab activation history", () => {
       { type: "activate", tabId: noteA.id }
     );
 
-    expect(state.history.entries).toEqual([noteA.id, noteB.id, noteA.id]);
+    expect(state.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id, noteA.id]);
     expect(state.history.cursor).toBe(2);
     expect(canGoBackInTabs(state)).toBe(true);
     expect(canGoForwardInTabs(state)).toBe(false);
@@ -308,7 +315,7 @@ describe("tab activation history", () => {
       { type: "activate", tabId: noteA.id }
     );
 
-    expect(state.history.entries).toEqual([noteA.id]);
+    expect(state.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id]);
     expect(canGoBackInTabs(state)).toBe(false);
   });
 
@@ -346,7 +353,7 @@ describe("tab activation history", () => {
     );
 
     // noteB's forward visit is gone; Forward stays disabled on the new tip.
-    expect(opened.history.entries).toEqual([noteA.id, noteC.id]);
+    expect(opened.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteC.id]);
     expect(opened.activeTabId).toBe(noteC.id);
     expect(canGoForwardInTabs(opened)).toBe(false);
 
@@ -362,7 +369,7 @@ describe("tab activation history", () => {
     );
 
     expect(state.activeTabId).toBe(noteA.id);
-    expect(state.history.entries).toEqual([noteA.id, noteB.id, noteA.id]);
+    expect(state.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id, noteA.id]);
   });
 
   it("scrubs a closed tab's visits and keeps Back on live tabs", () => {
@@ -375,7 +382,7 @@ describe("tab activation history", () => {
     );
     const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteB.id });
 
-    expect(closed.history.entries).toEqual([noteA.id, noteC.id]);
+    expect(closed.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteC.id]);
     expect(closed.activeTabId).toBe(noteC.id);
 
     const back = desktopTabReducer(closed, { type: "goBack" });
@@ -407,7 +414,7 @@ describe("tab activation history", () => {
     // stack — Back would walk visits that were in the user's future.
     const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteC.id });
 
-    expect(closed.history.entries).toEqual([noteA.id, noteB.id, noteA.id]);
+    expect(closed.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id, noteA.id]);
     expect(closed.activeTabId).toBe(noteA.id);
     expect(canGoBackInTabs(closed)).toBe(false);
     expect(canGoForwardInTabs(closed)).toBe(true);
@@ -428,7 +435,7 @@ describe("tab activation history", () => {
     const closed = desktopTabReducer(opened, { type: "requestClose", tabId: noteC.id });
 
     expect(closed.activeTabId).toBe(noteB.id);
-    expect(closed.history.entries).toEqual([noteA.id, noteB.id]);
+    expect(closed.history.entries.map((entry) => entry.tab.id)).toEqual([noteA.id, noteB.id]);
     expect(closed.history.cursor).toBe(1);
     expect(canGoForwardInTabs(closed)).toBe(false);
 
@@ -460,7 +467,7 @@ describe("tab activation history", () => {
       { type: "resetHistory" }
     );
 
-    expect(opened.history.entries).toEqual([noteB.id]);
+    expect(opened.history.entries.map((entry) => entry.tab.id)).toEqual([noteB.id]);
     expect(opened.history.cursor).toBe(0);
     expect(canGoBackInTabs(opened)).toBe(false);
     // Already reset: no churn, and an empty shell stays empty.
@@ -565,14 +572,19 @@ describe("tab reuse placements", () => {
     expect(state.activeTabId).toBe(firstNote.id);
   });
 
-  it("keeps Back working through a tab a file open replaced", () => {
+  it("reopens the preview a file open displaced when Back reaches its visit", () => {
     const state = reduce(
       { type: "open", tab: welcome },
       { type: "open", tab: firstNote, placement: "preview" },
       { type: "open", tab: secondNote, placement: "preview" }
     );
 
-    expect(desktopTabReducer(state, { type: "goBack" }).activeTabId).toBe(welcome.id);
+    // The displaced preview's visit survives the takeover: Back lands on
+    // firstNote and reopens its tab, then once more reaches the welcome tab.
+    const back = desktopTabReducer(state, { type: "goBack" });
+    expect(back.activeTabId).toBe(firstNote.id);
+    expect(back.tabs.map((tab) => tab.id)).toContain(firstNote.id);
+    expect(desktopTabReducer(back, { type: "goBack" }).activeTabId).toBe(welcome.id);
   });
 });
 

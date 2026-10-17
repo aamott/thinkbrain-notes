@@ -72,10 +72,13 @@ export function useExternalDocumentSync({
       const open = tabStateRef.current.tabs.find(
         (tab) => tab.id === editorTabId(from) || tab.id === fileTabId(from)
       );
-      if (!open) return;
       // The destination's own inferred kind decides the new id — an
       // extension-changing rename moves the document to the other id scheme.
-      moveDocument(open.id, documentTabId(to));
+      if (open) moveDocument(open.id, documentTabId(to));
+      // The retarget runs even when nothing open shows `from`: history keeps
+      // displaced visits (a taken-over preview, say) whose descriptor still
+      // names the old path — without this, Back lands on a path nothing
+      // lives at. The reducer no-ops when nothing retained matches.
       dispatchTabs({ type: "retarget", from, to });
     };
 

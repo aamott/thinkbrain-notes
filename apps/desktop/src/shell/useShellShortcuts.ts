@@ -12,6 +12,7 @@ import { useEffect, type Dispatch } from "react";
 
 import type { DesktopTab, DesktopTabAction, DesktopTabState } from "../tabs/tabModel";
 import type { LeftPanel } from "./shellTypes";
+import { commandSurfaceEffect } from "./useShellCommands";
 
 /** What the shortcuts need in order to act. */
 export interface ShellShortcutsProps {
@@ -26,6 +27,17 @@ export interface ShellShortcutsProps {
   readonly saveDocument: (tab: DesktopTab) => Promise<boolean>;
 }
 
+/** Whether the event target is editable text — where navigation chords belong to the editor. */
+function inEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null;
+  return (
+    element !== null &&
+    (element.isContentEditable ||
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement)
+  );
+}
+
 /**
  * Binds the global shortcuts: command palette (Ctrl/Cmd+P), explorer
  * (Ctrl/Cmd+B), bottom dock (Ctrl/Cmd+J), save (Ctrl/Cmd+S), tab switching
@@ -33,12 +45,14 @@ export interface ShellShortcutsProps {
  * Ctrl/Cmd+[ and Ctrl/Cmd+]), mouse thumb buttons, and Escape to dismiss
  * the palette.
  *
- * History chords: Alt+Left/Right is the browser and file-manager convention
- * and stays free of editing conflicts on every platform — on macOS the
- * word-jump chord is Option+Left/Right in *text inputs*, so it also gets the
- * browser-native Cmd+[/Cmd+] alternative. Dispatching is unconditional: the
- * reducer no-ops when the cursor has nowhere to go, same contract the
- * title-bar buttons rely on via `canGoBackInTabs`/`canGoForwardInTabs`.
+ * History chords: Alt+Left/Right is the browser and file-manager convention,
+ * bound only as a bare chord — Shift+Alt arrows keep their selection meaning
+ * everywhere, and Ctrl/Cmd+Alt arrows keep their word-jump meaning. Ctrl+[/]
+ * is the indentation chord in the editor on every platform, so it navigates
+ * only outside editable targets. Every history gesture runs the mounted
+ * chrome's command-surface effect when one is registered — the phone's route
+ * stack is its own history — and falls back to the desktop tab-history
+ * dispatch, which no-ops when the cursor has nowhere to go.
  */
 export function useShellShortcuts({
   tabState,
@@ -52,6 +66,14 @@ export function useShellShortcuts({
   saveDocument
 }: ShellShortcutsProps): void {
   useEffect(() => {
+    const navigateHistory = (direction: -1 | 1) => {
+      const surface = commandSurfaceEffect(direction === -1 ? "goBack" : "goForward");
+      if (surface) {
+        surface();
+        return;
+      }
+      dispatchTabs({ type: direction === -1 ? "goBack" : "goForward" });
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
       const isTab = event.key === "Tab";
@@ -86,26 +108,25 @@ export function useShellShortcuts({
           void saveDocument(activeTab);
         }
       }
-      // History Back/Forward. Skipped while an editable element has focus
-      // so Alt+Left/Right inside an editor keeps its word-jump meaning;
-      // Cmd/Ctrl+[/] stays bound regardless since no editing shortcut uses it.
-      if (
-        (event.key === "[" || event.key === "]") &&
-        modifier &&
-        !event.altKey
-      ) {
-        event.preventDefault();
-        dispatchTabs({ type: event.key === "[" ? "goBack" : "goForward" });
+      // History Back/Forward. Brackets stay bound wherever they cannot be
+      // indentation: inside an editable they belong to the editor on every
+      // platform, so the chord is left alone there rather than stolen.
+      if ((event.key === "[" || event.key === "]") && modifier && !event.altKey && !event.shiftKey) {
+        if (!inEditableTarget(event.target)) {
+          event.preventDefault();
+          navigateHistory(event.key === "[" ? -1 : 1);
+        }
         return;
       }
-      if (event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-        const target = event.target as HTMLElement | null;
-        const inEditable =
-          target !== null &&
-          (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
-        if (!inEditable) {
+      if (
+        event.altKey &&
+        !event.shiftKey &&
+        !modifier &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")
+      ) {
+        if (!inEditableTarget(event.target)) {
           event.preventDefault();
-          dispatchTabs({ type: event.key === "ArrowLeft" ? "goBack" : "goForward" });
+          navigateHistory(event.key === "ArrowLeft" ? -1 : 1);
         }
         return;
       }
@@ -120,7 +141,7 @@ export function useShellShortcuts({
     const onMouseUp = (event: MouseEvent) => {
       if (event.button !== 3 && event.button !== 4) return;
       event.preventDefault();
-      dispatchTabs({ type: event.button === 3 ? "goBack" : "goForward" });
+      navigateHistory(event.button === 3 ? -1 : 1);
     };
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("mouseup", onMouseUp);

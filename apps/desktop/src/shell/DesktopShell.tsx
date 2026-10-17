@@ -78,6 +78,7 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
     documentContents: activeDocument?.phase === "ready" ? activeDocument.contents : null,
     documentPath,
     onOpenNote: shell.onOpenNote,
+    onNavigate: shell.navigateToLine,
     onCompareVersion: shell.compareVersion,
     onRestoreVersion: shell.restoreVersionSafely
   };

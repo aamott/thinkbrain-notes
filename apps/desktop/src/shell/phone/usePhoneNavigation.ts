@@ -14,11 +14,45 @@ declare global {
 /**
  * The phone chrome's content route: the Files home, one revealed left panel,
  * or one open tab.
+ *
+ * A tab route may carry the shared location-history `visitId` it was pushed
+ * for (see the location-history contract: every visit has a unique numeric
+ * id, a tab descriptor and a captured location). The route *refers* to the
+ * visit — it never holds an editor anchor of its own — so a restored visit
+ * lands exactly where the core recorded it, and a visit whose tab was
+ * renamed still resolves through the core entry rather than the stale id.
  */
 export type PhoneRoute =
   | { readonly kind: "files" }
   | { readonly kind: "panel"; readonly panel: LeftPanel }
-  | { readonly kind: "tab"; readonly tabId: string };
+  | { readonly kind: "tab"; readonly tabId: string; readonly visitId?: number };
+
+/**
+ * Optional hooks into the shared location-history core.
+ *
+ * Every callback runs through a ref the navigation updates each commit, so
+ * callers may pass a fresh object every render — the history effects and
+ * browser listeners always see the latest closures.
+ */
+export interface PhoneHistoryIntegration {
+  /**
+   * Snapshots the departing editor's location into the visit being left.
+   *
+   * Invoked *before* any transition away from a tab route — pushing another
+   * route or an inspector, replacing the route, or any backward/forward pop
+   * (header, Android, mouse, keyboard or native `popstate`) — while the DOM
+   * still shows the departing document. Revisit restore only lands on the
+   * right position when the visit leaves holding where the user actually
+   * was; typing and scrolling alone never record a visit.
+   */
+  readonly captureDeparture?: () => void;
+  /**
+   * Whether `visitId` still names a visit in the shared history. Explicit
+   * closes scrub their visits; popped entries pointing at a dead visit are
+   * skipped in the direction of travel rather than reopened.
+   */
+  readonly isVisitLive?: (visitId: number) => boolean;
+}
 
 /**
  * A transient surface over the content route. Menus and launchers — the
@@ -53,6 +87,10 @@ export interface PhoneNavigation {
   readonly push: (route: PhoneRoute) => void;
   /** Replaces the current entry with `route` and no overlay. */
   readonly replace: (route: PhoneRoute) => void;
+  /** Rewrites the current tab route's visit identity in place — keeping any
+   *  overlay — for opens that pushed a bare tab route before the core visit
+   *  id was known, or renames that moved the visit to a new tab descriptor. */
+  readonly bindVisit: (visitId: number, tabId?: string) => void;
   /** Pushes `overlay` as a new history entry — the drill-in used when a surface
    *  sits on top of another (actions menu → inspector) and Back must step out
    *  one level at a time. Menus stay ephemeral either way. */
@@ -74,16 +112,59 @@ interface PhoneNavState {
   readonly route: PhoneRoute;
   readonly overlay: PhoneHistoryOverlay | null;
   readonly depth: number;
+  /** Minted at each workspace reset: workspace alone cannot tell this
+   *  session's vault-A entries from a stale A→B→A ancestor's — especially
+   *  panel routes, which carry no core visit id. Only pops stamped with the
+   *  current session's token are trusted; older same-workspace entries read
+   *  as foreign and fall to the Files root. In-memory only — entries written
+   *  before tokens existed are foreign, exactly like any other old shape. */
+  readonly session: string;
 }
 
 const filesRoute: PhoneRoute = { kind: "files" };
 
-function sameRoute(a: PhoneRoute, b: PhoneRoute): boolean {
+/**
+ * Physical slots the route ledger retains besides the root: enough for real
+ * navigation while staying bounded on long sessions. Depths beyond the
+ * newest slots fall out of the map and are skipped — never targets — the
+ * same as truncated-forward slots.
+ */
+const ROUTE_LEDGER_DEPTH_SLOTS = 200;
+
+/** Bounds the ledger to the root entry plus the newest physical slots. */
+function boundRouteLedger(routes: ReadonlyMap<number, PhoneRoute>): ReadonlyMap<number, PhoneRoute> {
+  if (routes.size <= ROUTE_LEDGER_DEPTH_SLOTS + 1) return routes;
+  const newest = [...routes.keys()].sort((a, b) => b - a).slice(0, ROUTE_LEDGER_DEPTH_SLOTS);
+  const bounded = new Map<number, PhoneRoute>();
+  const root = routes.get(0);
+  if (root !== undefined) bounded.set(0, root);
+  for (const depth of newest) bounded.set(depth, routes.get(depth)!);
+  return bounded;
+}
+
+/**
+ * Whether two routes name the same destination.
+ *
+ * A tab route's `visitId` is part of its identity: the same tab at a
+ * different visit is a different place (a same-document jump must push a new
+ * entry, not collapse onto the previous one). An *unbound* tab route —
+ * pushed before its visit id was known — compares equal to the same tab at
+ * any visit so re-tapping the open file never stacks a duplicate.
+ */
+export function samePhoneRoute(a: PhoneRoute | null, b: PhoneRoute | null): boolean {
+  if (a === null || b === null) return a === b;
   if (a.kind !== b.kind) return false;
   if (a.kind === "panel" && b.kind === "panel") return a.panel === b.panel;
-  if (a.kind === "tab" && b.kind === "tab") return a.tabId === b.tabId;
+  if (a.kind === "tab" && b.kind === "tab") {
+    return (
+      a.tabId === b.tabId &&
+      (a.visitId === undefined || b.visitId === undefined || a.visitId === b.visitId)
+    );
+  }
   return a.kind === "files";
 }
+
+const sameRoute = samePhoneRoute;
 
 function sameOverlay(a: PhoneOverlay | null, b: PhoneOverlay | null): boolean {
   if (a === null || b === null) return a === b;
@@ -104,9 +185,36 @@ function navState(
   workspace: string | null,
   route: PhoneRoute,
   overlay: PhoneHistoryOverlay | null,
-  depth: number
+  depth: number,
+  session: string
 ): PhoneNavState {
-  return { tnPhoneNav: true, workspace, route, overlay, depth };
+  return { tnPhoneNav: true, workspace, route, overlay, depth, session };
+}
+
+/**
+ * The nearest entry in `direction` whose route still names something alive.
+ *
+ * `window.history` is not enumerable, so liveness is answered from the
+ * route-only metadata the hook records per physical depth: Files, panels and
+ * unbound tab routes are always live; a bound tab route lives only while its
+ * visit does (an explicit close scrubs the visit). Depths missing from the
+ * map are skipped — never targets — and `tip` bounds the forward scan.
+ */
+function nearestLiveDepth(
+  routes: ReadonlyMap<number, PhoneRoute>,
+  fromDepth: number,
+  direction: -1 | 1,
+  isVisitLive: (visitId: number) => boolean,
+  tip: number
+): number | null {
+  for (let d = fromDepth + direction; d >= 0 && d <= tip; d += direction) {
+    const route = routes.get(d);
+    if (route === undefined) continue;
+    if (route.kind !== "tab" || route.visitId === undefined || isVisitLive(route.visitId)) {
+      return d;
+    }
+  }
+  return null;
 }
 
 /**
@@ -132,11 +240,22 @@ function navState(
  * and `back` are stable across renders, and several pushes inside one React
  * batch see each other's depth.
  */
-export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigation {
-  const [entry, setEntry] = useState<PhoneNavState>(() => navState(workspaceRoot, filesRoute, null, 0));
+export function usePhoneNavigation(
+  workspaceRoot: string | null,
+  integration?: PhoneHistoryIntegration
+): PhoneNavigation {
+  // Session token minted once per workspace reset (below): it, not the
+  // workspace string, is what an A→B→A round-trip invalidates. Only physical
+  // history entries are vetted by it — the pre-reset React-side states below
+  // are never pushed, so their `""` session is a placeholder, not a credential.
+  const sessionRef = useRef("");
+  const [entry, setEntry] = useState<PhoneNavState>(
+    () => navState(workspaceRoot, filesRoute, null, 0, "")
+  );
   // An entry recorded under another workspace is not this workspace's route:
   // after a switch the chrome reads as Files until something pushes again.
-  const current = entry.workspace === workspaceRoot ? entry : navState(workspaceRoot, filesRoute, null, 0);
+  const current =
+    entry.workspace === workspaceRoot ? entry : navState(workspaceRoot, filesRoute, null, 0, "");
   const route = current.route;
   const depth = current.depth;
   const entryRef = useRef(current);
@@ -149,17 +268,56 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
   const [tip, setTip] = useState(0);
   const tipRef = useRef(0);
   const skipParentMenuOnPopRef = useRef(false);
+  // One-hop bounce guard: a dead-entry pop issues `history.go` to the nearest
+  // live depth, and the landing pop adopts without a second bounce or a
+  // second departure capture.
+  const bouncePendingRef = useRef(false);
+  // Route-only metadata keyed by physical depth — the liveness ledger Back
+  // and Forward target from. No editor locations and no duplicated core
+  // visits: a bound route's `visitId` is the only identity it needs.
+  const [routeAtDepth, setRouteAtDepthState] = useState<ReadonlyMap<number, PhoneRoute>>(
+    () => new Map([[0, filesRoute]])
+  );
+  const routeAtDepthRef = useRef(routeAtDepth);
+  const setDepthMap = useCallback((next: ReadonlyMap<number, PhoneRoute>) => {
+    const bounded = boundRouteLedger(next);
+    routeAtDepthRef.current = bounded;
+    setRouteAtDepthState(bounded);
+  }, []);
   const effectiveTip = entry.workspace === workspaceRoot ? tip : 0;
+  // The history integration may hand a fresh object each render; the
+  // listeners below read through this ref so they always call the latest
+  // closures without re-subscribing.
+  const integrationRef = useRef(integration);
+  useEffect(() => {
+    integrationRef.current = integration;
+  });
+
+  /** Snapshots the departing tab's location into its visit, when leaving one. */
+  const captureDeparture = useCallback(() => {
+    if (entryRef.current.route.kind === "tab") integrationRef.current?.captureDeparture?.();
+  }, []);
+
+  /** Stamps a history entry for the current workspace + navigation session. */
+  const stamp = useCallback(
+    (nextRoute: PhoneRoute, overlay: PhoneHistoryOverlay | null, depth: number): PhoneNavState =>
+      navState(workspaceRoot, nextRoute, overlay, depth, sessionRef.current),
+    [workspaceRoot]
+  );
 
   // Cold mount and workspace change both start at Files. `replaceState` rather
   // than `pushState`: the root entry is not a visit, so it must not leave a
-  // history entry Back could land on.
+  // history entry Back could land on. Each reset mints a fresh session token,
+  // so a stale same-workspace entry from a previous visit to this vault can
+  // never validate against the live session.
   useEffect(() => {
-    const reset = navState(workspaceRoot, filesRoute, null, 0);
+    sessionRef.current = crypto.randomUUID();
+    const reset = stamp(filesRoute, null, 0);
     window.history.replaceState(reset, "");
     entryRef.current = reset;
     tipRef.current = 0;
     skipParentMenuOnPopRef.current = false;
+    bouncePendingRef.current = false;
     ephemeralMenuRef.current = null;
     /* eslint-disable react-hooks/set-state-in-effect -- A workspace switch is a
        genuine reset, not state derived from props: the derived-Files read above
@@ -168,23 +326,37 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     setEntry(reset);
     setTip(0);
     setEphemeralMenuState(null);
+    setDepthMap(new Map([[0, filesRoute]]));
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [workspaceRoot]);
+  }, [workspaceRoot, stamp, setDepthMap]);
 
   /** Writes `state` to history (top of the stack, or in place) and adopts it. */
-  const commit = useCallback((state: PhoneNavState, inPlace: boolean) => {
-    if (inPlace) window.history.replaceState(state, "");
-    else window.history.pushState(state, "");
-    entryRef.current = state;
-    setEntry(state);
-  }, []);
+  const commit = useCallback(
+    (state: PhoneNavState, inPlace: boolean) => {
+      if (inPlace) window.history.replaceState(state, "");
+      else window.history.pushState(state, "");
+      entryRef.current = state;
+      setEntry(state);
+      // Record the route at its physical depth; a push truncates anything
+      // deeper, exactly as the browser drops the forward branch.
+      const nextMap = new Map(routeAtDepthRef.current);
+      nextMap.set(state.depth, state.route);
+      if (!inPlace) {
+        for (const depth of [...nextMap.keys()]) {
+          if (depth > state.depth) nextMap.delete(depth);
+        }
+      }
+      setDepthMap(nextMap);
+    },
+    [setDepthMap]
+  );
 
   const replaceOverlay = useCallback(
     (nextOverlay: PhoneHistoryOverlay | null) => {
       const base = entryRef.current;
-      commit(navState(workspaceRoot, base.route, nextOverlay, base.depth), true);
+      commit(stamp(base.route, nextOverlay, base.depth), true);
     },
-    [workspaceRoot, commit]
+    [stamp, commit]
   );
 
   const setEphemeralMenu = useCallback((nextMenu: PhoneMenuOverlay | null) => {
@@ -229,20 +401,83 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       type PoppedState = Omit<PhoneNavState, "overlay"> & { readonly overlay?: PhoneOverlay | null };
       const s = event.state as Partial<PoppedState> | null;
       const marked: PoppedState | null =
-        s?.tnPhoneNav === true && s.workspace === workspaceRoot && s.route !== undefined && typeof s.depth === "number"
+        s?.tnPhoneNav === true &&
+        s.workspace === workspaceRoot &&
+        s.session === sessionRef.current &&
+        s.route !== undefined &&
+        typeof s.depth === "number"
           ? (s as PoppedState)
           : null;
       const restored = marked?.overlay;
       const overlay: PhoneHistoryOverlay | null =
         restored?.kind === "inspector" ? restored : null;
       // A valid pop keeps the known branch tip (Forward can walk back up);
-      // a foreign state resets both route and tip to the Files root.
-      const next = marked
-        ? navState(workspaceRoot, marked.route, overlay, marked.depth)
-        : navState(workspaceRoot, filesRoute, null, 0);
+      // a foreign state resets route, tip and the depth ledger to the Files
+      // root — deeper entries are gone for good.
+      let next = marked
+        ? stamp(marked.route, overlay, marked.depth)
+        : stamp(filesRoute, null, 0);
       if (!marked) {
         tipRef.current = 0;
         setTip(0);
+        setDepthMap(new Map([[0, filesRoute]]));
+      } else if (next.route.kind === "tab" && next.route.visitId === undefined) {
+        // Canonical ledger over the physical payload: a tab route pushed
+        // bare and then buried by a same-batch inspector never got its
+        // pushState rewritten — the binding lives in the ledger, so resolve
+        // it here. Independently bound slots are never overridden.
+        const ledgerRoute = routeAtDepthRef.current.get(next.depth);
+        if (
+          ledgerRoute?.kind === "tab" &&
+          ledgerRoute.tabId === next.route.tabId &&
+          ledgerRoute.visitId !== undefined
+        ) {
+          next = stamp(ledgerRoute, overlay, next.depth);
+        }
+      }
+      const bouncing = bouncePendingRef.current;
+      bouncePendingRef.current = false;
+      // Snapshot the departing tab's location into its visit *before* the
+      // route effect turns the tab/route around — the DOM still shows the
+      // document being left. Runs for every user-driven pop; the landing pop
+      // of our own bounce skips it (the departure was already captured, and
+      // re-capturing here could overwrite it under a different visit).
+      if (!bouncing && previous.route.kind === "tab") {
+        integrationRef.current?.captureDeparture?.();
+      }
+      // A popped tab route naming a visit the core has since scrubbed (its
+      // tab was explicitly closed) must not reopen the resource. Step
+      // straight to the nearest live entry in the direction of travel — or,
+      // when the tail ahead is all dead, back to the live entry the gesture
+      // came from — instead of rewriting the slot into a phantom Home.
+      const poppedVisitId = next.route.kind === "tab" ? next.route.visitId : undefined;
+      const isVisitLive = integrationRef.current?.isVisitLive;
+      if (poppedVisitId !== undefined && isVisitLive?.(poppedVisitId) === false) {
+        if (bouncing) {
+          // The bounce target died mid-hop: never reopen it and never chain
+          // a second hop. Reset the branch to the Files root.
+          next = stamp(filesRoute, null, 0);
+          window.history.replaceState(next, "");
+          tipRef.current = 0;
+          setTip(0);
+          setDepthMap(new Map([[0, filesRoute]]));
+        } else {
+          const steppingBack = next.depth <= previous.depth;
+          const map = routeAtDepthRef.current;
+          const backward = nearestLiveDepth(map, next.depth, -1, isVisitLive, tipRef.current);
+          const forward = nearestLiveDepth(map, next.depth, 1, isVisitLive, tipRef.current);
+          const target = steppingBack ? (backward ?? forward) : (forward ?? backward);
+          if (target !== null) {
+            bouncePendingRef.current = true;
+            window.history.go(target - next.depth);
+            return;
+          }
+          // No live entry anywhere in the branch: fall safe to Home,
+          // rewritten in place so a further Back can still reach live
+          // entries on the other side.
+          next = stamp(filesRoute, null, next.depth);
+          window.history.replaceState(next, "");
+        }
       }
       // Back from a child inspector restores its ephemeral parent menu without
       // putting that menu in history. Whole-flow dismissal suppresses it.
@@ -252,21 +487,29 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       setEphemeralMenu(restoreActionsMenu ? { kind: "actions" } : null);
       entryRef.current = next;
       setEntry(next);
+      if (marked) {
+        const nextMap = new Map(routeAtDepthRef.current);
+        nextMap.set(next.depth, next.route);
+        setDepthMap(nextMap);
+      }
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [workspaceRoot, setEphemeralMenu]);
+  }, [workspaceRoot, stamp, setEphemeralMenu, setDepthMap]);
 
   const pushEntry = useCallback(
     (nextRoute: PhoneRoute, nextOverlay: PhoneHistoryOverlay | null) => {
+      // Leaving a tab route — for Home, a panel or an inspector — snapshots
+      // the departing editor's location into its visit before the DOM hides.
+      captureDeparture();
       setEphemeralMenu(null);
       const nextDepth = entryRef.current.depth + 1;
-      commit(navState(workspaceRoot, nextRoute, nextOverlay, nextDepth), false);
+      commit(stamp(nextRoute, nextOverlay, nextDepth), false);
       // pushState truncates any forward entries: the new entry is the tip.
       tipRef.current = nextDepth;
       setTip(nextDepth);
     },
-    [workspaceRoot, commit, setEphemeralMenu]
+    [stamp, commit, setEphemeralMenu, captureDeparture]
   );
 
   const push = useCallback(
@@ -283,10 +526,39 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
 
   const replace = useCallback(
     (next: PhoneRoute) => {
+      if (entryRef.current.route.kind === "tab" && next.kind !== "tab") captureDeparture();
       setEphemeralMenu(null);
-      commit(navState(workspaceRoot, next, null, entryRef.current.depth), true);
+      commit(stamp(next, null, entryRef.current.depth), true);
     },
-    [workspaceRoot, commit, setEphemeralMenu]
+    [stamp, commit, setEphemeralMenu, captureDeparture]
+  );
+
+  const bindVisit = useCallback(
+    (visitId: number, tabId?: string) => {
+      const base = entryRef.current;
+      if (base.route.kind !== "tab") return;
+      const nextRoute: PhoneRoute = { kind: "tab", tabId: tabId ?? base.route.tabId, visitId };
+      if (base.route.visitId === visitId && base.route.tabId === nextRoute.tabId) return;
+      // In-place rewrite: the inspector entry (if any) keeps its slot, and no
+      // second browser entry appears for an opener that pushed first.
+      commit(stamp(nextRoute, base.overlay, base.depth), true);
+      // Enrich the ledger's other unbound routes for this tab: a same-batch
+      // push below an inspector stays bare physically forever, so the ledger
+      // carries the binding the pop handler resolves against. Slots already
+      // bound to a visit of their own are never overridden.
+      const ledger = new Map(routeAtDepthRef.current);
+      for (const [ledgerDepth, ledgerRoute] of ledger) {
+        if (
+          ledgerRoute.kind === "tab" &&
+          ledgerRoute.visitId === undefined &&
+          ledgerRoute.tabId === nextRoute.tabId
+        ) {
+          ledger.set(ledgerDepth, nextRoute);
+        }
+      }
+      setDepthMap(ledger);
+    },
+    [stamp, commit, setDepthMap]
   );
 
   const openEphemeralMenu = useCallback(
@@ -356,15 +628,39 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
     // under an open drawer that system Back would have closed.
     if (dismissTopOverlay()) return;
     if (closeEphemeralMenu()) return;
-    if (entryRef.current.depth > 0) window.history.back();
+    const depth = entryRef.current.depth;
+    if (depth <= 0) return;
+    // One `history.go` to the nearest live entry — dead visits (closed tabs)
+    // are skipped without ever being adopted. Home at depth 0 always counts
+    // as live, so the fallback is the root, not a stranded position.
+    const isVisitLive = integrationRef.current?.isVisitLive;
+    const target =
+      isVisitLive === undefined
+        ? depth - 1
+        : (nearestLiveDepth(routeAtDepthRef.current, depth, -1, isVisitLive, tipRef.current) ?? 0);
+    window.history.go(target - depth);
   }, [closeEphemeralMenu]);
 
   const forward = useCallback(() => {
-    if (entryRef.current.depth < tipRef.current) {
-      setEphemeralMenu(null);
-      window.history.forward();
-    }
+    const depth = entryRef.current.depth;
+    if (depth >= tipRef.current) return;
+    setEphemeralMenu(null);
+    const isVisitLive = integrationRef.current?.isVisitLive;
+    const target =
+      isVisitLive === undefined
+        ? depth + 1
+        : nearestLiveDepth(routeAtDepthRef.current, depth, 1, isVisitLive, tipRef.current);
+    if (target !== null) window.history.go(target - depth);
   }, [setEphemeralMenu]);
+
+  // Forward only exists while a *live* entry sits deeper on this branch —
+  // a tail of scrubbed visits is not a destination. Without visit liveness
+  // the depth bound alone answers, as it always did.
+  const isVisitLiveNow = integration?.isVisitLive;
+  const canGoForward =
+    isVisitLiveNow === undefined
+      ? depth < effectiveTip
+      : nearestLiveDepth(routeAtDepth, depth, 1, isVisitLiveNow, effectiveTip) !== null;
 
   // Memoized so consumers can depend on `navigation` in effects without
   // re-running on every unrelated render.
@@ -373,9 +669,10 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       route,
       overlay,
       canGoBack: depth > 0 || ephemeralMenu !== null,
-      canGoForward: depth < effectiveTip,
+      canGoForward,
       push,
       replace,
+      bindVisit,
       pushOverlay,
       showOverlay,
       dismissOverlay,
@@ -387,9 +684,10 @@ export function usePhoneNavigation(workspaceRoot: string | null): PhoneNavigatio
       overlay,
       depth,
       ephemeralMenu,
-      effectiveTip,
+      canGoForward,
       push,
       replace,
+      bindVisit,
       pushOverlay,
       showOverlay,
       dismissOverlay,

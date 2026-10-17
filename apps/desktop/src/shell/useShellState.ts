@@ -48,6 +48,7 @@ import type { RightPanel } from "./shellTypes";
 import { useAppUpdate } from "./useAppUpdate";
 import { useDocumentViews } from "./useDocumentViews";
 import { useExternalDocumentSync } from "./useExternalDocumentSync";
+import { useHistoryDispatch, useLocationHistory } from "./useLocationHistory";
 import { usePanelResize } from "./usePanelResize";
 import { useShellCommands } from "./useShellCommands";
 import { useShellShortcuts } from "./useShellShortcuts";
@@ -61,6 +62,12 @@ export function useShellState(): ShellState {
   // Read by the outside-change subscription, which outlives any one set of
   // tabs and must not be rebuilt every time one opens or closes.
   const tabStateRef = useRef(tabState);
+  /**
+   * The dispatch every caller shares: before any action that moves the user
+   * somewhere it snapshots the departing editor's position into the visit
+   * being left. The reducer stays pure — the live-view read happens here.
+   */
+  const dispatchNavigation = useHistoryDispatch(dispatchTabs, tabStateRef);
   const [rightPanel, setRightPanel] = useState<RightPanel | null>(null);
   const { theme, setTheme } = useTheme();
 
@@ -112,7 +119,17 @@ export function useShellState(): ShellState {
     markDocumentConflict,
     dismissEmptied,
     renameDocument
-  } = useDocumentViews({ tabState, dispatchTabs });
+  } = useDocumentViews({ tabState, dispatchTabs: dispatchNavigation });
+
+  // Location history: pending position restores, position mapping, and the
+  // line-jump / go-to-visit / departure-capture APIs the chromes call.
+  const { navigateToLine, goToVisit, captureCurrentLocation } = useLocationHistory({
+    tabState,
+    dispatchTabs,
+    dispatchNavigation,
+    documents,
+    loadDocumentIntoView
+  });
 
   const {
     acknowledgeNewNoteFocus,
@@ -140,7 +157,12 @@ export function useShellState(): ShellState {
     workspaceFiles,
     workspaceName,
     workspaceSession
-  } = useWorkspaceLifecycle({ tabState, dispatchTabs, loadDocumentIntoView, openMarkdownDocument });
+  } = useWorkspaceLifecycle({
+    tabState,
+    dispatchTabs: dispatchNavigation,
+    loadDocumentIntoView,
+    openMarkdownDocument
+  });
 
   // The one switching controller for this window, shared by every chrome and
   // every placement of the selector. Built here, above the chrome choice, so a
@@ -161,8 +183,8 @@ export function useShellState(): ShellState {
   // The reducer returns the state untouched while it is already reset, so
   // the mount-time fire on a still-empty history costs nothing.
   useEffect(() => {
-    dispatchTabs({ type: "resetHistory" });
-  }, [restoredWorkspacePath]);
+    dispatchNavigation({ type: "resetHistory" });
+  }, [restoredWorkspacePath, dispatchNavigation]);
 
   /**
    * Reveals a right panel, or closes it when it is already showing.
@@ -185,7 +207,7 @@ export function useShellState(): ShellState {
     runCommand
   } = useShellCommands({
     tabState,
-    dispatchTabs,
+    dispatchTabs: dispatchNavigation,
     theme,
     setTheme,
     showExplorer,
@@ -234,7 +256,7 @@ export function useShellState(): ShellState {
     showVersionsOf
   } = useSyncActions({
     restoredWorkspacePath,
-    dispatchTabs,
+    dispatchTabs: dispatchNavigation,
     tabStateRef,
     setRightPanel,
     selectLeftPanel,
@@ -249,7 +271,7 @@ export function useShellState(): ShellState {
   useExternalDocumentSync({
     workspacePath: restoredWorkspacePath,
     tabStateRef,
-    dispatchTabs,
+    dispatchTabs: dispatchNavigation,
     moveDocument,
     markDocumentConflict,
     reloadDocumentInPlace
@@ -314,7 +336,7 @@ export function useShellState(): ShellState {
 
   useShellShortcuts({
     tabState,
-    dispatchTabs,
+    dispatchTabs: dispatchNavigation,
     activeTab,
     paletteOpen,
     openPalette,
@@ -326,7 +348,10 @@ export function useShellState(): ShellState {
 
   return {
     tabState,
-    dispatchTabs,
+    dispatchTabs: dispatchNavigation,
+    navigateToLine,
+    goToVisit,
+    captureCurrentLocation,
     activeTab,
     activeDocument,
     documents,

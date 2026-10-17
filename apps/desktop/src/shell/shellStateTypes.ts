@@ -12,7 +12,13 @@ import type { MarkdownLinkTarget } from "@thinkbrain/core";
 import type { DesktopCommand } from "../commands/commandRegistry";
 import type { NativeMarkdownFileEntry } from "../native/commands";
 import type { SyncStatus } from "../sync/historyTypes";
-import type { DesktopTab, DesktopTabAction, DesktopTabState, TabOpenPlacement } from "../tabs/tabModel";
+import type {
+  DesktopTab,
+  DesktopTabAction,
+  DesktopTabState,
+  EditorLocation,
+  TabOpenPlacement
+} from "../tabs/tabModel";
 import type { NoteIndexEntry } from "@thinkbrain/core";
 import type { WorkspaceSwitchingController } from "../workspace/useWorkspaceSwitching";
 import type { WorkspaceExplorerProps } from "../workspace/WorkspaceExplorer";
@@ -31,7 +37,34 @@ import type {
 export interface ShellState {
   // tabs & documents
   readonly tabState: DesktopTabState;
+  /**
+   * The departure-enriched dispatch: any action that moves the user somewhere
+   * (`open`, `activate`, `goBack`, `goForward`, `restoreVisit`,
+   * `navigateToLocation`) first snapshots the live editor's position into the
+   * visit being left. All tab dispatches should flow through this.
+   */
   readonly dispatchTabs: Dispatch<DesktopTabAction>;
+  /**
+   * Jumps to a 1-based line in the active document — an outline heading
+   * click. Captures the departing position, records an in-file visit, and
+   * lands the cursor at the line's start.
+   */
+  readonly navigateToLine: (line: number) => void;
+  /**
+   * Restores a recorded visit by its numeric id — moves the history cursor
+   * and reopens the visit's tab descriptor if it was displaced. For chrome
+   * history UIs (the phone's go-to-visit) rather than recording a new visit.
+   * `placement` governs how an absent destination rejoins the strip: the
+   * desktop default refills a displaced preview slot, while `"replace-active"`
+   * takes over the tab in use — the phone's always-one-surface restore.
+   */
+  readonly goToVisit: (visitId: number, placement?: TabOpenPlacement) => void;
+  /**
+   * Snapshots the live editor's position into the current visit — for a
+   * chrome about to hide the tab surface (phone: leaving a tab for Home or a
+   * panel). Returns the captured location, or `null` when there is none.
+   */
+  readonly captureCurrentLocation: () => EditorLocation | null;
   readonly activeTab: DesktopTab | null;
   readonly activeDocument: DocumentViewState | undefined;
   readonly documents: Readonly<Record<string, DocumentViewState>>;

@@ -1,9 +1,10 @@
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import type { MarkdownLinkTarget, NoteIndexEntry } from "@thinkbrain/core";
 import { cn } from "../lib/utils";
 import { createVaultAssetResolver } from "../native/assets";
 import { useSettingsStore } from "../settings/settingsStore";
 import { desktopTabRegistry } from "../tabs/tabRegistry";
+import { notifyEditorVisibility } from "../tabs/editorLocationRegistry";
 import { isMediaViewerKind, type DesktopTab } from "../tabs/tabModel";
 import type { DocumentViewState } from "./shellTypes";
 import { SettingsTab } from "../settings/SettingsTab";
@@ -121,6 +122,15 @@ export function TabContent({
         : undefined,
     [rootPath, relativePath]
   );
+
+  // A surface coming back into view (the phone returning from Home or a
+  // panel that covered the kept-mounted editor) must announce itself — its
+  // editor stayed registered while hidden, so nothing else tells history a
+  // queued restore can answer again.
+  const tabId = tab?.id ?? null;
+  useEffect(() => {
+    if (active && tabId !== null) notifyEditorVisibility(tabId);
+  }, [active, tabId]);
 
   if (!tab) {
     return (

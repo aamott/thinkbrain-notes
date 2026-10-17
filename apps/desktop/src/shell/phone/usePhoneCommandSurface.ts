@@ -52,5 +52,12 @@ export function usePhoneCommandSurface(navigation: PhoneNavigation): void {
       goForward: navigation.forward
     };
   }, [navigation]);
-  useCommandSurface(commandSurface);
+  // The palette's Back/Forward availability follows this chrome's own stack:
+  // a Home→note walk can step back, and an open inspector can be dismissed,
+  // even while the shared tab history has nowhere to go.
+  const availability = useMemo(
+    () => ({ canGoBack: navigation.canGoBack, canGoForward: navigation.canGoForward }),
+    [navigation.canGoBack, navigation.canGoForward]
+  );
+  useCommandSurface(commandSurface, availability);
 }
