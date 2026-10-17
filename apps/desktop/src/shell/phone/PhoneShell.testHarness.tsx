@@ -13,8 +13,9 @@ import { PhoneShell } from "./PhoneShell";
 // `useShellState` boots the workspace lifecycle and reaches for Tauri IPC when
 // it believes it is running under Tauri. Mock both so the restore path is a
 // no-op, matching `ShellRoot.test.tsx` and `useShellState.test.tsx`.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false)
+vi.mock("../../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
 }));
 
 // The load path dereferences what the adapter returns, and the native-command
@@ -61,7 +62,7 @@ const nativeCommands = () =>
 /**
  * Answers `workspace_access_capabilities` the way a managed-vault-only host
  * (Android) does. The workspace list needs no answer: `listKnownWorkspaces`
- * short-circuits to `[]` when `isTauri()` is false, which this harness
+ * short-circuits to `[]` when `isNativeHost()` is false, which this harness
  * already fakes. Call before `render`/`renderWithShell`.
  */
 export const mockManagedWorkspaceAccess = (): void => {

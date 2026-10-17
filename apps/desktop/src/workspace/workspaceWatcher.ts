@@ -1,7 +1,9 @@
-import { listen } from "@tauri-apps/api/event";
-
 import { appEvents } from "../events/appEvents";
 import { invokeNativeCommand } from "../native/commands";
+import {
+  subscribeToNativeEvent,
+  type NativeWorkspaceChange
+} from "../native/events";
 
 /**
  * Turns edits made outside the app into the events the app already understands.
@@ -28,27 +30,10 @@ const WORKSPACE_CHANGED_EVENT = "workspace://changed";
 const MAX_INDIVIDUAL_CHANGES = 50;
 
 /**
- * One reportable change, mirroring the native `WorkspaceChange`. The native
- * classifier always pairs a rename with its origin — an unresolvable end
- * becomes a rescan instead — so `oldPath` is a required field here.
+ * The public domain alias for the native change union — kept so this module's
+ * API stays in workspace vocabulary while the wire shape lives in `native/`.
  */
-export type WorkspaceChange =
-  | {
-      readonly kind: "created" | "modified" | "deleted" | "rescan";
-      /** Workspace-relative, forward slashes. Empty for a rescan. */
-      readonly path: string;
-    }
-  | {
-      readonly kind: "renamed";
-      readonly path: string;
-      /** Where a renamed note came from. */
-      readonly oldPath: string;
-    };
-
-interface WorkspaceChangedPayload {
-  readonly rootPath: string;
-  readonly changes: readonly WorkspaceChange[];
-}
+export type WorkspaceChange = NativeWorkspaceChange;
 
 /**
  * Emits the note events describing `changes`.
@@ -127,10 +112,10 @@ export async function watchWorkspace(
   // every event.
   const canonicalRoot = await invokeNativeCommand("watch_workspace", { rootPath });
 
-  const unlisten = await listen<WorkspaceChangedPayload>(WORKSPACE_CHANGED_EVENT, (event) => {
+  const unlisten = await subscribeToNativeEvent(WORKSPACE_CHANGED_EVENT, (payload) => {
     // Every window hears every workspace; only this one's changes are ours.
-    if (event.payload.rootPath !== canonicalRoot) return;
-    applyWorkspaceChanges(rootPath, event.payload.changes, onRescan);
+    if (payload.rootPath !== canonicalRoot) return;
+    applyWorkspaceChanges(rootPath, payload.changes, onRescan);
   });
 
   return () => {

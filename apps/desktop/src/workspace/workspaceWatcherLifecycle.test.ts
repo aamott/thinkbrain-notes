@@ -1,28 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { appEvents } from "../events/appEvents";
+import type { NativeWorkspaceChangedPayload } from "../native/events";
 
-const listen = vi.fn();
+const subscribeToNativeEvent = vi.fn();
 const invokeNativeCommand = vi.fn();
 
-vi.mock("@tauri-apps/api/event", () => ({ listen: (...args: unknown[]) => listen(...args) }));
+vi.mock("../native/events", () => ({
+  subscribeToNativeEvent: (...args: unknown[]) => subscribeToNativeEvent(...args)
+}));
 vi.mock("../native/commands", () => ({
   invokeNativeCommand: (...args: unknown[]) => invokeNativeCommand(...args)
 }));
 
 const { watchWorkspace } = await import("./workspaceWatcher");
 
-/** Captures the handler the watcher registers so tests can drive it. */
-type Handler = (event: { payload: unknown }) => void;
+/** Captures the payload handler the watcher registers so tests can drive it. */
+type Handler = (payload: NativeWorkspaceChangedPayload) => void;
 
 const unlisten = vi.fn();
 let handler: Handler = () => undefined;
 
 beforeEach(() => {
-  listen.mockReset();
+  subscribeToNativeEvent.mockReset();
   invokeNativeCommand.mockReset();
   unlisten.mockReset();
-  listen.mockImplementation((_event: string, given: Handler) => {
+  subscribeToNativeEvent.mockImplementation((_event: string, given: Handler) => {
     handler = given;
     return Promise.resolve(unlisten);
   });
@@ -48,9 +51,7 @@ describe("the workspace watcher's lifecycle", () => {
     const subscription = appEvents.on("note.saved", (payload) => seen.push(payload));
 
     await watchWorkspace("/link/vault", vi.fn());
-    handler({
-      payload: { rootPath: "/real/vault", changes: [{ kind: "modified", path: "a.md" }] }
-    });
+    handler({ rootPath: "/real/vault", changes: [{ kind: "modified", path: "a.md" }] });
 
     // Heard, and re-announced under the root the stores are keyed by.
     expect(seen).toEqual([
@@ -65,9 +66,7 @@ describe("the workspace watcher's lifecycle", () => {
     const subscription = appEvents.on("note.saved", (payload) => seen.push(payload));
 
     await watchWorkspace("/vault", vi.fn());
-    handler({
-      payload: { rootPath: "/other-vault", changes: [{ kind: "modified", path: "a.md" }] }
-    });
+    handler({ rootPath: "/other-vault", changes: [{ kind: "modified", path: "a.md" }] });
 
     expect(seen).toEqual([]);
     void subscription.dispose();
@@ -89,7 +88,7 @@ describe("the workspace watcher's lifecycle", () => {
     const onRescan = vi.fn();
 
     await watchWorkspace("/vault", onRescan);
-    handler({ payload: { rootPath: "/vault", changes: [{ kind: "rescan", path: "" }] } });
+    handler({ rootPath: "/vault", changes: [{ kind: "rescan", path: "" }] });
 
     expect(onRescan).toHaveBeenCalledTimes(1);
   });

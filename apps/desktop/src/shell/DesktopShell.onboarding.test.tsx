@@ -7,7 +7,10 @@ import { ThemeProvider } from "../settings/ThemeProvider";
 import { DesktopShell } from "./DesktopShell";
 import { useShellState, type ShellState } from "./useShellState";
 
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: vi.fn(() => false) }));
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
+}));
 vi.mock("../native/commands", () => ({
   // Desktop-shaped capabilities so the keepMounted explorer publishes its
   // onboarding actions; every other command keeps the null default.

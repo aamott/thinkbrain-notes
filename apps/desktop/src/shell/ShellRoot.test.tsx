@@ -28,8 +28,9 @@ vi.mock("../lib/useMediaQuery", async (importOriginal) => {
 // `ShellRoot` mounts the real shell state, which boots the workspace lifecycle
 // and reaches for Tauri IPC when it believes it is running under Tauri. Mock
 // both so the restore path is a no-op, matching `useShellState.test.tsx`.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false)
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
 }));
 
 vi.mock("../native/commands", () => ({

@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "./native/runtime";
 import "@thinkbrain/ui/styles.css";
 import "./index.css";
 import App from "./App";
@@ -18,7 +18,7 @@ const bootstrap = bootstrapExtensions();
 const localExtensions = createLocalExtensions({
   loader: createDesktopLocalDirectoryLoader(),
   bootstrap,
-  ...(isTauri() ? { directories: createDesktopExtensionDirectoryStore() } : {})
+  ...(isNativeHost() ? { directories: createDesktopExtensionDirectoryStore() } : {})
 });
 setLocalExtensions(localExtensions);
 

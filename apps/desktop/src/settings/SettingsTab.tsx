@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { workspaceDesktopApi } from "../workspace/workspaceAdapter";
 import { getExtensionBootstrap } from "../extensions/bootstrapRef";
 import { getWorkspaceBridge } from "../extensions/workspaceBridge";
@@ -58,7 +58,7 @@ export function SettingsTab({ active = true }: { readonly active?: boolean }) {
 
   useEffect(() => {
     // Non-Tauri contexts (tests, web preview) skip the native load.
-    if (!isTauri()) return;
+    if (!isNativeHost()) return;
     if (loadedRef.current) return;
     loadedRef.current = true;
 

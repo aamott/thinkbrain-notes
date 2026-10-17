@@ -15,11 +15,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * tabs produces a new array reference but should not re-trigger the sync).
  */
 
-// Mock Tauri's isTauri so the shell's restore/persistence effects are no-ops
-// under the test environment. This keeps the render focused on the dirty-sync
+// Mock the native runtime so restore/persistence effects are no-ops under
+// the test environment. This keeps the render focused on the dirty-sync
 // effect without booting the native workspace-restore lifecycle.
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false)
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn(() => false)
 }));
 
 // Mock native commands so any transitive gateway call returns null instead of
@@ -73,7 +74,7 @@ vi.mock("../tabs/tabModel", async () => {
   };
 });
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { desktopTabReducer } from "../tabs/tabModel";
 import { getWorkspaceBridge } from "../extensions/workspaceBridge";
 import { selectIsDirty, useSettingsStore } from "../settings/settingsStore";
@@ -85,7 +86,7 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
-  vi.mocked(isTauri).mockReturnValue(false);
+  vi.mocked(isNativeHost).mockReturnValue(false);
   // Reset the singleton settings store to a clean, non-dirty state so tests
   // start from a known baseline (other describe blocks in the same file run
   // would otherwise leak stagedChanges).

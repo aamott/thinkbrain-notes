@@ -8,7 +8,7 @@
  * theme picker renders without errors outside the desktop shell.
  */
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { invokeNativeCommand } from "../native/commands";
 
 /**
@@ -41,7 +41,7 @@ export async function listThemes(): Promise<readonly ThemeEntry[]> {
   // Non-Tauri contexts (vitest, web preview) have no native bridge. Return an
   // empty list so the picker renders with just the "None" option rather than
   // throwing an unhandled rejection.
-  if (!isTauri()) {
+  if (!isNativeHost()) {
     return [];
   }
 
@@ -71,6 +71,6 @@ export async function listThemes(): Promise<readonly ThemeEntry[]> {
  *   handler can surface "broken" distinctly from "missing" or "non-Tauri".
  */
 export async function readThemeFile(path: string): Promise<string | null> {
-  if (!isTauri()) return null;
+  if (!isNativeHost()) return null;
   return invokeNativeCommand("read_theme_file", { path });
 }

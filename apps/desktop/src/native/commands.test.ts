@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+// `isTauri` rides along because commands.ts probes it through native/runtime.
+vi.mock("@tauri-apps/api/core", () => ({ invoke, isTauri: () => true }));
 
 import {
   invokeNativeCommand,

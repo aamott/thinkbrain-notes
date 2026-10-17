@@ -9,8 +9,9 @@ import { forgetWorkspace, saveDesktopState } from "../settings/desktopState";
 import { useWorkspaceSwitching, type WorkspaceSwitchingController } from "./useWorkspaceSwitching";
 import { workspaceDesktopApi, type WorkspaceDesktopApi } from "./workspaceAdapter";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: () => true
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: () => true
 }));
 
 vi.mock("../settings/desktopState", () => ({

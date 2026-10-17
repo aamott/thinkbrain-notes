@@ -5,14 +5,13 @@
  * closing this one cannot lose a finished import.
  */
 
-import { listen } from "@tauri-apps/api/event";
-
 import {
   invokeNativeCommand,
   type NativeGitLinkPreview,
   type NativeImportProgress,
   type NativeImportStarted
 } from "../native/commands";
+import { subscribeToNativeEvent } from "../native/events";
 
 const WORKSPACE_IMPORT_EVENT = "sync://import";
 
@@ -58,7 +57,5 @@ export function importManagedWorkspaceFromGitLink(
 export async function subscribeToWorkspaceImport(
   onEvent: (payload: WorkspaceImportProgress) => void
 ): Promise<() => void> {
-  return listen<WorkspaceImportProgress>(WORKSPACE_IMPORT_EVENT, (event) => {
-    onEvent(event.payload);
-  });
+  return subscribeToNativeEvent(WORKSPACE_IMPORT_EVENT, onEvent);
 }

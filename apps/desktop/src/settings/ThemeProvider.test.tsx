@@ -11,17 +11,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * to the user's selection, and a toggle while a file is active doesn't flap.
  *
  * Uses `createRoot` + `act` (no @testing-library/react). Mocks `themeAdapter`
- * for controllable file reads and `isTauri` to skip the mount-time load.
+ * for controllable file reads and `isNativeHost` to skip the mount-time load.
  */
 
 vi.mock("./themeAdapter", () => ({
   readThemeFile: vi.fn<(path: string) => Promise<string | null>>()
 }));
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn<() => boolean>()
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: vi.fn<() => boolean>()
 }));
 
-import { isTauri } from "@tauri-apps/api/core";
+import { isNativeHost } from "../native/runtime";
 import { readThemeFile } from "./themeAdapter";
 import { ThemeProvider } from "./ThemeProvider";
 import { useSettingsStore } from "./settingsStore";
@@ -40,7 +41,7 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
-  vi.mocked(isTauri).mockReturnValue(false);
+  vi.mocked(isNativeHost).mockReturnValue(false);
   vi.mocked(readThemeFile).mockResolvedValue(null);
 
   // Reset to a clean, unloaded state. Tests seed fields via `setState`.
@@ -70,7 +71,7 @@ afterEach(async () => {
   document.documentElement.removeAttribute("data-thinkbrain-theme");
   vi.unstubAllGlobals();
   vi.mocked(readThemeFile).mockReset();
-  vi.mocked(isTauri).mockReset();
+  vi.mocked(isNativeHost).mockReset();
 });
 
 /** Renders the ThemeProvider into a fresh container and flushes effects. */

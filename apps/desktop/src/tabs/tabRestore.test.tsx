@@ -23,10 +23,9 @@ import { documentTabId, fileTabId, initialDesktopTabState } from "./tabModel";
 let storedState: DesktopState;
 let windowRoot: string | null = null;
 
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: () => true,
-  invoke: () => Promise.resolve(null),
-  convertFileSrc: (path: string) => path
+vi.mock("../native/runtime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../native/runtime")>()),
+  isNativeHost: () => true
 }));
 
 vi.mock("../settings/desktopState", async (importOriginal) => {
