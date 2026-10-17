@@ -8,6 +8,7 @@ import { useSettingsStore } from "../settings/settingsStore";
 import { mediaQueryList, useMediaQuery } from "../lib/useMediaQuery";
 import { IconButton } from "./IconButton";
 import { Menu, MenuButton, MenuSeparator, MENU_ITEM, type MenuCloseReason, type MenuPosition } from "./Menu";
+import { TabContextMenu, type TabMenuState } from "./TabContextMenu";
 import { PanelIcon } from "./panelIcons";
 import { type RightPanel } from "./shellTypes";
 import {
@@ -60,6 +61,10 @@ type TitleBarProps = {
   readonly onSelectTab: (tabId: string) => void;
   /** Called when the user clicks a tab's close affordance. */
   readonly onRequestCloseTab: (tabId: string) => void;
+  /** Called for "Close other tabs": every clean tab except `tabId` goes. */
+  readonly onCloseOtherTabs: (tabId: string) => void;
+  /** Called for "Close tabs to the right": clean tabs after `tabId` go. */
+  readonly onCloseTabsToRight: (tabId: string) => void;
   /** Called when the user double-clicks a tab, keeping a preview open. */
   readonly onKeepTab: (tabId: string) => void;
   readonly onReorderTab: (tabId: string, toIndex: number) => void;
@@ -108,6 +113,8 @@ export function TitleBar({
   onForward,
   onSelectTab,
   onRequestCloseTab,
+  onCloseOtherTabs,
+  onCloseTabsToRight,
   onKeepTab,
   onReorderTab,
   onNewTab,
@@ -120,6 +127,8 @@ export function TitleBar({
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   // Right-click on a bar icon raises this pointer-placed menu for pin control.
   const [pinMenu, setPinMenu] = useState<(MenuPosition & { panel: RightPanelContribution }) | null>(null);
+  // Right-click on a tab raises its context menu the same way.
+  const [tabMenu, setTabMenu] = useState<TabMenuState | null>(null);
 
   // The ⋯ menu shows every panel below 900px (the icon row is hidden there)
   // and only the unpinned remainder above it — the pinned icons are already
@@ -316,6 +325,12 @@ export function TitleBar({
             <div
               key={tab.id}
               data-tab-id={tab.id}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                // One pointer-placed menu at a time.
+                setPinMenu(null);
+                setTabMenu({ x: event.clientX, y: event.clientY, tabId: tab.id });
+              }}
               style={tabDrag.tabStyle(index)}
               ref={(el) => {
                 if (el) tabElementsRef.current.set(tab.id, el);
@@ -415,6 +430,7 @@ export function TitleBar({
                 onClick={() => onToggleRightPanel(action.id)}
                 onContextMenu={(event) => {
                   event.preventDefault();
+                  setTabMenu(null);
                   setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
                 }}
               />
@@ -428,6 +444,7 @@ export function TitleBar({
                 className="inline-flex w-[1.6rem] h-[1.6rem] items-center justify-center rounded-small text-titlebar-foreground opacity-40"
                 onContextMenu={(event) => {
                   event.preventDefault();
+                  setTabMenu(null);
                   setPinMenu({ x: event.clientX, y: event.clientY, panel: action });
                 }}
               >
@@ -538,6 +555,17 @@ export function TitleBar({
           </Menu>
         )}
       </div>
+
+      {tabMenu && (
+        <TabContextMenu
+          menu={tabMenu}
+          tabs={tabs}
+          onClose={() => setTabMenu(null)}
+          onRequestCloseTab={onRequestCloseTab}
+          onCloseOtherTabs={onCloseOtherTabs}
+          onCloseTabsToRight={onCloseTabsToRight}
+        />
+      )}
     </header>
   );
 }

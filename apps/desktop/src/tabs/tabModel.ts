@@ -2,6 +2,7 @@ import type { Tab, TabKind, TabResource } from "@thinkbrain/core";
 import { inferTabKind } from "@thinkbrain/core";
 import type { ChangeDesc } from "@codemirror/state";
 import { reorderTab, type TabReorderAction } from "./tabReorder";
+import { closeMultipleTabs, type TabCloseMultipleAction } from "./tabClose";
 
 import {
   activateExistingTab,
@@ -85,15 +86,11 @@ export function isDocumentBackedKind(kind: string): boolean {
   return DOCUMENT_BACKED_KINDS.has(kind);
 }
 
-interface CloseRequest {
-  readonly tabId: string;
-}
-
 export interface DesktopTabState {
   readonly tabs: readonly DesktopTab[];
   readonly activeTabId: string | null;
   /** Present only when a dirty tab needs a save/discard/cancel decision. */
-  readonly closeRequest: CloseRequest | null;
+  readonly closeRequest: { readonly tabId: string } | null;
   readonly history: DesktopTabHistory;
 }
 
@@ -113,6 +110,7 @@ export type TabOpenPlacement = "new" | "preview" | "replace-active";
 
 export type DesktopTabAction =
   | TabReorderAction
+  | TabCloseMultipleAction
   | { readonly type: "open"; readonly tab: DesktopTab; readonly placement?: TabOpenPlacement }
   | { readonly type: "keep"; readonly tabId: string }
   | { readonly type: "activate"; readonly tabId: string }
@@ -361,6 +359,7 @@ export function desktopTabReducer(
 ): DesktopTabState {
   switch (action.type) {
     case "reorder": return reorderTab(state, action);
+    case "closeMultiple": return closeMultipleTabs(state, action);
     case "open": {
       const prepared = prepareTabOpen(state, action.tab, action.placement);
       if (prepared.kind === "noop") return state;

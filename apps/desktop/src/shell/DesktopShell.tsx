@@ -164,6 +164,8 @@ export function DesktopShell({ shell }: { readonly shell: ShellState }) {
           onForward={() => dispatchTabs({ type: "goForward" })}
           onSelectTab={(tabId) => dispatchTabs({ type: "activate", tabId })}
           onRequestCloseTab={(tabId) => dispatchTabs({ type: "requestClose", tabId })}
+          onCloseOtherTabs={(tabId) => dispatchTabs({ type: "closeMultiple", tabId, scope: "others" })}
+          onCloseTabsToRight={(tabId) => dispatchTabs({ type: "closeMultiple", tabId, scope: "right" })}
           onKeepTab={(tabId) => dispatchTabs({ type: "keep", tabId })}
           onReorderTab={(tabId, toIndex) => dispatchTabs({ type: "reorder", tabId, toIndex })}
           onNewTab={() => shell.openNewTab()}
