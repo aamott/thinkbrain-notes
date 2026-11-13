@@ -44,49 +44,68 @@ export function parseNote(markdown: string): ParsedNote {
   };
 }
 
+/** Three-way compare for deterministic key order — internal ids, not user-facing text, so no localeCompare. */
+const compareMetadataKeys = ([left]: [string, unknown], [right]: [string, unknown]): number => {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+};
+
+/** Filters raw metadata values to indexable ones, deduped by type+string identity. */
+function collectSupportedValues(rawValues: readonly unknown[]): {
+  values: IndexMetadataValue[];
+  unsupportedCount: number;
+} {
+  const values: IndexMetadataValue[] = [];
+  const seen = new Set<string>();
+  let unsupportedCount = 0;
+
+  for (const value of rawValues) {
+    if (!isIndexMetadataValue(value)) {
+      unsupportedCount += 1;
+      continue;
+    }
+    const identity = `${typeof value}:${String(value)}`;
+    if (!seen.has(identity)) {
+      seen.add(identity);
+      values.push(value);
+    }
+  }
+
+  return { values, unsupportedCount };
+}
+
+function unsupportedMetadataDiagnostic(
+  key: string,
+  rawValue: unknown,
+  unsupportedCount: number
+): NoteDiagnostic {
+  const isList = Array.isArray(rawValue);
+  const noun = unsupportedCount === 1 ? "value" : "values";
+  return {
+    code: isList
+      ? "frontmatter_metadata_unsupported_list_item"
+      : "frontmatter_metadata_unsupported_value",
+    message: isList
+      ? `Frontmatter field "${key}" contains ${unsupportedCount} metadata ${noun} that cannot be indexed.`
+      : `Frontmatter field "${key}" has a value that cannot be indexed.`,
+    severity: "warning"
+  };
+}
+
 function collectIndexMetadata(
   metadata: Readonly<Record<string, unknown>>,
   diagnostics: NoteDiagnostic[]
 ): IndexMetadataField[] {
   const fields: IndexMetadataField[] = [];
 
-  for (const [key, rawValue] of Object.entries(metadata).sort(([left], [right]) => {
-    if (left < right) return -1;
-    if (left > right) return 1;
-    return 0;
-  })) {
+  for (const [key, rawValue] of Object.entries(metadata).sort(compareMetadataKeys)) {
     const rawValues = Array.isArray(rawValue) ? rawValue : [rawValue];
-    const values: IndexMetadataValue[] = [];
-    const seen = new Set<string>();
-    let unsupportedCount = 0;
-
-    for (const value of rawValues) {
-      if (!isIndexMetadataValue(value)) {
-        unsupportedCount += 1;
-        continue;
-      }
-
-      const identity = `${typeof value}:${String(value)}`;
-      if (!seen.has(identity)) {
-        seen.add(identity);
-        values.push(value);
-      }
-    }
+    const { values, unsupportedCount } = collectSupportedValues(rawValues);
 
     if (unsupportedCount > 0) {
-      const noun = unsupportedCount === 1 ? "value" : "values";
-      const isList = Array.isArray(rawValue);
-      diagnostics.push({
-        code: isList
-          ? "frontmatter_metadata_unsupported_list_item"
-          : "frontmatter_metadata_unsupported_value",
-        message: isList
-          ? `Frontmatter field "${key}" contains ${unsupportedCount} metadata ${noun} that cannot be indexed.`
-          : `Frontmatter field "${key}" has a value that cannot be indexed.`,
-        severity: "warning"
-      });
+      diagnostics.push(unsupportedMetadataDiagnostic(key, rawValue, unsupportedCount));
     }
-
     if (values.length > 0) {
       fields.push({ key, values });
     }
@@ -219,11 +238,15 @@ function maskMarkdown(markdown: string, frontmatter: { endOffset: number } | nul
     masked = blankNonNewlines(block) + masked.slice(frontmatter.endOffset);
   }
 
-  // Mask fenced code blocks (e.g., ```lang ... ``` or ~~~ ... ~~~)
+  // Mask fenced code blocks (e.g., ```lang ... ``` or ~~~ ... ~~~). Two
+  // passes for the two alternation branches of the old single regex —
+  // simpler and equivalent: a closed fence ends at its matching close
+  // line, an unclosed one runs to end of input.
   masked = masked.replace(
-    /^( {0,3})(`{3,}|~{3,})[^\n]*(?:\n([^]*?))?(?:\n[ \t]*\2[ \t]*$|(?![^]))/gm,
+    /^( {0,3})(`{3,}|~{3,})[^\n]*(?:\n[^]*?)?\n[ \t]*\2[ \t]*$/gm,
     blankNonNewlines
   );
+  masked = masked.replace(/^( {0,3})(`{3,}|~{3,})[^\n]*(?:\n[^]*)?(?![^])/gm, blankNonNewlines);
 
   // Mask inline code snippets. `(?!\n\n)[^`]` is the same character set the
   // alternation allowed — a non-backtick, and a newline only when it is not

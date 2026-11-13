@@ -22,7 +22,7 @@ export function dismissTopOverlay(): boolean {
 }
 
 function onDocumentKeyDown(event: KeyboardEvent): void {
-  const top = overlayStack[overlayStack.length - 1];
+  const top = overlayStack.at(-1);
   if (!top) return;
   if (event.key === "Escape") {
     if (event.defaultPrevented) return;
@@ -67,7 +67,7 @@ function trapTab(event: KeyboardEvent, container: HTMLElement): void {
     return;
   }
   const first = elements[0];
-  const last = elements[elements.length - 1];
+  const last = elements.at(-1);
   if (first === undefined || last === undefined) return;
   const active = document.activeElement;
   const outside = !container.contains(active);
