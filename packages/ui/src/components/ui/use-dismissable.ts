@@ -97,14 +97,14 @@ function trapTab(event: KeyboardEvent, container: HTMLElement): void {
  * Tab/Shift+Tab stay inside the open panel (the `aria-modal` contract). Escape
  * dismisses the top-most registered overlay, not whichever mounted first.
  */
-export function useDismissable({
+export function useDismissable<T extends HTMLElement = HTMLDivElement>({
   open,
   onDismiss
 }: {
   readonly open: boolean;
   readonly onDismiss: () => void;
-}): { readonly containerRef: React.RefObject<HTMLDivElement | null> } {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+}): { readonly containerRef: React.RefObject<T | null> } {
+  const containerRef = useRef<T | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const onDismissRef = useRef(onDismiss);
 

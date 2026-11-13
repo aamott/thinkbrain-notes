@@ -50,9 +50,11 @@ function collectIndexMetadata(
 ): IndexMetadataField[] {
   const fields: IndexMetadataField[] = [];
 
-  for (const [key, rawValue] of Object.entries(metadata).sort(([left], [right]) =>
-    left < right ? -1 : left > right ? 1 : 0
-  )) {
+  for (const [key, rawValue] of Object.entries(metadata).sort(([left], [right]) => {
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
+  })) {
     const rawValues = Array.isArray(rawValue) ? rawValue : [rawValue];
     const values: IndexMetadataValue[] = [];
     const seen = new Set<string>();
@@ -72,14 +74,14 @@ function collectIndexMetadata(
     }
 
     if (unsupportedCount > 0) {
+      const noun = unsupportedCount === 1 ? "value" : "values";
+      const isList = Array.isArray(rawValue);
       diagnostics.push({
-        code: Array.isArray(rawValue)
+        code: isList
           ? "frontmatter_metadata_unsupported_list_item"
           : "frontmatter_metadata_unsupported_value",
-        message: Array.isArray(rawValue)
-          ? `Frontmatter field "${key}" contains ${unsupportedCount} metadata ${
-              unsupportedCount === 1 ? "value" : "values"
-            } that cannot be indexed.`
+        message: isList
+          ? `Frontmatter field "${key}" contains ${unsupportedCount} metadata ${noun} that cannot be indexed.`
           : `Frontmatter field "${key}" has a value that cannot be indexed.`,
         severity: "warning"
       });
