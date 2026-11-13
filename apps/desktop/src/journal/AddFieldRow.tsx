@@ -50,16 +50,15 @@ export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }
 
   // Validity is the model's to decide; this only turns the code into words.
   const check = typed === "" ? null : validateFieldDefinition({ id: key, label: "x", type: "text" });
-  const problem =
-    typed === "" || matched
-      ? null
-      : existingKeys.includes(key)
-        ? `"${key}" is already on this entry.`
-        : check?.definition
-          ? null
-          : check?.diagnostics[0]?.code === "journal_field_reserved"
-            ? `"${key}" is already used by the app itself. Try another name.`
-            : "Give this a name using letters or numbers.";
+  const problem = (() => {
+    if (typed === "" || matched) return null;
+    if (existingKeys.includes(key)) return `"${key}" is already on this entry.`;
+    if (check?.definition) return null;
+    if (check?.diagnostics[0]?.code === "journal_field_reserved") {
+      return `"${key}" is already used by the app itself. Try another name.`;
+    }
+    return "Give this a name using letters or numbers.";
+  })();
 
   const add = (field: JournalFieldDefinition): void => {
     onAdd(field);
