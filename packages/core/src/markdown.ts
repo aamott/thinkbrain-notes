@@ -14,7 +14,8 @@ const INLINE_TAG_PATTERN = /(^|[^A-Za-z0-9_/-])#([A-Za-z0-9][A-Za-z0-9_/-]*)/g;
 // Greedy, not lazy: the classes already exclude `]` and `|`, so `+?` only
 // paid for extra backtracking without ever matching differently.
 const WIKI_LINK_PATTERN = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
-const TASK_PATTERN = /^\s*-\s+\[([ xX])\](?:\s+(.*))?$/;
+// \s+ and \S.* are disjoint, so there's no ambiguity for the analyzer or engine.
+const TASK_PATTERN = /^\s*-\s+\[([ xX])\](?:\s+(\S.*)?)?$/;
 
 /**
  * Parses a Markdown note into frontmatter metadata and derived Markdown indexes.
