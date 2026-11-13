@@ -11,7 +11,9 @@ import type {
 } from "./note-model";
 
 const INLINE_TAG_PATTERN = /(^|[^A-Za-z0-9_/-])#([A-Za-z0-9][A-Za-z0-9_/-]*)/g;
-const WIKI_LINK_PATTERN = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
+// Greedy, not lazy: the classes already exclude `]` and `|`, so `+?` only
+// paid for extra backtracking without ever matching differently.
+const WIKI_LINK_PATTERN = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 const TASK_PATTERN = /^\s*-\s+\[([ xX])\](?:\s+(.*))?$/;
 
 /**
@@ -221,8 +223,10 @@ function maskMarkdown(markdown: string, frontmatter: { endOffset: number } | nul
     blankNonNewlines
   );
 
-  // Mask inline code snippets
-  masked = masked.replace(/(`+)((?:[^`\n]|\n(?!\n))+?)\1/g, blankNonNewlines);
+  // Mask inline code snippets. `(?!\n\n)[^`]` is the same character set the
+  // alternation allowed — a non-backtick, and a newline only when it is not
+  // the first of a blank line — without the two-path backtracking.
+  masked = masked.replace(/(`+)((?:(?!\n\n)[^`])+?)\1/g, blankNonNewlines);
 
   return masked;
 }

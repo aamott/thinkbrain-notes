@@ -25,7 +25,7 @@ const EDITOR_FONT_SIZE_DEFAULT = 16;
 export function resolveEditorFontSize(value: unknown): number {
   // Numeric-only: the settings contract stores a number, and a coerced
   // non-number ("" → 0) must never shrink the editor toward the floor.
-  const parsed = typeof value === "number" ? value : NaN;
+  const parsed = typeof value === "number" ? value : Number.NaN;
   if (!Number.isFinite(parsed)) return EDITOR_FONT_SIZE_DEFAULT;
   return Math.min(
     EDITOR_FONT_SIZE_MAX,

@@ -99,7 +99,7 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
               overflowed ? "left-full -translate-x-full" : "left-1/2 -translate-x-1/2"
             )}
           >
-            {crumbs.map(crumb)}
+            {crumbs.map((segment, index) => crumb(segment, index))}
           </div>
           {overflowed && (
             <span
@@ -129,11 +129,14 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
             <div className="text-xs font-medium text-muted-foreground">Current location</div>
             <div
               ref={scrollRowRef}
+              // A scrollable region takes a tab stop so keyboards can scroll
+              // it; the landmark role is what makes that legitimate.
+              role="region"
               tabIndex={0}
               aria-label="Full path"
               className="mt-2 overflow-x-auto overscroll-x-contain touch-pan-x tn-focus-ring"
             >
-              <div className="flex w-max items-center">{crumbs.map(crumb)}</div>
+              <div className="flex w-max items-center">{crumbs.map((segment, index) => crumb(segment, index))}</div>
             </div>
           </div>
         </>

@@ -37,7 +37,7 @@ export function Row({
     return (
       <div className={`flex w-full items-center px-2 py-1 ${TOUCH} border-b border-border`}>
         <input
-          autoFocus
+          ref={(el) => el?.focus()}
           aria-label="Rename entry"
           value={renaming.draft}
           onChange={(e) => onRenameChange?.(e.target.value)}

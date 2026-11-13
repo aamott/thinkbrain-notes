@@ -157,6 +157,9 @@ export function Menu({
         placement.className
       )}
       role="menu"
+      // Items own the tab stop; -1 makes the menu itself focusable for
+      // programmatic focus, which ARIA's menu pattern requires.
+      tabIndex={-1}
       aria-label={label}
       style={placement.style}
       onKeyDown={handleKeyDown}

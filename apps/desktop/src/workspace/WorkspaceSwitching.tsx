@@ -158,7 +158,7 @@ function CreateManagedWorkspaceDialog({
       <form className="grid gap-3" onSubmit={submit}>
         <label className="grid gap-1 text-xs">
           Vault name
-          <input autoFocus className="min-h-11 rounded-small border border-border bg-surface px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={busy} maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
+          <input data-initial-focus className="min-h-11 rounded-small border border-border bg-surface px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={busy} maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         {error && <p className="m-0 text-xs text-danger" role="alert">{error}</p>}
         <div className="flex justify-end gap-2">

@@ -3,33 +3,33 @@
 set -euo pipefail
 
 NDK_DIR=""
-if [ -n "${ANDROID_NDK_HOME:-}" ] && [ -d "$ANDROID_NDK_HOME" ]; then
+if [[ -n "${ANDROID_NDK_HOME:-}" ]] && [[ -d "$ANDROID_NDK_HOME" ]]; then
   NDK_DIR="$ANDROID_NDK_HOME"
-elif [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+elif [[ -n "${ANDROID_HOME:-}" ]] && [[ -d "$ANDROID_HOME/ndk" ]]; then
   LATEST_NDK=$(ls -1d "$ANDROID_HOME/ndk/"* 2>/dev/null | sort -V | tail -n 1 || true)
-  if [ -n "$LATEST_NDK" ] && [ -d "$LATEST_NDK" ]; then
+  if [[ -n "$LATEST_NDK" ]] && [[ -d "$LATEST_NDK" ]]; then
     NDK_DIR="$LATEST_NDK"
   fi
-elif [ -d "$HOME/Android/Sdk/ndk" ]; then
+elif [[ -d "$HOME/Android/Sdk/ndk" ]]; then
   LATEST_NDK=$(ls -1d "$HOME/Android/Sdk/ndk/"* 2>/dev/null | sort -V | tail -n 1 || true)
-  if [ -n "$LATEST_NDK" ] && [ -d "$LATEST_NDK" ]; then
+  if [[ -n "$LATEST_NDK" ]] && [[ -d "$LATEST_NDK" ]]; then
     NDK_DIR="$LATEST_NDK"
   fi
 fi
 
-if [ -z "$NDK_DIR" ] || [ ! -d "$NDK_DIR" ]; then
+if [[ -z "$NDK_DIR" ]] || [[ ! -d "$NDK_DIR" ]]; then
   echo "Error: Android NDK not found. Set ANDROID_NDK_HOME or install NDK via Android SDK Manager." >&2
   exit 1
 fi
 
 TOOLCHAIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
-if [ ! -d "$TOOLCHAIN" ]; then
+if [[ ! -d "$TOOLCHAIN" ]]; then
   echo "Error: LLVM toolchain directory not found at $TOOLCHAIN" >&2
   exit 1
 fi
 
 CLANG_BIN=$(ls -1 "$TOOLCHAIN"/aarch64-linux-android*-clang 2>/dev/null | sort -V | tail -n 1 || true)
-if [ -z "$CLANG_BIN" ]; then
+if [[ -z "$CLANG_BIN" ]]; then
   CLANG_BIN="$TOOLCHAIN/aarch64-linux-android21-clang"
 fi
 

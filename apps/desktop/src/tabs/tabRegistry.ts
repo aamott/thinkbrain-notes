@@ -139,7 +139,12 @@ export function createDesktopTabRegistry(
 
   const register = (view: DesktopTabView): Disposable => {
     if (views.get(view.kind)?.placeholder === true) {
-      placeholderHandles.get(view.kind)?.dispose();
+      // Registration is synchronous, so an async placeholder disposal can
+      // only be reported, not awaited.
+      void Promise.resolve(placeholderHandles.get(view.kind)?.dispose()).catch(
+        (error: unknown) =>
+          console.error(`[tabs] Failed to dispose placeholder "${view.kind}".`, error)
+      );
     }
     const registration: TabRegistration = {
       kind: view.kind,
@@ -160,7 +165,7 @@ export function createDesktopTabRegistry(
     let disposed = false;
 
     const handle: Disposable = {
-      dispose: (): void => {
+      dispose: (): void | Promise<void> => {
         if (disposed) return;
         disposed = true;
         if (placeholderHandles.get(view.kind) === handle) {
@@ -168,8 +173,9 @@ export function createDesktopTabRegistry(
         }
         // Core fires subscribers here; entries() derives from core so the
         // removed view is already absent before we clean up `views`.
-        coreHandle.dispose();
+        const coreDisposal = coreHandle.dispose();
         if (views.get(view.kind) === view) views.delete(view.kind);
+        return coreDisposal;
       }
     };
     if (view.placeholder === true) placeholderHandles.set(view.kind, handle);

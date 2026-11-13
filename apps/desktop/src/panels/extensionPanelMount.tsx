@@ -144,7 +144,9 @@ export function ExtensionPanelMountPoint({
         try {
           if (typeof teardown === "function") (teardown as () => void)();
           else if (typeof (teardown as Disposable).dispose === "function") {
-            (teardown as Disposable).dispose();
+            // Dispose may settle later; this teardown contract is sync, so a
+            // rejected promise still has to reach the console.
+            void Promise.resolve((teardown as Disposable).dispose()).catch(reportToConsole);
           } else {
             throw new TypeError(
               "A panel mount cleanup must be a function, a Disposable, or a list of them."

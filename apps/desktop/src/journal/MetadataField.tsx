@@ -110,7 +110,7 @@ export function MetadataField({ definition, value, size = "compact", onSet, read
 
           {adding ? (
             <input
-              autoFocus
+              ref={(el) => el?.focus()}
               disabled={readOnly}
               aria-label={`New value for ${definition.label}`}
               value={draft}

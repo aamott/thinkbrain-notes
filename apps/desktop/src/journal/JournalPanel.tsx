@@ -354,6 +354,7 @@ export function JournalPanel({
           <div
             ref={listRef}
             role="tree"
+            tabIndex={0}
             aria-label="Journal entries"
             data-phone-scroll-clearance
             className="min-h-0 flex-1 overflow-auto"

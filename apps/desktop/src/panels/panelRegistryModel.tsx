@@ -417,20 +417,25 @@ export function createDesktopPanelRegistry(
   const placeholderHandles = new Map<string, Disposable>();
   const register = (contribution: DesktopPanelContribution): Disposable => {
     if (coreRegistry.get(contribution.id)?.placeholder === true) {
-      placeholderHandles.get(contribution.id)?.dispose();
+      // Registration is synchronous, so an async placeholder disposal can
+      // only be reported, not awaited.
+      void Promise.resolve(placeholderHandles.get(contribution.id)?.dispose()).catch(
+        (error: unknown) =>
+          console.error(`[panels] Failed to dispose placeholder "${contribution.id}".`, error)
+      );
     }
     const handle = coreRegistry.register(contribution);
     if (contribution.placeholder !== true) return handle;
     placeholderHandles.set(contribution.id, handle);
     let disposed = false;
     return {
-      dispose: (): void => {
+      dispose: (): void | Promise<void> => {
         if (disposed) return;
         disposed = true;
         if (placeholderHandles.get(contribution.id) === handle) {
           placeholderHandles.delete(contribution.id);
         }
-        handle.dispose();
+        return handle.dispose();
       }
     };
   };

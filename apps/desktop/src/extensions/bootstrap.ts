@@ -106,7 +106,13 @@ export function bootstrapExtensions(options: BootstrapOptions = {}): ExtensionBo
   const failedManifests: BootstrapEntry[] = [];
 
   const disposeAll = (disposables: Disposable[]): Disposable[] => {
-    for (const disposable of disposables) disposable.dispose();
+    for (const disposable of disposables) {
+      // Dispose may settle async, but this rollback helper is synchronous —
+      // report failures and keep unwinding rather than dropping the promise.
+      void Promise.resolve(disposable.dispose()).catch((error: unknown) => {
+        console.error("[extensions] Failed to dispose a bootstrap resource.", error);
+      });
+    }
     return [];
   };
 

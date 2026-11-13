@@ -88,7 +88,7 @@ export function AddFieldRow({ available, existingKeys, onAdd, readOnly = false }
   return (
     <div className="relative flex flex-col">
       <input
-        autoFocus
+        ref={(el) => el?.focus()}
         aria-label="New field name"
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
