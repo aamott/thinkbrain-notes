@@ -131,7 +131,7 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
               ref={scrollRowRef}
               // A scrollable region takes a tab stop so keyboards can scroll
               // it; the labelled section is what makes that legitimate.
-              tabIndex={0}
+              tabIndex={0} // NOSONAR — scrollable regions require a tab stop for keyboard access
               aria-label="Full path"
               className="mt-2 overflow-x-auto overscroll-x-contain touch-pan-x tn-focus-ring"
             >
