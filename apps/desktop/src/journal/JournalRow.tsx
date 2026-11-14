@@ -30,14 +30,18 @@ export function Row({
 }) {
   const isHeader = row.collapsed !== null;
   const isRenaming = renaming !== undefined;
-  const level = row.kind === "year" || row.kind === "undated" ? 1 : row.kind === "month" ? 2 : 3;
+  const level = (() => {
+    if (row.kind === "year" || row.kind === "undated") return 1;
+    if (row.kind === "month") return 2;
+    return 3;
+  })();
 
   // When renaming an entry row, render an inline input instead of the button.
   if (!isHeader && isRenaming) {
     return (
       <div className={`flex w-full items-center px-2 py-1 ${TOUCH} border-b border-border`}>
         <input
-          autoFocus
+          ref={(el) => el?.focus()}
           aria-label="Rename entry"
           value={renaming.draft}
           onChange={(e) => onRenameChange?.(e.target.value)}
@@ -52,10 +56,23 @@ export function Row({
     );
   }
 
+  const rowClass = (() => {
+    if (!isHeader) {
+      return `flex w-full flex-col justify-center gap-0.5 px-2 py-1 ${TOUCH} text-left cursor-pointer hover:bg-secondary`;
+    }
+    if (row.kind === "year") {
+      return `flex w-full items-center gap-1.5 px-2 py-1 ${TOUCH} bg-secondary border-t border-border text-[0.69rem] font-bold uppercase tracking-[0.12em] tabular-nums cursor-pointer text-left`;
+    }
+    return `flex w-full items-center gap-1.5 px-2 py-1 ${TOUCH} border-b border-border text-xs font-semibold cursor-pointer text-left`;
+  })();
+
   return (
     <button
       type="button"
       role="treeitem"
+      // Rows activate, they don't select — the tree has no selection model,
+      // so every item reports unselected.
+      aria-selected={false}
       aria-level={level}
       aria-label={rowName(row)}
       aria-expanded={isHeader ? !row.collapsed : undefined}
@@ -69,13 +86,7 @@ export function Row({
       tabIndex={focused ? 0 : -1}
       onClick={onActivate}
       onContextMenu={onContextMenu}
-      className={
-        isHeader
-          ? row.kind === "year"
-            ? `flex w-full items-center gap-1.5 px-2 py-1 ${TOUCH} bg-secondary border-t border-border text-[0.69rem] font-bold uppercase tracking-[0.12em] tabular-nums cursor-pointer text-left`
-            : `flex w-full items-center gap-1.5 px-2 py-1 ${TOUCH} border-b border-border text-xs font-semibold cursor-pointer text-left`
-          : `flex w-full flex-col justify-center gap-0.5 px-2 py-1 ${TOUCH} text-left cursor-pointer hover:bg-secondary`
-      }
+      className={rowClass}
     >
       {isHeader ? (
         <>

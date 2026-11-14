@@ -256,7 +256,7 @@ function mountPanel(element, panel, context) {
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      captureFromInput();
+      void captureFromInput();
     }
   });
 
@@ -342,7 +342,7 @@ function mountPanel(element, panel, context) {
       // No workspace or not ready yet — the list stays empty.
     }
   };
-  loadExisting();
+  void loadExisting();
 
   // Anything the app does to the workspace shows up here, including the
   // captures this extension makes itself. New captures go to the top.

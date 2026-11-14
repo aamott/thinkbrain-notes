@@ -41,7 +41,7 @@ fi
 # clang is used as the linker frontend because it reliably forwards
 # `-fuse-ld=mold` to the linker; passing `mold` directly as `linker` can
 # mis-handle rustc's flag passing.
-if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]; then
+if [[ "$(uname -s)" = "Linux" ]] && [[ "$(uname -m)" = "x86_64" ]]; then
   if command -v mold >/dev/null 2>&1 && command -v clang >/dev/null 2>&1; then
     # CARGO_TARGET_<TRIPLE>_RUSTFLAGS overrides rustflags for this target only,
     # leaving other targets (e.g. cross-compiles) unaffected.
@@ -64,16 +64,16 @@ fi
 # manually exported NDK_HOME. Honors an existing NDK_HOME; otherwise picks the
 # highest-versioned NDK under ANDROID_HOME/ndk (or ANDROID_SDK_ROOT). Silently
 # skipped when no SDK/NDK is installed — desktop-only devs never need it.
-if [ -z "${NDK_HOME:-}" ]; then
+if [[ -z "${NDK_HOME:-}" ]]; then
   _sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-  if [ -n "$_sdk_root" ] && [ -d "$_sdk_root/ndk" ]; then
+  if [[ -n "$_sdk_root" ]] && [[ -d "$_sdk_root/ndk" ]]; then
     # Shell glob sorts lexicographically; NDK dirs are version strings
     # (e.g. 30.0.15729638), so the last match is the highest version.
     _ndk_dir=""
     for _candidate in "$_sdk_root"/ndk/*/; do
       _ndk_dir="$_candidate"
     done
-    if [ -n "$_ndk_dir" ]; then
+    if [[ -n "$_ndk_dir" ]]; then
       export NDK_HOME="${_ndk_dir%/}"
       echo "rust-env: NDK_HOME set to $NDK_HOME"
     fi

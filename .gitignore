@@ -67,5 +67,4 @@ ehthumbs.db
 temp/
 tmp/
 tools/keyring-migration-probe/target/
-tools/keyring-migration-probe/Cargo.lock
 .zvec-grep

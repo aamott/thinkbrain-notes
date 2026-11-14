@@ -61,7 +61,7 @@ export function DeleteWorkspaceDialog({
         <label className="grid gap-1 text-xs">
           Type {name} to confirm
           <input
-            autoFocus
+            data-initial-focus
             className="min-h-11 rounded-small border border-border bg-surface px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
             disabled={pending}
             value={confirmation}

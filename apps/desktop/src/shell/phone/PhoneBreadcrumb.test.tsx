@@ -27,7 +27,7 @@ const render = async (segments: readonly string[] = ["Vault", "docs", "note"]) =
 
 const pill = (): HTMLButtonElement =>
   container!.querySelector<HTMLButtonElement>('[aria-label="Current location"]')!;
-const dialog = (): HTMLElement | null => container!.querySelector<HTMLElement>('[role="dialog"]');
+const dialog = (): HTMLElement | null => container!.querySelector<HTMLElement>('dialog[open]');
 
 describe("PhoneBreadcrumb", () => {
   it("renders every segment with the current one emphasized", async () => {

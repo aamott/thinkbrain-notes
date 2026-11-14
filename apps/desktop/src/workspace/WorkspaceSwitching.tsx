@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type ReactNode, type SyntheticEvent } from "react";
 import { ModalDialog } from "../shell/ModalDialog";
 import { GitLinkImportDialog } from "./GitLinkImportDialog";
 import type { WorkspaceSwitchingController } from "./useWorkspaceSwitching";
@@ -125,10 +125,10 @@ export function ManagedStorageNotice() {
   const switching = useWorkspaceSwitchingContext();
   if (!switching.managedStorageNoticeOpen) return null;
   return (
-    <div className="m-2 rounded-small border border-warning/50 bg-warning/10 p-2 text-[0.6875rem] leading-relaxed text-sidebar-foreground" role="status">
-      <p className="m-0">Android removes managed vaults when the app is uninstalled. Keep another copy using Git or an explicit backup/export when available.</p>
+    <output className="m-2 block rounded-small border border-warning/50 bg-warning/10 p-2 text-[0.6875rem] leading-relaxed text-sidebar-foreground">
+      <span className="m-0 block">Android removes managed vaults when the app is uninstalled. Keep another copy using Git or an explicit backup/export when available.</span>
       <button type="button" className="mt-1.5 min-h-11 rounded-small border border-border px-3 text-[0.6875rem]" onClick={() => switching.setManagedStorageNoticeOpen(false)}>Got it</button>
-    </div>
+    </output>
   );
 }
 
@@ -144,7 +144,7 @@ function CreateManagedWorkspaceDialog({
   readonly onCreate: (name: string) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!busy && name.trim()) void onCreate(name);
   };
@@ -157,8 +157,8 @@ function CreateManagedWorkspaceDialog({
     >
       <form className="grid gap-3" onSubmit={submit}>
         <label className="grid gap-1 text-xs">
-          Vault name
-          <input autoFocus className="min-h-11 rounded-small border border-border bg-surface px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={busy} maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
+          <span>Vault name</span>
+          <input data-initial-focus className="min-h-11 rounded-small border border-border bg-surface px-2 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={busy} maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         {error && <p className="m-0 text-xs text-danger" role="alert">{error}</p>}
         <div className="flex justify-end gap-2">

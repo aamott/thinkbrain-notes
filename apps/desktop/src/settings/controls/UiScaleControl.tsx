@@ -18,7 +18,7 @@ import { UI_SCALE_PRESETS } from "../uiModuleDefaults";
  * in sorted order so the selection always names what is actually applied.
  */
 export function UiScaleControl({ definition, value, onChange }: ControlProps) {
-  const current = typeof value === "number" && Number.isFinite(value) ? value : NaN;
+  const current = typeof value === "number" && Number.isFinite(value) ? value : Number.NaN;
   const options =
     !Number.isNaN(current) && !UI_SCALE_PRESETS.includes(current)
       ? [...UI_SCALE_PRESETS, current].sort((a, b) => a - b)

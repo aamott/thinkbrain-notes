@@ -20,7 +20,7 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
   const scrollRowRef = useRef<HTMLDivElement | null>(null);
-  const { containerRef } = useDismissable({
+  const { containerRef } = useDismissable<HTMLDialogElement>({
     open,
     onDismiss: () => setOpen(false)
   });
@@ -99,7 +99,7 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
               overflowed ? "left-full -translate-x-full" : "left-1/2 -translate-x-1/2"
             )}
           >
-            {crumbs.map(crumb)}
+            {crumbs.map((segment, index) => crumb(segment, index))}
           </div>
           {overflowed && (
             <span
@@ -120,22 +120,24 @@ export function PhoneBreadcrumb({ segments }: { readonly segments: readonly stri
               if (event.target === event.currentTarget) setOpen(false);
             }}
           />
-          <div
+          <dialog
+            open
             ref={containerRef}
-            role="dialog"
             aria-label="Full path"
-            className="absolute left-1/2 top-[calc(100%+0.5rem)] z-50 w-max max-w-[min(85vw,24rem)] -translate-x-1/2 rounded-large border border-border bg-surface p-3 shadow-panel backdrop-blur-sm"
+            className="m-0 absolute left-1/2 top-[calc(100%+0.5rem)] z-50 w-max max-w-[min(85vw,24rem)] -translate-x-1/2 rounded-large border border-border bg-surface p-3 shadow-panel backdrop-blur-sm"
           >
             <div className="text-xs font-medium text-muted-foreground">Current location</div>
-            <div
+            <section
               ref={scrollRowRef}
-              tabIndex={0}
+              // A scrollable region takes a tab stop so keyboards can scroll
+              // it; the labelled section is what makes that legitimate.
+              tabIndex={0} // NOSONAR — scrollable regions require a tab stop for keyboard access
               aria-label="Full path"
               className="mt-2 overflow-x-auto overscroll-x-contain touch-pan-x tn-focus-ring"
             >
-              <div className="flex w-max items-center">{crumbs.map(crumb)}</div>
-            </div>
-          </div>
+              <div className="flex w-max items-center">{crumbs.map((segment, index) => crumb(segment, index))}</div>
+            </section>
+          </dialog>
         </>
       )}
     </div>
