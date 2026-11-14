@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Explorer + search mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #16171c;
+    --sidebar: #1d1e24;
+    --surface: #23242b;
+    --border: #30323b;
+    --fg: #d7d8de;
+    --muted: #8a8c98;
+    --accent: hsl(262 83% 58%);
+    --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+    --mark: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  h1 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .subtitle { color: var(--muted); font-size: 12px; margin: 0 0 16px; }
+
+  .panel {
+    background: var(--sidebar);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 300px; height: 540px;
+    min-width: 200px; max-width: 480px;
+    resize: horizontal; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .chrome {
+    display: flex; align-items: center; justify-content: space-between;
+    min-height: 36px; padding: 0 10px; flex: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .chrome .title {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600;
+  }
+  .chrome .icons { display: flex; gap: 2px; color: var(--muted); }
+  .chrome .icons span {
+    width: 22px; height: 22px; display: grid; place-items: center;
+    border-radius: 4px; font-size: 12px;
+  }
+
+  .searchrow {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 7px 10px; border-bottom: 1px solid var(--border); flex: none;
+  }
+  .searchrow .icon { color: var(--muted); font-size: 12px; flex: none; }
+  /* The input keeps a flex-basis, so the tools wrap below it on narrow panels. */
+  .searchrow input {
+    flex: 1 1 150px; min-width: 0; background: transparent; border: 0; outline: none;
+    color: var(--fg); font: inherit; font-size: 12px;
+  }
+  .searchrow input::placeholder { color: var(--muted); }
+  .tools { display: flex; gap: 2px; flex: 0 0 auto; margin-left: auto; position: relative; }
+  .toolbtn {
+    width: 22px; height: 22px; display: grid; place-items: center;
+    border: 0; border-radius: 4px; background: transparent;
+    color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .toolbtn:hover { background: var(--surface); color: var(--fg); }
+  .toolbtn.on { background: var(--accent-soft); color: var(--fg); }
+  .filtermenu {
+    position: absolute; top: 100%; right: 0; z-index: 10;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px; min-width: 150px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / .4);
+  }
+  .filtermenu label {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;
+  }
+  .filtermenu label:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .filtermenu input { accent-color: var(--accent); margin: 0; }
+
+  .tree, .results { flex: 1; overflow-y: auto; min-height: 0; }
+  .tree { padding: 6px 0; }
+  .results { padding: 6px 8px; }
+
+  .row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 8px 3px 0; font-size: 12px; white-space: nowrap;
+  }
+  .row:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .row .glyph { width: 15px; text-align: center; flex: none; font-size: 11px; color: var(--muted); }
+  .row .name { overflow: hidden; text-overflow: ellipsis; }
+
+  .hit { padding: 4px 6px; border-radius: 4px; }
+  .hit:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .hit .fname { font-size: 12px; font-weight: 500; }
+  .hit .fname .dir { color: var(--muted); font-weight: 400; }
+  .hitgroup > .hitgroup-label {
+    font-size: 11px; color: var(--muted); padding: 4px 6px 2px;
+    display: flex; gap: 5px; align-items: center;
+  }
+  .badge {
+    background: var(--accent-soft); color: var(--fg);
+    font-size: 10px; border-radius: 8px; padding: 0 6px; line-height: 15px;
+  }
+  .snippet {
+    display: block; color: var(--muted); font-size: 11px;
+    overflow: hidden; text-overflow: ellipsis; padding-right: 8px;
+  }
+  mark { background: var(--mark); color: inherit; border-radius: 2px; }
+  .empty { color: var(--muted); font-size: 11px; text-align: center; padding: 18px 10px; }
+  .foot {
+    border-top: 1px solid var(--border); padding: 5px 10px; flex: none;
+    color: var(--muted); font-size: 11px;
+  }
+
+  /* Coarse-pointer contract — mirrors the app's `pointer-coarse:` utilities.
+     44px touch targets, 16px input font (stops iOS focus zoom). */
+  @media (pointer: coarse) {
+    .row, .hit { min-height: 44px; align-items: center; }
+    .toolbtn, .chrome .icons span { width: 44px; height: 44px; }
+    .chrome { min-height: 48px; }
+    .searchrow input { font-size: 16px; min-height: 44px; }
+    .filtermenu label { padding: 12px 8px; }
+  }
+</style>
+</head>
+<body>
+  <h1>Explorer + content search</h1>
+  <p class="subtitle">Type to match file contents (try <code>meeting</code>, <code>graph</code>, <code>sync</code>). Drag the panel's corner to see the tools wrap. Mock data only.</p>
+
+  <div class="panel" title="Drag the bottom-right corner to resize">
+    <div class="chrome">
+      <span class="title">Files</span>
+      <span class="icons"><span>✚</span><span>🗀</span><span>⋯</span></span>
+    </div>
+    <div class="searchrow">
+      <span class="icon">⌕</span>
+      <input id="q" type="search" placeholder="Search workspace…" autocomplete="off" />
+      <div class="tools">
+        <button id="filter" class="toolbtn" title="Result options" aria-expanded="false">⏷</button>
+        <button class="toolbtn" title="More actions (future)">⋯</button>
+        <div class="filtermenu" id="filtermenu" hidden>
+          <label><input id="group" type="checkbox" /> Group by folder</label>
+        </div>
+      </div>
+    </div>
+    <div class="results" id="results" hidden></div>
+    <div class="tree" id="tree"></div>
+    <div class="foot" id="foot"></div>
+  </div>
+
+<script>
+const TREE = [
+  { dir: "Projects", children: [
+    { file: "Roadmap.md", body: "Q4 goals: ship the sync engine, polish the graph view, draft the mobile roadmap." },
+    { dir: "Sync Engine", children: [
+      { file: "Conflict resolution.md", body: "Auto-merge strategy for sync conflicts. Notes from the sync meeting on merge policy." },
+      { file: "Design notes.md", body: "Graph traversal powers backlinks. The sync index runs on FTS5." },
+    ]},
+    { file: "Graph view.md", body: "The graph view renders note links as a force-directed layout." },
+  ]},
+  { dir: "Journal", children: [
+    { file: "2026-10-12.md", body: "Weekly sync meeting with the team. Discussed sync retry bugs." },
+    { file: "2026-10-15.md", body: "Fixed the sync retry loop. Meeting with design moved to Friday." },
+  ]},
+  { file: "Inbox.md", body: "Schedule a meeting with design. Review graph mockups." },
+  { file: "Reading list.md", body: "CRDTs for sync, incremental graph layout, FTS ranking papers." },
+  { dir: "Archive", children: [
+    { file: "Old sync spec.md", body: "Original sync specification, superseded by the engine rewrite." },
+    { file: "Meeting archive.md", body: "Archived meeting minutes from 2025." },
+  ]},
+];
+
+const FILES = new Map();
+(function walk(nodes, prefix) {
+  for (const n of nodes) {
+    if (n.dir) walk(n.children, prefix + n.dir + "/");
+    else FILES.set(prefix + n.file, n);
+  }
+})(TREE, "");
+
+// Content search: name OR body substring, with a snippet cut around the hit.
+function search(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const out = [];
+  for (const [path, node] of FILES) {
+    const name = path.split("/").pop();
+    const idx = node.body.toLowerCase().indexOf(q);
+    let snippet = null;
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 24), end = Math.min(node.body.length, idx + q.length + 36);
+      snippet = (start ? "…" : "") + node.body.slice(start, end) + (end < node.body.length ? "…" : "");
+    }
+    if (name.toLowerCase().includes(q) || snippet) out.push({ path, name, snippet });
+  }
+  return out;
+}
+
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function mark(s, q) {
+  const i = s.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0 || !q) return esc(s);
+  return esc(s.slice(0, i)) + "<mark>" + esc(s.slice(i, i + q.length)) + "</mark>" + esc(s.slice(i + q.length));
+}
+
+function renderTree() {
+  let html = "";
+  const emit = (nodes, depth, prefix) => {
+    for (const n of nodes) {
+      const pad = `style="padding-left:${10 + depth * 14}px"`;
+      if (n.dir) {
+        html += `<div class="row" ${pad}><span class="glyph">🗀</span><span class="name">${esc(n.dir)}</span></div>`;
+        emit(n.children, depth + 1, prefix + n.dir + "/");
+      } else {
+        html += `<div class="row" ${pad}><span class="glyph">📄</span><span class="name">${esc(n.file)}</span></div>`;
+      }
+    }
+  };
+  emit(TREE, 0, "");
+  document.getElementById("tree").innerHTML = html;
+}
+
+function renderResults(results, query, grouped) {
+  const hit = (r) => `
+    <div class="hit">
+      <div class="fname">${mark(r.name, query)}${r.path.includes("/") ? ` <span class="dir">— ${esc(r.path.slice(0, r.path.lastIndexOf("/")))}</span>` : ""}</div>
+      ${r.snippet ? `<span class="snippet">${mark(r.snippet, query)}</span>` : `<span class="snippet">Name match</span>`}
+    </div>`;
+  if (!grouped) return results.map(hit).join("");
+  const groups = new Map();
+  for (const r of results) {
+    const dir = r.path.includes("/") ? r.path.slice(0, r.path.lastIndexOf("/")) : "(root)";
+    if (!groups.has(dir)) groups.set(dir, []);
+    groups.get(dir).push(r);
+  }
+  return [...groups.entries()].map(([dir, rs]) => `
+    <div class="hitgroup">
+      <div class="hitgroup-label">▾ 🗀 ${esc(dir)} <span class="badge">${rs.length}</span></div>
+      ${rs.map(hit).join("")}
+    </div>`).join("");
+}
+
+const q = document.getElementById("q"), tree = document.getElementById("tree"),
+      results = document.getElementById("results"), foot = document.getElementById("foot"),
+      filterBtn = document.getElementById("filter"), filterMenu = document.getElementById("filtermenu"),
+      group = document.getElementById("group");
+
+filterBtn.addEventListener("click", () => {
+  filterMenu.hidden = !filterMenu.hidden;
+  filterBtn.setAttribute("aria-expanded", String(!filterMenu.hidden));
+  filterBtn.classList.toggle("on", !filterMenu.hidden || group.checked);
+});
+group.addEventListener("change", () => {
+  filterBtn.classList.toggle("on", group.checked || !filterMenu.hidden);
+  draw();
+});
+q.addEventListener("input", draw);
+
+function draw() {
+  const query = q.value;
+  const searching = !!query.trim();
+  const res = search(query);
+  tree.hidden = searching;                       // the tree stays mounted, just hidden
+  results.hidden = !searching;
+  results.innerHTML = searching
+    ? (res.length ? renderResults(res, query, group.checked) : `<div class="empty">No matches found.</div>`)
+    : "";
+  foot.textContent = searching ? `${res.length} result${res.length === 1 ? "" : "s"}` : "";
+}
+
+renderTree();
+draw();
+</script>
+</body>
+</html>
